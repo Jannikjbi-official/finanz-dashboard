@@ -8,11 +8,12 @@ import {
   ensureIndexes,
   goals,
   recurring,
+  refunds,
   toObjectId,
   transactions,
 } from "./mongo";
 import { requireUser } from "./session";
-import { advance, nextDueFrom, todayISO } from "./dates";
+import { advance, endOfMonth, nextDueFrom, todayISO } from "./dates";
 import { parseAmountToCents } from "./money";
 import { parseCsv } from "./csv";
 
@@ -44,6 +45,40 @@ function optionalId(value: FormDataEntryValue | null) {
   const raw = String(value ?? "").trim();
   if (!raw || raw === "none") return null;
   return toObjectId(raw) ? raw : null;
+}
+
+
+const datePrecision = z.enum(["day", "range", "month"]);
+
+/**
+ * Datumsangabe einer Buchung einlesen. Wer den Tag nicht kennt, gibt einen
+ * Zeitraum oder gleich den ganzen Monat an - gespeichert wird immer ein
+ * Startdatum, damit Monatsauswertungen weiter funktionieren.
+ */
+function periodFrom(formData: FormData):
+  | { date: string; dateEnd: string | null; precision: "day" | "range" | "month" }
+  | { error: string } {
+  const precision =
+    datePrecision.safeParse(formData.get("datePrecision")).data ?? "day";
+
+  if (precision === "month") {
+    const month = String(formData.get("month") ?? "").trim();
+    if (!/^\d{4}-\d{2}$/.test(month)) return { error: "Monat ungültig" };
+    return { date: `${month}-01`, dateEnd: endOfMonth(month), precision };
+  }
+
+  const start = isoDate.safeParse(formData.get("date"));
+  if (!start.success) return { error: "Datum ungültig" };
+
+  if (precision === "day") {
+    return { date: start.data, dateEnd: null, precision };
+  }
+
+  const end = isoDate.safeParse(formData.get("dateEnd"));
+  if (!end.success) return { error: "Enddatum ungültig" };
+  if (end.data < start.data) return { error: "Der Zeitraum endet vor dem Start" };
+
+  return { date: start.data, dateEnd: end.data, precision };
 }
 
 /* ------------------------------- Kategorien ------------------------------- */
@@ -145,15 +180,17 @@ export async function saveTransaction(
   const title = String(formData.get("title") ?? "").trim();
   if (!title) return fail("Bezeichnung fehlt");
 
-  const date = isoDate.safeParse(formData.get("date"));
-  if (!date.success) return fail("Datum ungültig");
+  const period = periodFrom(formData);
+  if ("error" in period) return fail(period.error);
 
   const payload = {
     type: type.data,
     amountCents,
     title: title.slice(0, 80),
     note: String(formData.get("note") ?? "").trim().slice(0, 300) || null,
-    date: date.data,
+    date: period.date,
+    dateEnd: period.dateEnd,
+    datePrecision: period.precision,
     categoryId: optionalId(formData.get("categoryId")),
     accountId: optionalId(formData.get("accountId")),
   };
@@ -640,4 +677,121 @@ export async function importTransactions(
     createdCategories,
     problems: errors.slice(0, 5).map(({ line, reason }) => ({ line, reason })),
   };
+}
+
+/* ------------------------------ Erstattungen ------------------------------ */
+
+/**
+ * Geld, das dir jemand zurueckzahlt - Versicherung, Steuer, geliehen an
+ * Freunde. Oft ist unklar, wann es kommt, deshalb ist das Datum optional.
+ */
+export async function saveRefund(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireUser();
+  await ensureIndexes();
+
+  const title = String(formData.get("title") ?? "").trim();
+  if (!title) return fail("Bezeichnung fehlt");
+
+  const amountCents = amountFrom(formData.get("amount"));
+  if (amountCents === null) return fail("Betrag ungültig");
+
+  const fromRaw = String(formData.get("expectedFrom") ?? "").trim();
+  const toRaw = String(formData.get("expectedTo") ?? "").trim();
+
+  const expectedFrom =
+    fromRaw && isoDate.safeParse(fromRaw).success ? fromRaw : null;
+  const expectedTo = toRaw && isoDate.safeParse(toRaw).success ? toRaw : null;
+
+  if (expectedFrom && expectedTo && expectedTo < expectedFrom) {
+    return fail("Der Zeitraum endet vor dem Start");
+  }
+
+  const payload = {
+    title: title.slice(0, 80),
+    amountCents,
+    expectedFrom,
+    expectedTo,
+    categoryId: optionalId(formData.get("categoryId")),
+    accountId: optionalId(formData.get("accountId")),
+    note: String(formData.get("note") ?? "").trim().slice(0, 300) || null,
+  };
+
+  const id = String(formData.get("id") ?? "").trim();
+
+  if (id) {
+    const objectId = toObjectId(id);
+    if (!objectId) return fail("Erstattung nicht gefunden");
+    await refunds.updateOne({ _id: objectId, userId: user.id }, { $set: payload });
+  } else {
+    await refunds.insertOne({
+      ...payload,
+      userId: user.id,
+      status: "open",
+      receivedDate: null,
+      createdAt: new Date(),
+    });
+  }
+
+  refresh();
+  return done(id ? "Erstattung aktualisiert" : "Erstattung angelegt");
+}
+
+/** Erstattung ist eingegangen: als Einnahme buchen und abhaken. */
+export async function receiveRefund(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireUser();
+
+  const objectId = toObjectId(String(formData.get("id") ?? ""));
+  if (!objectId) return fail("Erstattung nicht gefunden");
+
+  const refund = await refunds.findOne({ _id: objectId, userId: user.id });
+  if (!refund) return fail("Erstattung nicht gefunden");
+  if (refund.status === "received") return fail("Schon als erhalten markiert");
+
+  const dateRaw = String(formData.get("date") ?? "").trim();
+  const date = dateRaw && isoDate.safeParse(dateRaw).success ? dateRaw : todayISO();
+
+  // Betrag kann abweichen - manchmal kommt weniger zurueck als erwartet
+  const actual = amountFrom(formData.get("amount")) ?? refund.amountCents;
+
+  await transactions.insertOne({
+    userId: user.id,
+    type: "income",
+    amountCents: actual,
+    title: refund.title,
+    note: refund.note ?? "Erstattung",
+    date,
+    dateEnd: null,
+    datePrecision: "day",
+    categoryId: refund.categoryId ?? null,
+    accountId: refund.accountId ?? null,
+    recurringId: null,
+    createdAt: new Date(),
+  });
+
+  await refunds.updateOne(
+    { _id: objectId, userId: user.id },
+    { $set: { status: "received", receivedDate: date, amountCents: actual } },
+  );
+
+  refresh();
+  return done("Als erhalten gebucht");
+}
+
+export async function deleteRefund(
+  _prev: ActionState,
+  formData: FormData,
+): Promise<ActionState> {
+  const user = await requireUser();
+  const objectId = toObjectId(String(formData.get("id") ?? ""));
+  if (!objectId) return fail("Erstattung nicht gefunden");
+
+  await refunds.deleteOne({ _id: objectId, userId: user.id });
+  refresh();
+  return done("Erstattung gelöscht");
 }

@@ -31,6 +31,12 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
     </>
   ),
+  refund: (
+    <>
+      <path d="M3 9h13a5 5 0 0 1 0 10H9" />
+      <path d="M7 5L3 9l4 4" />
+    </>
+  ),
   wallet: (
     <>
       <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H18a2 2 0 0 1 2 2v1" />

@@ -15,6 +15,8 @@ export function BalanceHero({
   monthExpenseCents,
   openRecurringCents,
   openRecurringCount,
+  openRefundCents,
+  openRefundCount,
 }: {
   availableCents: number;
   fromAccounts: boolean;
@@ -24,6 +26,8 @@ export function BalanceHero({
   monthExpenseCents: number;
   openRecurringCents: number;
   openRecurringCount: number;
+  openRefundCents: number;
+  openRefundCount: number;
 }) {
   const afterFixed = availableCents - openRecurringCents;
 
@@ -61,6 +65,24 @@ export function BalanceHero({
             )}
           </p>
         </div>
+
+        {openRefundCount > 0 ? (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-success/10 px-3 py-2 text-tiny">
+            <span className="font-medium text-success">
+              {formatMoney(openRefundCents)} kommen noch zurück
+            </span>
+            <span className="text-default-400">
+              ({openRefundCount}{" "}
+              {openRefundCount === 1 ? "Erstattung" : "Erstattungen"}) ·{" "}
+              <NextLink
+                href="/erstattungen"
+                className="text-primary hover:underline"
+              >
+                ansehen
+              </NextLink>
+            </span>
+          </div>
+        ) : null}
 
         {openRecurringCount > 0 ? (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-warning/10 px-3 py-2 text-tiny">

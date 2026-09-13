@@ -1,7 +1,7 @@
 import { Chip } from "@heroui/react";
 import NextLink from "next/link";
 import { requireUser } from "@/lib/session";
-import { getAccounts, getDashboard } from "@/lib/queries";
+import { getAccounts, getDashboard, getOpenRefundTotal } from "@/lib/queries";
 import { currentMonthKey, INTERVAL_LABEL, daysUntil } from "@/lib/dates";
 import { formatDate, formatMoney, formatSigned } from "@/lib/money";
 import { CategoryBars, Donut, TrendChart } from "@/components/charts";
@@ -31,9 +31,10 @@ export default async function DashboardPage({
     ? params.m!
     : currentMonthKey();
 
-  const [data, accounts] = await Promise.all([
+  const [data, accounts, openRefunds] = await Promise.all([
     getDashboard(user.id, month),
     getAccounts(user.id),
+    getOpenRefundTotal(user.id),
   ]);
 
   const saldo = data.monthTotals.income - data.monthTotals.expense;
@@ -70,6 +71,8 @@ export default async function DashboardPage({
         monthExpenseCents={data.monthTotals.expense}
         openRecurringCents={data.openRecurringCents}
         openRecurringCount={data.openRecurringCount}
+        openRefundCents={openRefunds.cents}
+        openRefundCount={openRefunds.count}
       />
 
       {/* ---------- Monat ---------- */}

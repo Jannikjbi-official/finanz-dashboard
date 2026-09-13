@@ -20,7 +20,7 @@ import {
 } from "@heroui/react";
 import { saveRecurring, saveTransaction, type ActionState } from "@/lib/actions";
 import { INTERVAL_LABEL, todayISO } from "@/lib/dates";
-import type { Category, Interval, Kind, Transaction } from "@/lib/types";
+import type { Category, DatePrecision, Interval, Kind, Transaction } from "@/lib/types";
 import type { Account } from "@/lib/types";
 
 const INITIAL: ActionState = { ok: true };
@@ -59,6 +59,9 @@ export function TransactionDialog({
     : internal.onClose;
 
   const [mode, setMode] = useState<Mode>("once");
+  const [precision, setPrecision] = useState<DatePrecision>(
+    transaction?.datePrecision ?? "day",
+  );
   const [type, setType] = useState<Kind>(transaction?.type ?? defaultType);
 
   const [txState, txAction, txPending] = useActionState(saveTransaction, INITIAL);
@@ -184,14 +187,80 @@ export function TransactionDialog({
                     </Select>
                   ) : null}
 
-                  <Input
-                    isRequired
-                    name={mode === "once" ? "date" : "startDate"}
-                    type="date"
-                    label={mode === "once" ? "Datum" : "Erste Zahlung"}
-                    variant="bordered"
-                    defaultValue={transaction?.date ?? todayISO()}
-                  />
+                  {mode === "recurring" ? (
+                    <Input
+                      isRequired
+                      name="startDate"
+                      type="date"
+                      label="Erste Zahlung"
+                      variant="bordered"
+                      defaultValue={transaction?.date ?? todayISO()}
+                    />
+                  ) : (
+                    <div className="flex flex-col gap-3 sm:col-span-2">
+                      <input
+                        type="hidden"
+                        name="datePrecision"
+                        value={precision}
+                      />
+
+                      <Tabs
+                        aria-label="Wie genau ist das Datum?"
+                        fullWidth
+                        size="sm"
+                        selectedKey={precision}
+                        onSelectionChange={(key) =>
+                          setPrecision(key as DatePrecision)
+                        }
+                      >
+                        <Tab key="day" title="Genauer Tag" />
+                        <Tab key="range" title="Zeitraum" />
+                        <Tab key="month" title="Ganzer Monat" />
+                      </Tabs>
+
+                      {precision === "month" ? (
+                        <Input
+                          isRequired
+                          name="month"
+                          type="month"
+                          label="Monat"
+                          variant="bordered"
+                          description="Für Buchungen, bei denen nur der Monat feststeht"
+                          defaultValue={(transaction?.date ?? todayISO()).slice(0, 7)}
+                        />
+                      ) : precision === "range" ? (
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <Input
+                            isRequired
+                            name="date"
+                            type="date"
+                            label="Frühestens"
+                            variant="bordered"
+                            defaultValue={transaction?.date ?? todayISO()}
+                          />
+                          <Input
+                            isRequired
+                            name="dateEnd"
+                            type="date"
+                            label="Spätestens"
+                            variant="bordered"
+                            defaultValue={
+                              transaction?.dateEnd ?? transaction?.date ?? todayISO()
+                            }
+                          />
+                        </div>
+                      ) : (
+                        <Input
+                          isRequired
+                          name="date"
+                          type="date"
+                          label="Datum"
+                          variant="bordered"
+                          defaultValue={transaction?.date ?? todayISO()}
+                        />
+                      )}
+                    </div>
+                  )}
 
                   <Select
                     name="categoryId"

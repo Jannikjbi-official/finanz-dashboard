@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import {
   Button,
+  Chip,
   Dropdown,
   DropdownItem,
   DropdownMenu,
@@ -10,7 +11,7 @@ import {
   addToast,
 } from "@heroui/react";
 import { deleteTransaction, type ActionState } from "@/lib/actions";
-import { formatDate } from "@/lib/money";
+import { formatPeriod } from "@/lib/money";
 import { Amount, EmptyState } from "@/components/ui";
 import { Icon } from "@/components/icon";
 import { TransactionDialog } from "@/components/transaction-dialog";
@@ -37,6 +38,7 @@ export function TransactionList({
   showDate?: boolean;
 }) {
   const byId = new Map(categories.map((category) => [category.id, category]));
+  const accountById = new Map(accounts.map((account) => [account.id, account]));
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -64,46 +66,70 @@ export function TransactionList({
       <ul className="flex flex-col divide-y divide-default-100/70">
         {rows.map((tx) => {
           const category = tx.categoryId ? byId.get(tx.categoryId) : undefined;
+          const account = tx.accountId ? accountById.get(tx.accountId) : undefined;
 
           return (
-            <li key={tx.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+            <li key={tx.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
               <span
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base"
+                className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-base"
                 style={{ backgroundColor: `${category?.color ?? "#64748b"}1f` }}
               >
                 {category?.icon || (tx.type === "income" ? "↓" : "↑")}
               </span>
 
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{tx.title}</p>
-                <p className="flex flex-wrap items-center gap-x-1.5 truncate text-tiny text-default-400">
-                  {showDate ? <span>{formatDate(tx.date)}</span> : null}
+                <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                  <span className="truncate">{tx.title}</span>
+                  {tx.recurringId ? (
+                    <Chip size="sm" variant="flat" className="h-5 text-[0.65rem]">
+                      Abo
+                    </Chip>
+                  ) : null}
+                  {tx.datePrecision !== "day" ? (
+                    <Chip
+                      size="sm"
+                      variant="flat"
+                      color="warning"
+                      className="h-5 text-[0.65rem]"
+                    >
+                      {tx.datePrecision === "month" ? "ganzer Monat" : "Zeitraum"}
+                    </Chip>
+                  ) : null}
+                </p>
+
+                <p className="flex flex-wrap items-center gap-x-1.5 text-tiny text-default-400">
+                  {showDate ? (
+                    <span>
+                      {formatPeriod(tx.date, tx.dateEnd, tx.datePrecision)}
+                    </span>
+                  ) : null}
+
+                  <span aria-hidden>·</span>
                   {category ? (
-                    <>
-                      {showDate ? <span aria-hidden>·</span> : null}
-                      <span style={{ color: category.color }}>{category.name}</span>
-                    </>
+                    <span style={{ color: category.color }}>{category.name}</span>
                   ) : (
-                    <>
-                      {showDate ? <span aria-hidden>·</span> : null}
-                      <span>Ohne Kategorie</span>
-                    </>
+                    <span>Ohne Kategorie</span>
                   )}
-                  {tx.note ? (
+
+                  {account ? (
                     <>
-                      <span className="hidden sm:inline" aria-hidden>
-                        ·
-                      </span>
-                      <span className="hidden truncate sm:inline">{tx.note}</span>
+                      <span aria-hidden>·</span>
+                      <span>{account.name}</span>
                     </>
                   ) : null}
                 </p>
+
+                {tx.note ? (
+                  <p className="mt-0.5 line-clamp-2 text-tiny text-default-500">
+                    {tx.note}
+                  </p>
+                ) : null}
               </div>
 
               <Amount
                 cents={tx.amountCents}
                 kind={tx.type}
-                className="shrink-0 text-sm font-medium"
+                className="mt-0.5 shrink-0 text-sm font-medium"
               />
 
               <Dropdown placement="bottom-end">

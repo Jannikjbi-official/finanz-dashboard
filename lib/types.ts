@@ -16,9 +16,26 @@ export type Transaction = {
   title: string;
   note: string | null;
   date: string;
+  dateEnd: string | null;
+  datePrecision: DatePrecision;
   categoryId: string | null;
   recurringId: string | null;
   accountId: string | null;
+};
+
+export type DatePrecision = "day" | "range" | "month";
+
+export type Refund = {
+  id: string;
+  title: string;
+  amountCents: number;
+  expectedFrom: string | null;
+  expectedTo: string | null;
+  status: "open" | "received";
+  receivedDate: string | null;
+  categoryId: string | null;
+  accountId: string | null;
+  note: string | null;
 };
 
 export type Recurring = {

@@ -6,13 +6,14 @@ import {
   ensureIndexes,
   goals,
   recurring,
+  refunds,
   transactions,
   type CategoryDoc,
   type RecurringDoc,
   type TransactionDoc,
 } from "./mongo";
-import type { Account, Category, Goal, Recurring, Transaction } from "./types";
-export type { Account, Goal } from "./types";
+import type { Account, Category, Goal, Recurring, Refund, Transaction } from "./types";
+export type { Account, Goal, Refund } from "./types";
 export { ACCOUNT_KIND_LABEL } from "./types";
 import { currentMonthKey, lastMonthKeys, monthRange, monthlyAmount } from "./dates";
 
@@ -35,6 +36,8 @@ function mapTransaction(doc: WithId<TransactionDoc>): Transaction {
     title: doc.title,
     note: doc.note ?? null,
     date: doc.date,
+    dateEnd: doc.dateEnd ?? null,
+    datePrecision: doc.datePrecision ?? "day",
     categoryId: doc.categoryId ?? null,
     recurringId: doc.recurringId ?? null,
     accountId: doc.accountId ?? null,
@@ -522,4 +525,39 @@ export async function countTransactionsWithoutAccount(userId: string) {
     userId,
     $or: [{ accountId: null }, { accountId: { $exists: false } }],
   });
+}
+
+/* ------------------------------ Erstattungen ------------------------------ */
+
+export async function getRefunds(userId: string): Promise<Refund[]> {
+  await ensureIndexes();
+
+  const docs = await refunds
+    .find({ userId })
+    .sort({ status: 1, createdAt: -1 })
+    .toArray();
+
+  return docs.map((doc) => ({
+    id: doc._id.toString(),
+    title: doc.title,
+    amountCents: doc.amountCents,
+    expectedFrom: doc.expectedFrom ?? null,
+    expectedTo: doc.expectedTo ?? null,
+    status: doc.status,
+    receivedDate: doc.receivedDate ?? null,
+    categoryId: doc.categoryId ?? null,
+    accountId: doc.accountId ?? null,
+    note: doc.note ?? null,
+  }));
+}
+
+export async function getOpenRefundTotal(userId: string) {
+  const rows = await refunds
+    .aggregate<{ _id: null; sum: number; count: number }>([
+      { $match: { userId, status: "open" } },
+      { $group: { _id: null, sum: { $sum: "$amountCents" }, count: { $sum: 1 } } },
+    ])
+    .toArray();
+
+  return { cents: rows[0]?.sum ?? 0, count: rows[0]?.count ?? 0 };
 }

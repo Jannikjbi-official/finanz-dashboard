@@ -12,6 +12,7 @@ export type IconName =
   | "repeat"
   | "chart"
   | "target"
+  | "refund"
   | "wallet"
   | "exchange"
   | "cog"

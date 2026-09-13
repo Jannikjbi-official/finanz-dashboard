@@ -105,3 +105,15 @@ export function daysUntil(dateISO: string) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   return Math.round((target - today) / 86_400_000);
 }
+
+/* ---------------------------- Unscharfe Daten ----------------------------- */
+
+/** Letzter Tag des Monats zu "2026-10" oder "2026-10-05". */
+export function endOfMonth(dateOrMonth: string) {
+  const [year, month] = dateOrMonth.split("-").map(Number);
+  return toISO(new Date(year, month, 0));
+}
+
+export function startOfMonth(dateOrMonth: string) {
+  return `${dateOrMonth.slice(0, 7)}-01`;
+}

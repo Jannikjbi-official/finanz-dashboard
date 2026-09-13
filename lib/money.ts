@@ -44,3 +44,43 @@ export const MONTH_NAMES = [
   "Januar", "Februar", "Maerz", "April", "Mai", "Juni",
   "Juli", "August", "September", "Oktober", "November", "Dezember",
 ];
+
+/**
+ * Datumsangabe einer Buchung lesbar machen - je nachdem, wie genau sie ist:
+ * ein Tag, ein Zeitraum oder ein ganzer Monat.
+ */
+export function formatPeriod(
+  date: string,
+  dateEnd: string | null,
+  precision: "day" | "range" | "month",
+) {
+  if (precision === "month") {
+    const [year, month] = date.split("-");
+    return `${MONTH_NAMES[Number(month) - 1]} ${year}`;
+  }
+
+  if (precision === "range" && dateEnd && dateEnd !== date) {
+    const [, startMonth, startDay] = date.split("-");
+    const [endYear, endMonth, endDay] = dateEnd.split("-");
+
+    // Gleicher Monat: "1.-10.10.2026", sonst beide Daten ausschreiben
+    return startMonth === endMonth && date.slice(0, 4) === endYear
+      ? `${Number(startDay)}.–${Number(endDay)}.${endMonth}.${endYear}`
+      : `${formatDate(date)} – ${formatDate(dateEnd)}`;
+  }
+
+  return formatDate(date);
+}
+
+/** Kurzform fuer enge Spalten. */
+export function formatPeriodShort(
+  date: string,
+  dateEnd: string | null,
+  precision: "day" | "range" | "month",
+) {
+  if (precision === "month") {
+    const [year, month] = date.split("-");
+    return `${MONTH_NAMES[Number(month) - 1].slice(0, 3)} ${year}`;
+  }
+  return formatPeriod(date, dateEnd, precision);
+}

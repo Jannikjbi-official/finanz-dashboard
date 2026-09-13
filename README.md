@@ -80,7 +80,10 @@ Nach jeder Änderung an den Environment Variables einmal neu deployen.
   Feste Einnahmen werden hier verwaltet.
 - **Buchungen** – anlegen, bearbeiten, löschen; Filter nach Typ und Kategorie,
   Monatswechsel, Summen pro Auswahl. Der Dialog legt wahlweise eine einmalige
-  Buchung oder direkt einen Dauerauftrag an.
+  Buchung oder direkt einen Dauerauftrag an. Das Datum muss kein genauer Tag
+  sein: wahlweise **genauer Tag**, **Zeitraum** (z. B. 1.–10.10.) oder
+  **ganzer Monat**. In der Liste steht alles dran – Zeitraum, Kategorie, Konto,
+  Notiz und ob die Buchung aus einem Abo stammt.
 - **Abos** – ausschließlich regelmäßige Ausgaben, hochgerechnet auf Monat und
   Jahr, mit nächster Fälligkeit und teuerstem Abo. „Buchen" übernimmt eine
   fällige Zahlung als echte Buchung.
@@ -90,6 +93,10 @@ Nach jeder Änderung an den Environment Variables einmal neu deployen.
 - **Budgets & Sparziele** – Monatsbudget je Ausgaben-Kategorie mit Fortschritt
   und Drei-Monats-Durchschnitt als Orientierung; Sparziele mit Zielbetrag,
   Zieldatum und Ein-/Auszahlung.
+- **Erstattungen** – Geld, das dir zurückgezahlt wird, auch ohne bekannten
+  Termin (Zeitpunkt unbekannt, bestimmter Tag oder Zeitraum). „Erhalten" bucht
+  den Betrag als Einnahme, der tatsächliche Betrag lässt sich dabei anpassen.
+  Die offene Summe steht auf dem Dashboard.
 - **Konten** – mehrere Konten mit Startsaldo, laufender Kontostand aus den
   zugeordneten Buchungen, Gesamtvermögen und Umbuchung zwischen Konten.
 - **Import / Export** – Buchungen als CSV herunterladen (gesamt oder pro Jahr)
@@ -105,7 +112,8 @@ wichtigsten Bereichen und einem Menü für den Rest.
 
 ```
 app/(app)/           Geschützte Seiten: Dashboard, Buchungen, Abos,
-                     Auswertung, Budgets, Konten, Import/Export, Einstellungen
+                     Erstattungen, Auswertung, Budgets, Konten,
+                     Import/Export, Einstellungen
 app/login/           Login & Registrierung
 app/api/auth/        Better-Auth-Handler
 app/api/export/      CSV-Export

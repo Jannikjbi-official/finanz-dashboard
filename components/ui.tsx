@@ -1,12 +1,19 @@
 import { Card, CardBody, CardHeader } from "@heroui/react";
 import { formatMoney } from "@/lib/money";
 
-export type Tone = "default" | "success" | "danger" | "primary" | "muted";
+export type Tone =
+  | "default"
+  | "success"
+  | "danger"
+  | "warning"
+  | "primary"
+  | "muted";
 
 const TONE_TEXT: Record<Tone, string> = {
   default: "text-foreground",
   success: "text-success",
   danger: "text-danger",
+  warning: "text-warning",
   primary: "text-primary",
   muted: "text-default-500",
 };
