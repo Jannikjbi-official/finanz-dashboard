@@ -23,6 +23,7 @@ Läuft dann auf http://localhost:3000
 | `ALLOWED_EMAILS` | **Zugangssperre** – nur diese Adressen dürfen ein Konto anlegen, mit Komma getrennt |
 | `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | Discord-Login (optional; ohne Werte wird der Button ausgeblendet) |
 | `BETTER_AUTH_API_KEY` | Key für das Better-Auth-Infra-Plugin (Dashboard/Analytics) |
+| `NEXT_PUBLIC_BETTER_AUTH_IDENTIFY_URL` | Projekt-Ingestion-URL von Sentinel. Muss das `NEXT_PUBLIC_`-Präfix haben, weil sie im Browser gebraucht wird |
 
 ### Discord einrichten
 
@@ -49,6 +50,7 @@ sonst wird der Login abgelehnt.
    | `NEXT_PUBLIC_APP_URL` | `https://finanzen.jannikjbi.de` |
    | `BETTER_AUTH_SECRET` | dasselbe Secret wie lokal (oder ein neues – dann sind alte Sessions ungültig) |
    | `BETTER_AUTH_API_KEY` | Key aus dem Better-Auth-Dashboard |
+   | `NEXT_PUBLIC_BETTER_AUTH_IDENTIFY_URL` | Ingestion-URL aus den Projekt-Settings |
    | `MONGODB_URI` / `MONGODB_DB` | aus der Atlas-Integration |
    | `ALLOWED_EMAILS` | deine Adresse(n) |
    | `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | aus dem Discord-Portal |
