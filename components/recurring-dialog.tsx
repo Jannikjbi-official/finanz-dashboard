@@ -30,14 +30,17 @@ export function RecurringDialog({
   categories,
   entry,
   trigger,
+  lockType,
 }: {
   categories: Category[];
   entry?: Recurring;
   trigger?: React.ReactNode;
+  /** Typ festnageln - auf der Abo-Seite gibt es nur Ausgaben. */
+  lockType?: Kind;
 }) {
   const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
   const [state, formAction, pending] = useActionState(saveRecurring, INITIAL);
-  const [type, setType] = useState<Kind>(entry?.type ?? "expense");
+  const [type, setType] = useState<Kind>(entry?.type ?? lockType ?? "expense");
   const [active, setActive] = useState(entry?.active ?? true);
 
   useEffect(() => {
@@ -66,7 +69,11 @@ export function RecurringDialog({
           {() => (
             <form action={formAction}>
               <ModalHeader className="flex-col items-start gap-1">
-                {entry ? "Abo bearbeiten" : "Neues Abo / Dauerauftrag"}
+                {entry
+                  ? "Abo bearbeiten"
+                  : lockType === "expense"
+                    ? "Neues Abo"
+                    : "Neues Abo / Dauerauftrag"}
               </ModalHeader>
 
               <ModalBody className="gap-4">
@@ -74,16 +81,18 @@ export function RecurringDialog({
                 <input type="hidden" name="type" value={type} />
                 <input type="hidden" name="active" value={String(active)} />
 
-                <Tabs
-                  aria-label="Typ"
-                  fullWidth
-                  selectedKey={type}
-                  onSelectionChange={(key) => setType(key as Kind)}
-                  color={type === "income" ? "success" : "danger"}
-                >
-                  <Tab key="expense" title="Feste Ausgabe" />
-                  <Tab key="income" title="Feste Einnahme" />
-                </Tabs>
+                {lockType && (!entry || entry.type === lockType) ? null : (
+                  <Tabs
+                    aria-label="Typ"
+                    fullWidth
+                    selectedKey={type}
+                    onSelectionChange={(key) => setType(key as Kind)}
+                    color={type === "income" ? "success" : "danger"}
+                  >
+                    <Tab key="expense" title="Feste Ausgabe" />
+                    <Tab key="income" title="Feste Einnahme" />
+                  </Tabs>
+                )}
 
                 {state.error ? (
                   <Alert color="danger" variant="flat" title={state.error} />

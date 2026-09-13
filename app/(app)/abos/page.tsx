@@ -61,7 +61,7 @@ export default async function SubscriptionsPage() {
             Alles was regelmäßig kommt oder geht.
           </p>
         </div>
-        <RecurringDialog categories={categories} />
+        <RecurringDialog categories={categories} lockType="expense" />
       </header>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -210,6 +210,7 @@ export default async function SubscriptionsPage() {
                         <RecurringDialog
                           categories={categories}
                           entry={entry}
+                          lockType="expense"
                           trigger={
                             <span className="inline-flex h-8 cursor-pointer items-center rounded-lg px-3 text-tiny text-default-500 hover:bg-default-100 hover:text-foreground">
                               Bearbeiten
