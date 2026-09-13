@@ -11,6 +11,7 @@ import { RecurringDialog } from "@/components/recurring-dialog";
 import { RecurringList } from "@/components/recurring-list";
 import { TransactionList } from "@/components/transaction-list";
 import { EmptyState, PageHeader, SectionCard, StatCard } from "@/components/ui";
+import { BalanceHero } from "@/components/balance-hero";
 
 function diffHint(current: number, previous: number) {
   if (previous === 0) return current === 0 ? "keine Vormonatsdaten" : "neu";
@@ -36,6 +37,14 @@ export default async function DashboardPage({
   ]);
 
   const saldo = data.monthTotals.income - data.monthTotals.expense;
+  const accountTotal = accounts.reduce(
+    (sum, account) => sum + account.balanceCents,
+    0,
+  );
+  // Mit Konten zaehlt der echte Kontostand, sonst alles Gebuchte seit Beginn.
+  const available = accounts.length > 0
+    ? accountTotal
+    : data.allTime.income - data.allTime.expense;
   const fixSaldo = data.recurringMonthlyIncome - data.recurringMonthlyExpense;
   const totalExpense = data.monthTotals.expense;
 
@@ -50,6 +59,17 @@ export default async function DashboardPage({
             <TransactionDialog categories={data.categories} accounts={accounts} />
           </>
         }
+      />
+
+      <BalanceHero
+        availableCents={available}
+        fromAccounts={accounts.length > 0}
+        accountCount={accounts.length}
+        incomeTotalCents={data.allTime.income}
+        expenseTotalCents={data.allTime.expense}
+        monthExpenseCents={data.monthTotals.expense}
+        openRecurringCents={data.openRecurringCents}
+        openRecurringCount={data.openRecurringCount}
       />
 
       {/* ---------- Monat ---------- */}
@@ -69,7 +89,7 @@ export default async function DashboardPage({
         <StatCard
           label="Saldo"
           value={formatSigned(saldo)}
-          hint={`Gesamt: ${formatSigned(data.allTime.income - data.allTime.expense)}`}
+          hint="Einnahmen minus Ausgaben in diesem Monat"
           tone={saldo >= 0 ? "success" : "danger"}
         />
       </section>

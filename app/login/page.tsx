@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { discordEnabled } from "@/lib/auth";
 import { getCurrentUser } from "@/lib/session";
 import { LoginForm } from "@/components/login-form";
+import { LogoMark } from "@/components/logo";
 
 export default async function LoginPage() {
   const user = await getCurrentUser();
@@ -12,9 +13,7 @@ export default async function LoginPage() {
     <main className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-2xl">
-            <span className="font-semibold text-primary">&euro;</span>
-          </div>
+          <LogoMark size={56} id="login" className="mx-auto mb-4" />
           <h1 className="text-2xl font-semibold tracking-tight">
             Finanz Dashboard
           </h1>

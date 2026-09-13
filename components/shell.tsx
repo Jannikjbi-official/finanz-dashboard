@@ -17,6 +17,7 @@ import {
 } from "@heroui/react";
 import { authClient } from "@/lib/auth-client";
 import { Icon } from "@/components/icon";
+import { Logo, LogoMark } from "@/components/logo";
 import {
   NAV_GROUPS,
   NAV_ITEMS,
@@ -53,14 +54,8 @@ export function Shell({
     <div className="flex min-h-screen">
       {/* ---------- Sidebar ab lg ---------- */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-default-100/70 bg-background/60 px-3 py-6 backdrop-blur lg:flex">
-        <div className="mb-7 flex items-center gap-2.5 px-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 font-semibold text-primary">
-            &euro;
-          </div>
-          <div className="leading-tight">
-            <p className="text-sm font-semibold tracking-tight">Finanzen</p>
-            <p className="text-tiny text-default-400">Privates Dashboard</p>
-          </div>
+        <div className="mb-7 px-2">
+          <Logo id="sidebar" subtitle="Privates Dashboard" />
         </div>
 
         <nav className="flex flex-1 flex-col gap-5 overflow-y-auto">
@@ -90,9 +85,7 @@ export function Shell({
         {/* Kopfzeile nur auf kleinen Screens */}
         <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-default-100/70 bg-background/80 px-4 py-3 backdrop-blur lg:hidden">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/15 text-sm font-semibold text-primary">
-              &euro;
-            </div>
+            <LogoMark size={30} id="topbar" />
             <span className="text-sm font-semibold">
               {current?.label ?? "Finanzen"}
             </span>
