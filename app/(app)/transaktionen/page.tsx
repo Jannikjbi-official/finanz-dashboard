@@ -1,23 +1,12 @@
-import {
-  Card,
-  CardBody,
-  Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableColumn,
-  TableHeader,
-  TableRow,
-} from "@heroui/react";
+import { Card, CardBody, Chip } from "@heroui/react";
 import { requireUser } from "@/lib/session";
 import { getCategories, getTransactions } from "@/lib/queries";
 import { currentMonthKey } from "@/lib/dates";
-import { formatDate, formatMoney, formatSigned } from "@/lib/money";
+import { formatMoney, formatSigned } from "@/lib/money";
 import { MonthSwitcher } from "@/components/month-switcher";
 import { TransactionDialog } from "@/components/transaction-dialog";
 import { TransactionFilters } from "@/components/transaction-filters";
-import { ActionButton } from "@/components/action-button";
-import { deleteTransaction } from "@/lib/actions";
+import { TransactionsTable } from "@/components/transactions-table";
 
 export default async function TransactionsPage({
   searchParams,
@@ -51,8 +40,6 @@ export default async function TransactionsPage({
   const expense = rows
     .filter((tx) => tx.type === "expense")
     .reduce((sum, tx) => sum + tx.amountCents, 0);
-
-  const byId = new Map(categories.map((category) => [category.id, category]));
 
   return (
     <div className="flex flex-col gap-6">
@@ -91,89 +78,7 @@ export default async function TransactionsPage({
 
       <Card className="border border-default-100 bg-content1/60 backdrop-blur">
         <CardBody className="p-0">
-          <Table
-            aria-label="Buchungen"
-            removeWrapper
-            classNames={{ th: "bg-transparent text-tiny uppercase" }}
-          >
-            <TableHeader>
-              <TableColumn>Datum</TableColumn>
-              <TableColumn>Bezeichnung</TableColumn>
-              <TableColumn>Kategorie</TableColumn>
-              <TableColumn align="end">Betrag</TableColumn>
-              <TableColumn align="end">Aktionen</TableColumn>
-            </TableHeader>
-            <TableBody emptyContent="Keine Buchungen in diesem Monat.">
-              {rows.map((tx) => {
-                const category = tx.categoryId ? byId.get(tx.categoryId) : undefined;
-
-                return (
-                  <TableRow key={tx.id}>
-                    <TableCell className="whitespace-nowrap text-default-500">
-                      {formatDate(tx.date)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span>{tx.title}</span>
-                        {tx.note ? (
-                          <span className="text-tiny text-default-400">
-                            {tx.note}
-                          </span>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {category ? (
-                        <Chip
-                          size="sm"
-                          variant="flat"
-                          style={{
-                            backgroundColor: `${category.color}22`,
-                            color: category.color,
-                          }}
-                        >
-                          {category.icon ? `${category.icon} ` : ""}
-                          {category.name}
-                        </Chip>
-                      ) : (
-                        <span className="text-tiny text-default-400">&ndash;</span>
-                      )}
-                    </TableCell>
-                    <TableCell
-                      className={`whitespace-nowrap text-right tabular-nums ${
-                        tx.type === "income" ? "text-success" : "text-danger"
-                      }`}
-                    >
-                      {tx.type === "income" ? "+" : "-"}
-                      {formatMoney(tx.amountCents)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <TransactionDialog
-                          categories={categories}
-                          transaction={tx}
-                          trigger={
-                            <span className="cursor-pointer rounded-lg px-2 py-1 text-tiny text-default-500 hover:bg-default-100 hover:text-foreground">
-                              Bearbeiten
-                            </span>
-                          }
-                        />
-                        <ActionButton
-                          action={deleteTransaction}
-                          id={tx.id}
-                          color="danger"
-                          confirm="Buchung wirklich löschen?"
-                          title="Löschen"
-                        >
-                          Löschen
-                        </ActionButton>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <TransactionsTable rows={rows} categories={categories} />
         </CardBody>
       </Card>
     </div>
