@@ -31,14 +31,29 @@ export function RecurringDialog({
   entry,
   trigger,
   lockType,
+  isOpen: controlledOpen,
+  onOpenChange: controlledOpenChange,
 }: {
   categories: Category[];
   entry?: Recurring;
   trigger?: React.ReactNode;
   /** Typ festnageln - auf der Abo-Seite gibt es nur Ausgaben. */
   lockType?: Kind;
+  /** Von aussen gesteuert, z.B. aus einem Aktionsmenue heraus. */
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
+  const internal = useDisclosure();
+  const controlled = controlledOpen !== undefined;
+
+  const isOpen = controlled ? controlledOpen : internal.isOpen;
+  const onOpen = controlled ? () => controlledOpenChange?.(true) : internal.onOpen;
+  const onOpenChange = controlled
+    ? (open: boolean) => controlledOpenChange?.(open)
+    : internal.onOpenChange;
+  const onClose = controlled
+    ? () => controlledOpenChange?.(false)
+    : internal.onClose;
   const [state, formAction, pending] = useActionState(saveRecurring, INITIAL);
   const [type, setType] = useState<Kind>(entry?.type ?? lockType ?? "expense");
   const [active, setActive] = useState(entry?.active ?? true);
@@ -54,7 +69,7 @@ export function RecurringDialog({
 
   return (
     <>
-      {trigger ? (
+      {controlled ? null : trigger ? (
         <span onClick={onOpen} role="button" tabIndex={-1}>
           {trigger}
         </span>

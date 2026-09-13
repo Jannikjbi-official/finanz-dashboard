@@ -1,54 +1,22 @@
-import { Card, CardBody, CardHeader, Chip, Divider } from "@heroui/react";
+import { Chip } from "@heroui/react";
+import NextLink from "next/link";
 import { requireUser } from "@/lib/session";
-import { getDashboard } from "@/lib/queries";
+import { getAccounts, getDashboard } from "@/lib/queries";
 import { currentMonthKey, INTERVAL_LABEL, daysUntil } from "@/lib/dates";
 import { formatDate, formatMoney, formatSigned } from "@/lib/money";
 import { CategoryBars, Donut, TrendChart } from "@/components/charts";
 import { MonthSwitcher } from "@/components/month-switcher";
 import { TransactionDialog } from "@/components/transaction-dialog";
 import { RecurringDialog } from "@/components/recurring-dialog";
-import { ActionButton } from "@/components/action-button";
-import { deleteRecurring, toggleRecurring } from "@/lib/actions";
-import { monthlyAmount } from "@/lib/dates";
-
-function Stat({
-  label,
-  value,
-  hint,
-  tone = "default",
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  tone?: "default" | "success" | "danger" | "primary";
-}) {
-  const toneClass = {
-    default: "text-foreground",
-    success: "text-success",
-    danger: "text-danger",
-    primary: "text-primary",
-  }[tone];
-
-  return (
-    <Card className="border border-default-100 bg-content1/60 backdrop-blur">
-      <CardBody className="gap-1 p-5">
-        <span className="text-tiny uppercase tracking-wide text-default-400">
-          {label}
-        </span>
-        <span className={`text-2xl font-semibold tabular-nums ${toneClass}`}>
-          {value}
-        </span>
-        {hint ? <span className="text-tiny text-default-400">{hint}</span> : null}
-      </CardBody>
-    </Card>
-  );
-}
+import { RecurringList } from "@/components/recurring-list";
+import { TransactionList } from "@/components/transaction-list";
+import { EmptyState, PageHeader, SectionCard, StatCard } from "@/components/ui";
 
 function diffHint(current: number, previous: number) {
   if (previous === 0) return current === 0 ? "keine Vormonatsdaten" : "neu";
   const change = ((current - previous) / previous) * 100;
   const sign = change > 0 ? "+" : "";
-  return `${sign}${change.toFixed(0)}% zum Vormonat`;
+  return `${sign}${change.toFixed(0)} % zum Vormonat`;
 }
 
 export default async function DashboardPage({
@@ -62,96 +30,94 @@ export default async function DashboardPage({
     ? params.m!
     : currentMonthKey();
 
-  const data = await getDashboard(user.id, month);
+  const [data, accounts] = await Promise.all([
+    getDashboard(user.id, month),
+    getAccounts(user.id),
+  ]);
+
   const saldo = data.monthTotals.income - data.monthTotals.expense;
+  const fixSaldo = data.recurringMonthlyIncome - data.recurringMonthlyExpense;
   const totalExpense = data.monthTotals.expense;
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-default-500">
-            Hallo {user.name || user.email.split("@")[0]}, hier ist dein Überblick.
-          </p>
-        </div>
+      <PageHeader
+        title={`Hallo ${user.name || user.email.split("@")[0]}`}
+        description="Dein Überblick für diesen Monat."
+        actions={
+          <>
+            <MonthSwitcher month={month} />
+            <TransactionDialog categories={data.categories} accounts={accounts} />
+          </>
+        }
+      />
 
-        <div className="flex items-center gap-2">
-          <MonthSwitcher month={month} />
-          <TransactionDialog categories={data.categories} />
-        </div>
-      </header>
-
-      <section className="grid gap-4 sm:grid-cols-3">
-        <Stat
+      {/* ---------- Monat ---------- */}
+      <section className="grid gap-3 sm:grid-cols-3">
+        <StatCard
           label="Einnahmen"
           value={formatMoney(data.monthTotals.income)}
           hint={diffHint(data.monthTotals.income, data.previousTotals.income)}
           tone="success"
         />
-        <Stat
+        <StatCard
           label="Ausgaben"
           value={formatMoney(data.monthTotals.expense)}
           hint={diffHint(data.monthTotals.expense, data.previousTotals.expense)}
           tone="danger"
         />
-        <Stat
-          label="Saldo Monat"
+        <StatCard
+          label="Saldo"
           value={formatSigned(saldo)}
           hint={`Gesamt: ${formatSigned(data.allTime.income - data.allTime.expense)}`}
           tone={saldo >= 0 ? "success" : "danger"}
         />
       </section>
 
+      {/* ---------- Fixkosten ---------- */}
       <section className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-sm font-semibold">Fixkosten</h2>
-          <span className="text-tiny text-default-400">
+          <span className="hidden text-tiny text-default-400 sm:block">
             Abos und feste Einnahmen, auf den Monat gerechnet
           </span>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Stat
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
             label="Abos pro Monat"
             value={formatMoney(data.recurringMonthlyExpense)}
             hint={`${data.activeSubscriptions} aktive Abos`}
             tone="danger"
           />
-          <Stat
+          <StatCard
             label="Abos pro Jahr"
             value={formatMoney(data.recurringMonthlyExpense * 12)}
             hint="hochgerechnet"
             tone="danger"
           />
-          <Stat
+          <StatCard
             label="Feste Einnahmen"
             value={formatMoney(data.recurringMonthlyIncome)}
             hint="pro Monat"
             tone="success"
           />
-          <Stat
+          <StatCard
             label="Fixkosten-Saldo"
-            value={formatSigned(
-              data.recurringMonthlyIncome - data.recurringMonthlyExpense,
-            )}
+            value={formatSigned(fixSaldo)}
             hint="pro Monat übrig"
-            tone={
-              data.recurringMonthlyIncome - data.recurringMonthlyExpense >= 0
-                ? "success"
-                : "danger"
-            }
+            tone={fixSaldo >= 0 ? "success" : "danger"}
           />
         </div>
       </section>
 
+      {/* ---------- Verlauf und Kategorien ---------- */}
       <section className="grid gap-4 lg:grid-cols-3">
-        <Card className="border border-default-100 bg-content1/60 backdrop-blur lg:col-span-2">
-          <CardHeader className="flex items-center justify-between pb-0">
-            <div>
-              <h2 className="text-sm font-semibold">Verlauf</h2>
-              <p className="text-tiny text-default-400">Letzte 6 Monate</p>
-            </div>
+        <SectionCard
+          title="Verlauf"
+          description="Letzte 6 Monate"
+          className="lg:col-span-2"
+          action={
             <div className="flex gap-3 text-tiny text-default-400">
               <span className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-success" /> Einnahmen
@@ -160,241 +126,121 @@ export default async function DashboardPage({
                 <span className="h-2 w-2 rounded-full bg-danger" /> Ausgaben
               </span>
             </div>
-          </CardHeader>
-          <CardBody className="p-5">
-            <TrendChart data={data.trend} />
-          </CardBody>
-        </Card>
+          }
+        >
+          <TrendChart data={data.trend} />
+        </SectionCard>
 
-        <Card className="border border-default-100 bg-content1/60 backdrop-blur">
-          <CardHeader className="pb-0">
-            <h2 className="text-sm font-semibold">Ausgaben nach Kategorie</h2>
-          </CardHeader>
-          <CardBody className="gap-5 p-5">
-            <Donut
-              slices={data.expenseByCategory.slice(0, 8)}
-              total={totalExpense}
-              label="Ausgaben"
-            />
-            <CategoryBars
-              slices={data.expenseByCategory.slice(0, 6)}
-              total={totalExpense}
-            />
-          </CardBody>
-        </Card>
+        <SectionCard title="Ausgaben nach Kategorie" bodyClassName="gap-5 p-5">
+          {totalExpense === 0 ? (
+            <EmptyState title="In diesem Monat noch keine Ausgaben." />
+          ) : (
+            <>
+              <Donut
+                slices={data.expenseByCategory.slice(0, 8)}
+                total={totalExpense}
+                label="Ausgaben"
+              />
+              <CategoryBars
+                slices={data.expenseByCategory.slice(0, 6)}
+                total={totalExpense}
+              />
+            </>
+          )}
+        </SectionCard>
       </section>
 
+      {/* ---------- Listen ---------- */}
       <section className="grid gap-4 lg:grid-cols-3">
-        <Card className="border border-default-100 bg-content1/60 backdrop-blur">
-          <CardHeader className="pb-0">
-            <h2 className="text-sm font-semibold">Einnahmen nach Kategorie</h2>
-          </CardHeader>
-          <CardBody className="p-5">
-            <CategoryBars
-              slices={data.incomeByCategory}
-              total={data.monthTotals.income}
-            />
-          </CardBody>
-        </Card>
+        <SectionCard
+          title="Letzte Buchungen"
+          className="lg:col-span-2"
+          action={
+            <NextLink
+              href="/transaktionen"
+              className="text-tiny text-primary hover:underline"
+            >
+              alle ansehen
+            </NextLink>
+          }
+        >
+          <TransactionList
+            rows={data.recent}
+            categories={data.categories}
+            accounts={accounts}
+            emptyTitle="In diesem Monat noch nichts gebucht."
+          />
+        </SectionCard>
 
-        <Card className="border border-default-100 bg-content1/60 backdrop-blur">
-          <CardHeader className="flex items-center justify-between pb-0">
-            <h2 className="text-sm font-semibold">Nächste Fälligkeiten</h2>
-            <Chip size="sm" variant="flat" color="primary">
-              {data.activeSubscriptions}
-            </Chip>
-          </CardHeader>
-          <CardBody className="p-5">
-            {data.upcoming.length === 0 ? (
-              <p className="py-6 text-center text-sm text-default-400">
-                Keine aktiven Abos.
-              </p>
-            ) : (
-              <ul className="flex flex-col divide-y divide-default-100">
-                {data.upcoming.map((entry) => {
-                  const days = daysUntil(entry.nextDue);
-                  return (
-                    <li
-                      key={entry.id}
-                      className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm">{entry.title}</p>
-                        <p className="text-tiny text-default-400">
-                          {INTERVAL_LABEL[entry.interval]} &middot;{" "}
-                          {days <= 0
-                            ? "fällig"
-                            : days === 1
-                              ? "morgen"
-                              : `in ${days} Tagen`}
-                        </p>
-                      </div>
-                      <span
-                        className={`shrink-0 text-sm tabular-nums ${
-                          entry.type === "income" ? "text-success" : "text-danger"
-                        }`}
-                      >
-                        {entry.type === "income" ? "+" : "-"}
+        <SectionCard
+          title="Nächste Abos"
+          action={
+            <NextLink href="/abos" className="text-tiny text-primary hover:underline">
+              zu den Abos
+            </NextLink>
+          }
+        >
+          {data.upcoming.length === 0 ? (
+            <EmptyState title="Keine aktiven Abos." />
+          ) : (
+            <ul className="flex flex-col divide-y divide-default-100/70">
+              {data.upcoming.map((entry) => {
+                const days = daysUntil(entry.nextDue);
+                return (
+                  <li
+                    key={entry.id}
+                    className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm">{entry.title}</p>
+                      <p className="text-tiny text-default-400">
+                        {INTERVAL_LABEL[entry.interval]} · {formatDate(entry.nextDue)}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm tabular-nums text-danger">
                         {formatMoney(entry.amountCents)}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </CardBody>
-        </Card>
-
-        <Card className="border border-default-100 bg-content1/60 backdrop-blur">
-          <CardHeader className="pb-0">
-            <h2 className="text-sm font-semibold">Letzte Buchungen</h2>
-          </CardHeader>
-          <CardBody className="p-5">
-            {data.recent.length === 0 ? (
-              <p className="py-6 text-center text-sm text-default-400">
-                In diesem Monat noch nichts gebucht.
-              </p>
-            ) : (
-              <ul className="flex flex-col divide-y divide-default-100">
-                {data.recent.map((tx) => {
-                  const category = data.categories.find(
-                    (entry) => entry.id === tx.categoryId,
-                  );
-                  return (
-                    <li
-                      key={tx.id}
-                      className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm">
-                          {category?.icon ? `${category.icon} ` : ""}
-                          {tx.title}
-                        </p>
-                        <p className="text-tiny text-default-400">
-                          {formatDate(tx.date)}
-                          {category ? ` - ${category.name}` : ""}
-                        </p>
-                      </div>
-                      <span
-                        className={`shrink-0 text-sm tabular-nums ${
-                          tx.type === "income" ? "text-success" : "text-danger"
-                        }`}
-                      >
-                        {tx.type === "income" ? "+" : "-"}
-                        {formatMoney(tx.amountCents)}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </CardBody>
-        </Card>
+                      </p>
+                      {days <= 0 ? (
+                        <Chip size="sm" color="warning" variant="flat">
+                          fällig
+                        </Chip>
+                      ) : (
+                        <p className="text-tiny text-default-400">in {days} T.</p>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </SectionCard>
       </section>
 
-      <section>
-        <Card className="border border-default-100 bg-content1/60 backdrop-blur">
-          <CardHeader className="flex items-center justify-between pb-0">
-            <div>
-              <h2 className="text-sm font-semibold">Feste Einnahmen</h2>
-              <p className="text-tiny text-default-400">
-                Gehalt und andere regelmäßige Eingänge
-              </p>
-            </div>
-            <RecurringDialog
-              categories={data.categories}
-              lockType="income"
-              trigger={
-                <span className="inline-flex h-8 cursor-pointer items-center rounded-lg bg-success/15 px-3 text-tiny font-medium text-success hover:bg-success/25">
-                  Feste Einnahme anlegen
-                </span>
-              }
-            />
-          </CardHeader>
-
-          <CardBody className="p-5">
-            {data.recurringIncome.length === 0 ? (
-              <p className="py-6 text-center text-sm text-default-400">
-                Noch keine festen Einnahmen hinterlegt.
-              </p>
-            ) : (
-              <ul className="flex flex-col divide-y divide-default-100">
-                {data.recurringIncome.map((entry) => {
-                  const category = data.categories.find(
-                    (item) => item.id === entry.categoryId,
-                  );
-
-                  return (
-                    <li
-                      key={entry.id}
-                      className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="flex items-center gap-2 truncate text-sm">
-                          {category?.icon ? `${category.icon} ` : ""}
-                          {entry.title}
-                          {!entry.active ? (
-                            <Chip size="sm" variant="flat">
-                              pausiert
-                            </Chip>
-                          ) : null}
-                        </p>
-                        <p className="text-tiny text-default-400">
-                          {INTERVAL_LABEL[entry.interval]} &middot; nächste Zahlung{" "}
-                          {formatDate(entry.nextDue)}
-                        </p>
-                      </div>
-
-                      <div className="text-right">
-                        <p className="text-sm tabular-nums text-success">
-                          {formatMoney(entry.amountCents)}
-                        </p>
-                        <p className="text-tiny text-default-400">
-                          ={" "}
-                          {formatMoney(
-                            monthlyAmount(entry.amountCents, entry.interval),
-                          )}
-                          /Monat
-                        </p>
-                      </div>
-
-                      <div className="flex gap-1">
-                        <ActionButton
-                          action={toggleRecurring}
-                          id={entry.id}
-                          title={entry.active ? "Pausieren" : "Aktivieren"}
-                        >
-                          {entry.active ? "Pause" : "Start"}
-                        </ActionButton>
-                        <RecurringDialog
-                          categories={data.categories}
-                          entry={entry}
-                          lockType="income"
-                          trigger={
-                            <span className="inline-flex h-8 cursor-pointer items-center rounded-lg px-3 text-tiny text-default-500 hover:bg-default-100 hover:text-foreground">
-                              Bearbeiten
-                            </span>
-                          }
-                        />
-                        <ActionButton
-                          action={deleteRecurring}
-                          id={entry.id}
-                          color="danger"
-                          confirm="Feste Einnahme wirklich löschen?"
-                        >
-                          Löschen
-                        </ActionButton>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </CardBody>
-        </Card>
-      </section>
-
-      <Divider className="opacity-0" />
+      {/* ---------- Feste Einnahmen ---------- */}
+      <SectionCard
+        title="Feste Einnahmen"
+        description="Gehalt und andere regelmäßige Eingänge"
+        action={
+          <RecurringDialog
+            categories={data.categories}
+            lockType="income"
+            trigger={
+              <span className="inline-flex h-8 cursor-pointer items-center rounded-lg bg-success/15 px-3 text-tiny font-medium text-success transition-colors hover:bg-success/25">
+                Anlegen
+              </span>
+            }
+          />
+        }
+      >
+        <RecurringList
+          entries={data.recurringIncome}
+          categories={data.categories}
+          lockType="income"
+          emptyTitle="Noch keine festen Einnahmen hinterlegt."
+          emptyHint="Trag dein Gehalt ein, dann stimmt der Fixkosten-Saldo."
+        />
+      </SectionCard>
     </div>
   );
 }

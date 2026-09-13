@@ -74,30 +74,55 @@ Nach jeder Änderung an den Environment Variables einmal neu deployen.
 
 ## Funktionen
 
-- **Dashboard** – Einnahmen, Ausgaben, Saldo und Abo-Kosten des Monats,
-  Vergleich zum Vormonat, 6-Monats-Verlauf, Kategorie-Donut, fällige Abos.
+- **Dashboard** – Einnahmen, Ausgaben und Saldo des Monats mit Vormonatsvergleich,
+  Fixkosten-Block (Abos pro Monat/Jahr, feste Einnahmen, Fixkosten-Saldo),
+  6-Monats-Verlauf, Kategorie-Donut, nächste Abos und letzte Buchungen.
+  Feste Einnahmen werden hier verwaltet.
 - **Buchungen** – anlegen, bearbeiten, löschen; Filter nach Typ und Kategorie,
   Monatswechsel, Summen pro Auswahl. Der Dialog legt wahlweise eine einmalige
-  Buchung oder direkt einen Dauerauftrag an (Umschalter „Einmalig /
-  Dauerauftrag"), er ist aus dem Dashboard und aus der Buchungsliste erreichbar.
-- **Abos** – Daueraufträge mit Intervall (wöchentlich, monatlich,
-  vierteljährlich, jährlich). Alles wird auf Monats- und Jahreskosten
-  hochgerechnet, inklusive Aufteilung nach Kategorie. „Buchen" übernimmt eine
-  fällige Zahlung als echte Buchung und setzt die nächste Fälligkeit.
+  Buchung oder direkt einen Dauerauftrag an.
+- **Abos** – ausschließlich regelmäßige Ausgaben, hochgerechnet auf Monat und
+  Jahr, mit nächster Fälligkeit und teuerstem Abo. „Buchen" übernimmt eine
+  fällige Zahlung als echte Buchung.
+- **Auswertung** – Jahresübersicht: Monatsverlauf mit Saldo, Sparquote,
+  Kategorien über das ganze Jahr, größte Einzelausgaben, bester und schwächster
+  Monat.
+- **Budgets & Sparziele** – Monatsbudget je Ausgaben-Kategorie mit Fortschritt
+  und Drei-Monats-Durchschnitt als Orientierung; Sparziele mit Zielbetrag,
+  Zieldatum und Ein-/Auszahlung.
+- **Konten** – mehrere Konten mit Startsaldo, laufender Kontostand aus den
+  zugeordneten Buchungen, Gesamtvermögen und Umbuchung zwischen Konten.
+- **Import / Export** – Buchungen als CSV herunterladen (gesamt oder pro Jahr)
+  und CSV importieren, inklusive Kategoriezuordnung über den Namen.
 - **Einstellungen** – eigene Kategorien für Einnahmen und Ausgaben mit Symbol,
-  Farbe und optionalem Monatsbudget (Budget-Überschreitung wird markiert).
+  Farbe und optionalem Monatsbudget.
+
+Die Oberfläche ist für Handy und Desktop gebaut: ab `lg` eine Sidebar mit
+gruppierter Navigation, darunter eine feste untere Leiste mit den vier
+wichtigsten Bereichen und einem Menü für den Rest.
 
 ## Struktur
 
 ```
-app/(app)/           Dashboard, Buchungen, Abos, Einstellungen (geschützt)
+app/(app)/           Geschützte Seiten: Dashboard, Buchungen, Abos,
+                     Auswertung, Budgets, Konten, Import/Export, Einstellungen
 app/login/           Login & Registrierung
 app/api/auth/        Better-Auth-Handler
+app/api/export/      CSV-Export
 lib/auth.ts          Auth-Konfiguration + Zugangssperre
 lib/mongo.ts         MongoDB-Client, Collections, Indizes
-lib/queries.ts       Lesezugriffe und Dashboard-Aggregationen
+lib/queries.ts       Lesezugriffe und Aggregationen (server-only)
 lib/actions.ts       Server Actions (Schreiben)
-components/          HeroUI-Oberfläche
+lib/types.ts         Typen, die Client und Server teilen
+lib/nav.ts           Navigationsstruktur
+lib/csv.ts           CSV lesen und schreiben
+components/ui.tsx    Design-System: PageHeader, StatCard, SectionCard, Bar
+components/          Übrige HeroUI-Oberfläche
 ```
+
+**Wichtig bei HeroUI:** Collection-Komponenten (`SelectItem`, `TableRow`,
+`DropdownItem`, `Tab` …) müssen in einer Client-Komponente stehen. Aus einer
+Server Component kommt dort nur eine RSC-Referenz an, und react-stately wirft
+`Unknown element <[object Object]> in collection`.
 
 Beträge werden immer als Ganzzahl in Cent gespeichert – keine Rundungsfehler.

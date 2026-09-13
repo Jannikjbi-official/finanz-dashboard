@@ -12,6 +12,7 @@ import {
   addToast,
 } from "@heroui/react";
 import { deleteCategory, saveCategory, type ActionState } from "@/lib/actions";
+import { surface } from "@/components/ui";
 import { formatMoney } from "@/lib/money";
 import { ActionButton } from "@/components/action-button";
 import type { Category, Kind } from "@/lib/types";
@@ -132,8 +133,8 @@ export function CategoryManager({
   const list = categories.filter((category) => category.kind === kind);
 
   return (
-    <Card className="border border-default-100 bg-content1/60 backdrop-blur">
-      <CardHeader className="flex items-center justify-between pb-0">
+    <Card className={surface} shadow="none">
+      <CardHeader className="flex items-center justify-between px-5 pb-0 pt-5">
         <h2 className="text-sm font-semibold">{title}</h2>
         <Chip size="sm" variant="flat">
           {list.length}
@@ -141,7 +142,7 @@ export function CategoryManager({
       </CardHeader>
 
       <CardBody className="gap-5 p-5">
-        <ul className="flex flex-col divide-y divide-default-100">
+        <ul className="flex flex-col divide-y divide-default-100/70">
           {list.length === 0 ? (
             <li className="py-4 text-center text-sm text-default-400">
               Noch keine Kategorien.

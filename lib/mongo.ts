@@ -37,6 +37,8 @@ export type TransactionDoc = {
   date: string; // YYYY-MM-DD
   categoryId: string | null;
   recurringId: string | null;
+  /** Optional - aeltere Buchungen haben kein Konto. */
+  accountId?: string | null;
   createdAt: Date;
 };
 
@@ -54,9 +56,33 @@ export type RecurringDoc = {
   createdAt: Date;
 };
 
+export type GoalDoc = {
+  userId: string;
+  title: string;
+  targetCents: number;
+  savedCents: number;
+  deadline: string | null;
+  color: string;
+  note: string | null;
+  createdAt: Date;
+};
+
+export type AccountDoc = {
+  userId: string;
+  name: string;
+  kind: "giro" | "cash" | "savings" | "other";
+  startBalanceCents: number;
+  color: string;
+  icon: string;
+  archived: boolean;
+  createdAt: Date;
+};
+
 export const categories = db.collection<CategoryDoc>("categories");
 export const transactions = db.collection<TransactionDoc>("transactions");
 export const recurring = db.collection<RecurringDoc>("recurring");
+export const goals = db.collection<GoalDoc>("goals");
+export const accounts = db.collection<AccountDoc>("accounts");
 
 /** Indizes einmal pro Prozess anlegen. */
 export function ensureIndexes(): Promise<void> {
@@ -68,6 +94,8 @@ export function ensureIndexes(): Promise<void> {
     await transactions.createIndex({ userId: 1, date: -1 });
     await transactions.createIndex({ userId: 1, categoryId: 1 });
     await recurring.createIndex({ userId: 1, active: 1 });
+    await goals.createIndex({ userId: 1 });
+    await accounts.createIndex({ userId: 1, archived: 1 });
   })().catch((error) => {
     globalForMongo.__mongoIndexes = undefined;
     throw error;

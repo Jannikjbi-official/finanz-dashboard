@@ -34,12 +34,12 @@ export function TransactionFilters({
   }
 
   return (
-    <div className="flex flex-wrap gap-3">
+    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:gap-3">
       <Select
         aria-label="Typ"
         size="sm"
         variant="bordered"
-        className="w-40"
+        className="w-full sm:w-40"
         selectedKeys={[type]}
         onChange={(event) => {
           if (event.target.value) update("type", event.target.value);
@@ -54,7 +54,7 @@ export function TransactionFilters({
         aria-label="Kategorie"
         size="sm"
         variant="bordered"
-        className="w-52"
+        className="w-full sm:w-52"
         selectedKeys={[category]}
         onChange={(event) => {
           if (event.target.value) update("cat", event.target.value);

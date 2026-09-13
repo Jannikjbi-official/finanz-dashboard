@@ -1,15 +1,19 @@
 import "server-only";
 import type { WithId } from "mongodb";
 import {
+  accounts,
   categories,
   ensureIndexes,
+  goals,
   recurring,
   transactions,
   type CategoryDoc,
   type RecurringDoc,
   type TransactionDoc,
 } from "./mongo";
-import type { Category, Recurring, Transaction } from "./types";
+import type { Account, Category, Goal, Recurring, Transaction } from "./types";
+export type { Account, Goal } from "./types";
+export { ACCOUNT_KIND_LABEL } from "./types";
 import { currentMonthKey, lastMonthKeys, monthRange, monthlyAmount } from "./dates";
 
 function mapCategory(doc: WithId<CategoryDoc>): Category {
@@ -33,6 +37,7 @@ function mapTransaction(doc: WithId<TransactionDoc>): Transaction {
     date: doc.date,
     categoryId: doc.categoryId ?? null,
     recurringId: doc.recurringId ?? null,
+    accountId: doc.accountId ?? null,
   };
 }
 
@@ -216,4 +221,289 @@ export async function getDashboard(
     recent: monthTx.slice(0, 8),
     categories: cats,
   };
+}
+
+/* ------------------------------ Auswertung ------------------------------- */
+
+export type YearStats = {
+  year: number;
+  months: Array<{ month: string; income: number; expense: number }>;
+  totals: { income: number; expense: number };
+  best: { month: string; saldo: number } | null;
+  worst: { month: string; saldo: number } | null;
+  expenseByCategory: CategorySlice[];
+  incomeByCategory: CategorySlice[];
+  topExpenses: Transaction[];
+  transactionCount: number;
+  activeMonths: number;
+};
+
+export async function getYearStats(
+  userId: string,
+  year: number,
+): Promise<YearStats> {
+  await ensureIndexes();
+
+  const start = `${year}-01-01`;
+  const end = `${year}-12-31`;
+
+  const [cats, rows, topExpenses, transactionCount] = await Promise.all([
+    getCategories(userId),
+    transactions
+      .aggregate<{
+        _id: { month: string; type: "income" | "expense" };
+        sum: number;
+      }>([
+        { $match: { userId, date: { $gte: start, $lte: end } } },
+        {
+          $group: {
+            _id: { month: { $substrBytes: ["$date", 0, 7] }, type: "$type" },
+            sum: { $sum: "$amountCents" },
+          },
+        },
+      ])
+      .toArray(),
+    transactions
+      .find({ userId, type: "expense", date: { $gte: start, $lte: end } })
+      .sort({ amountCents: -1 })
+      .limit(8)
+      .toArray(),
+    transactions.countDocuments({ userId, date: { $gte: start, $lte: end } }),
+  ]);
+
+  const monthMap = new Map<string, { income: number; expense: number }>();
+  for (let index = 1; index <= 12; index += 1) {
+    monthMap.set(`${year}-${`${index}`.padStart(2, "0")}`, {
+      income: 0,
+      expense: 0,
+    });
+  }
+  for (const row of rows) {
+    const bucket = monthMap.get(row._id.month);
+    if (bucket) bucket[row._id.type] = row.sum;
+  }
+
+  const months = [...monthMap.entries()].map(([month, value]) => ({
+    month,
+    ...value,
+  }));
+
+  const totals = months.reduce(
+    (acc, entry) => ({
+      income: acc.income + entry.income,
+      expense: acc.expense + entry.expense,
+    }),
+    { income: 0, expense: 0 },
+  );
+
+  const withData = months.filter(
+    (entry) => entry.income > 0 || entry.expense > 0,
+  );
+  const ranked = [...withData].sort(
+    (a, b) => b.income - b.expense - (a.income - a.expense),
+  );
+
+  // Kategorien ueber das ganze Jahr
+  const catRows = await transactions
+    .aggregate<{
+      _id: { categoryId: string | null; type: "income" | "expense" };
+      sum: number;
+    }>([
+      { $match: { userId, date: { $gte: start, $lte: end } } },
+      {
+        $group: {
+          _id: { categoryId: "$categoryId", type: "$type" },
+          sum: { $sum: "$amountCents" },
+        },
+      },
+    ])
+    .toArray();
+
+  const catById = new Map(cats.map((category) => [category.id, category]));
+
+  function slicesFor(kind: "income" | "expense"): CategorySlice[] {
+    return catRows
+      .filter((row) => row._id.type === kind)
+      .map((row) => {
+        const category = row._id.categoryId
+          ? catById.get(row._id.categoryId)
+          : undefined;
+        return {
+          categoryId: row._id.categoryId ?? null,
+          name: category?.name ?? "Ohne Kategorie",
+          color: category?.color ?? "#64748b",
+          icon: category?.icon ?? "",
+          amountCents: row.sum,
+          budgetCents: category?.budgetCents ?? null,
+        };
+      })
+      .sort((a, b) => b.amountCents - a.amountCents);
+  }
+
+  return {
+    year,
+    months,
+    totals,
+    best: ranked[0]
+      ? { month: ranked[0].month, saldo: ranked[0].income - ranked[0].expense }
+      : null,
+    worst: ranked.at(-1)
+      ? {
+          month: ranked.at(-1)!.month,
+          saldo: ranked.at(-1)!.income - ranked.at(-1)!.expense,
+        }
+      : null,
+    expenseByCategory: slicesFor("expense"),
+    incomeByCategory: slicesFor("income"),
+    topExpenses: topExpenses.map(mapTransaction),
+    transactionCount,
+    activeMonths: withData.length,
+  };
+}
+
+/* --------------------------- Budgets & Sparziele --------------------------- */
+
+export async function getGoals(userId: string): Promise<Goal[]> {
+  await ensureIndexes();
+
+  const docs = await goals.find({ userId }).sort({ createdAt: 1 }).toArray();
+
+  return docs.map((doc) => ({
+    id: doc._id.toString(),
+    title: doc.title,
+    targetCents: doc.targetCents,
+    savedCents: doc.savedCents,
+    deadline: doc.deadline ?? null,
+    color: doc.color,
+    note: doc.note ?? null,
+  }));
+}
+
+export type BudgetRow = {
+  category: Category;
+  spentCents: number;
+  /** Durchschnitt der letzten drei Monate, als Orientierung. */
+  averageCents: number;
+};
+
+export async function getBudgetOverview(
+  userId: string,
+  month = currentMonthKey(),
+): Promise<BudgetRow[]> {
+  await ensureIndexes();
+
+  const cats = await getCategories(userId);
+  const expenseCats = cats.filter((category) => category.kind === "expense");
+
+  const range = monthRange(month);
+  const threeMonths = lastMonthKeys(3, month);
+  const historyStart = monthRange(threeMonths[0]).start;
+  const historyEnd = monthRange(threeMonths[2]).end;
+
+  const [current, history] = await Promise.all([
+    transactions
+      .aggregate<{ _id: string | null; sum: number }>([
+        {
+          $match: {
+            userId,
+            type: "expense",
+            date: { $gte: range.start, $lte: range.end },
+          },
+        },
+        { $group: { _id: "$categoryId", sum: { $sum: "$amountCents" } } },
+      ])
+      .toArray(),
+    transactions
+      .aggregate<{ _id: string | null; sum: number }>([
+        {
+          $match: {
+            userId,
+            type: "expense",
+            date: { $gte: historyStart, $lte: historyEnd },
+          },
+        },
+        { $group: { _id: "$categoryId", sum: { $sum: "$amountCents" } } },
+      ])
+      .toArray(),
+  ]);
+
+  const spent = new Map(current.map((row) => [row._id, row.sum]));
+  const average = new Map(
+    history.map((row) => [row._id, Math.round(row.sum / 3)]),
+  );
+
+  return expenseCats
+    .map((category) => ({
+      category,
+      spentCents: spent.get(category.id) ?? 0,
+      averageCents: average.get(category.id) ?? 0,
+    }))
+    .sort((a, b) => {
+      // Kategorien mit Budget zuerst, dann nach Ausgaben
+      const budgetDiff =
+        Number(Boolean(b.category.budgetCents)) -
+        Number(Boolean(a.category.budgetCents));
+      if (budgetDiff !== 0) return budgetDiff;
+      return b.spentCents - a.spentCents;
+    });
+}
+
+/* --------------------------------- Konten --------------------------------- */
+
+export async function getAccounts(userId: string): Promise<Account[]> {
+  await ensureIndexes();
+
+  const [docs, sums] = await Promise.all([
+    accounts.find({ userId }).sort({ createdAt: 1 }).toArray(),
+    transactions
+      .aggregate<{
+        _id: { accountId: string | null; type: "income" | "expense" };
+        sum: number;
+        count: number;
+      }>([
+        { $match: { userId, accountId: { $ne: null } } },
+        {
+          $group: {
+            _id: { accountId: "$accountId", type: "$type" },
+            sum: { $sum: "$amountCents" },
+            count: { $sum: 1 },
+          },
+        },
+      ])
+      .toArray(),
+  ]);
+
+  const movement = new Map<string, { delta: number; count: number }>();
+  for (const row of sums) {
+    if (!row._id.accountId) continue;
+    const entry = movement.get(row._id.accountId) ?? { delta: 0, count: 0 };
+    entry.delta += row._id.type === "income" ? row.sum : -row.sum;
+    entry.count += row.count;
+    movement.set(row._id.accountId, entry);
+  }
+
+  return docs.map((doc) => {
+    const id = doc._id.toString();
+    const entry = movement.get(id) ?? { delta: 0, count: 0 };
+
+    return {
+      id,
+      name: doc.name,
+      kind: doc.kind,
+      startBalanceCents: doc.startBalanceCents,
+      balanceCents: doc.startBalanceCents + entry.delta,
+      color: doc.color,
+      icon: doc.icon,
+      archived: doc.archived,
+      transactionCount: entry.count,
+    };
+  });
+}
+
+/** Buchungen ohne Kontozuordnung - fuer den Hinweis auf der Kontenseite. */
+export async function countTransactionsWithoutAccount(userId: string) {
+  return transactions.countDocuments({
+    userId,
+    $or: [{ accountId: null }, { accountId: { $exists: false } }],
+  });
 }

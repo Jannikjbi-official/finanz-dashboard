@@ -21,6 +21,7 @@ import {
 import { saveRecurring, saveTransaction, type ActionState } from "@/lib/actions";
 import { INTERVAL_LABEL, todayISO } from "@/lib/dates";
 import type { Category, Interval, Kind, Transaction } from "@/lib/types";
+import type { Account } from "@/lib/types";
 
 const INITIAL: ActionState = { ok: true };
 const INTERVALS: Interval[] = ["monthly", "yearly", "quarterly", "weekly"];
@@ -29,16 +30,33 @@ type Mode = "once" | "recurring";
 
 export function TransactionDialog({
   categories,
+  accounts = [],
   transaction,
   trigger,
   defaultType = "expense",
+  isOpen: controlledOpen,
+  onOpenChange: controlledOpenChange,
 }: {
   categories: Category[];
+  accounts?: Account[];
   transaction?: Transaction;
   trigger?: React.ReactNode;
   defaultType?: Kind;
+  /** Von aussen gesteuert, z.B. aus einem Aktionsmenue heraus. */
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
+  const internal = useDisclosure();
+  const controlled = controlledOpen !== undefined;
+
+  const isOpen = controlled ? controlledOpen : internal.isOpen;
+  const onOpen = controlled ? () => controlledOpenChange?.(true) : internal.onOpen;
+  const onOpenChange = controlled
+    ? (open: boolean) => controlledOpenChange?.(open)
+    : internal.onOpenChange;
+  const onClose = controlled
+    ? () => controlledOpenChange?.(false)
+    : internal.onClose;
 
   const [mode, setMode] = useState<Mode>("once");
   const [type, setType] = useState<Kind>(transaction?.type ?? defaultType);
@@ -64,7 +82,7 @@ export function TransactionDialog({
 
   return (
     <>
-      {trigger ? (
+      {controlled ? null : trigger ? (
         <span onClick={onOpen} role="button" tabIndex={-1}>
           {trigger}
         </span>
@@ -190,6 +208,28 @@ export function TransactionDialog({
                       </SelectItem>
                     ))}
                   </Select>
+
+                  {mode === "once" && accounts.length > 0 ? (
+                    <Select
+                      name="accountId"
+                      label="Konto"
+                      variant="bordered"
+                      className="sm:col-span-2"
+                      defaultSelectedKeys={
+                        transaction?.accountId ? [transaction.accountId] : ["none"]
+                      }
+                    >
+                      {[
+                        { id: "none", name: "Ohne Konto", icon: "" },
+                        ...accounts,
+                      ].map((account) => (
+                        <SelectItem key={account.id} textValue={account.name}>
+                          {account.icon ? `${account.icon} ` : ""}
+                          {account.name}
+                        </SelectItem>
+                      ))}
+                    </Select>
+                  ) : null}
                 </div>
 
                 <Textarea

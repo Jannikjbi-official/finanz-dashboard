@@ -1,12 +1,12 @@
-import { Card, CardBody, Chip } from "@heroui/react";
 import { requireUser } from "@/lib/session";
-import { getCategories, getTransactions } from "@/lib/queries";
+import { getAccounts, getCategories, getTransactions } from "@/lib/queries";
 import { currentMonthKey } from "@/lib/dates";
 import { formatMoney, formatSigned } from "@/lib/money";
 import { MonthSwitcher } from "@/components/month-switcher";
 import { TransactionDialog } from "@/components/transaction-dialog";
 import { TransactionFilters } from "@/components/transaction-filters";
-import { TransactionsTable } from "@/components/transactions-table";
+import { TransactionList } from "@/components/transaction-list";
+import { PageHeader, SectionCard, StatCard } from "@/components/ui";
 
 export default async function TransactionsPage({
   searchParams,
@@ -19,9 +19,10 @@ export default async function TransactionsPage({
     ? params.m!
     : currentMonthKey();
 
-  const [categories, all] = await Promise.all([
+  const [categories, all, accounts] = await Promise.all([
     getCategories(user.id),
     getTransactions(user.id, { month }),
+    getAccounts(user.id),
   ]);
 
   const rows = all.filter((tx) => {
@@ -41,46 +42,65 @@ export default async function TransactionsPage({
     .filter((tx) => tx.type === "expense")
     .reduce((sum, tx) => sum + tx.amountCents, 0);
 
+  const filtered = rows.length !== all.length;
+
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Buchungen</h1>
-          <p className="text-sm text-default-500">
-            Alle Einnahmen und Ausgaben des Monats.
-          </p>
-        </div>
+      <PageHeader
+        title="Buchungen"
+        description="Alle Einnahmen und Ausgaben des Monats."
+        actions={
+          <>
+            <MonthSwitcher month={month} basePath="/transaktionen" />
+            <TransactionDialog categories={categories} accounts={accounts} />
+          </>
+        }
+      />
 
-        <div className="flex items-center gap-2">
-          <MonthSwitcher month={month} basePath="/transaktionen" />
-          <TransactionDialog categories={categories} />
-        </div>
-      </header>
+      <section className="grid gap-3 sm:grid-cols-3">
+        <StatCard
+          label="Einnahmen"
+          value={formatMoney(income)}
+          tone="success"
+          hint={`${rows.filter((tx) => tx.type === "income").length} Buchungen`}
+        />
+        <StatCard
+          label="Ausgaben"
+          value={formatMoney(expense)}
+          tone="danger"
+          hint={`${rows.filter((tx) => tx.type === "expense").length} Buchungen`}
+        />
+        <StatCard
+          label="Saldo"
+          value={formatSigned(income - expense)}
+          tone={income - expense >= 0 ? "success" : "danger"}
+          hint={filtered ? "gefilterte Auswahl" : "gesamter Monat"}
+        />
+      </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <TransactionFilters
+      <SectionCard
+        title={filtered ? `${rows.length} von ${all.length} Buchungen` : `${all.length} Buchungen`}
+        action={<TransactionFilters
           categories={categories}
           month={month}
           type={params.type ?? "all"}
           category={params.cat ?? "all"}
+        />}
+      >
+        <TransactionList
+          rows={rows}
+          categories={categories}
+          accounts={accounts}
+          emptyTitle={
+            filtered
+              ? "Keine Buchung passt zu diesem Filter."
+              : "In diesem Monat noch nichts gebucht."
+          }
+          emptyHint={
+            filtered ? undefined : "Lege oben rechts deine erste Buchung an."
+          }
         />
-
-        <div className="flex gap-2">
-          <Chip variant="flat" color="success">
-            + {formatMoney(income)}
-          </Chip>
-          <Chip variant="flat" color="danger">
-            - {formatMoney(expense)}
-          </Chip>
-          <Chip variant="flat">Saldo {formatSigned(income - expense)}</Chip>
-        </div>
-      </div>
-
-      <Card className="border border-default-100 bg-content1/60 backdrop-blur">
-        <CardBody className="p-0">
-          <TransactionsTable rows={rows} categories={categories} />
-        </CardBody>
-      </Card>
+      </SectionCard>
     </div>
   );
 }
