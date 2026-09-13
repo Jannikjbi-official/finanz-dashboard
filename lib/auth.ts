@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
+import { dash } from "@better-auth/infra";
 import { db } from "./mongo";
 import { seedDefaultCategories } from "./seed";
 
@@ -46,6 +47,7 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24,
     cookieCache: { enabled: true, maxAge: 5 * 60 },
   },
+  plugins: [dash()],
   databaseHooks: {
     user: {
       create: {

@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@better-auth/infra": "^0.4.9",
     "@heroui/react": "^2.8.10",
     "@heroui/theme": "^2.4.26",
     "better-auth": "^1.7.4",
