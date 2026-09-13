@@ -16,18 +16,25 @@ export default async function SubscriptionsPage() {
   ]);
 
   const byId = new Map(categories.map((category) => [category.id, category]));
-  const active = entries.filter((entry) => entry.active);
-  const expenses = active.filter((entry) => entry.type === "expense");
-  const incomes = active.filter((entry) => entry.type === "income");
+
+  // Abos sind ausschliesslich Ausgaben - feste Einnahmen leben im Dashboard.
+  const abos = entries.filter((entry) => entry.type === "expense");
+  const expenses = abos.filter((entry) => entry.active);
 
   const monthlyExpense = expenses.reduce(
     (sum, entry) => sum + monthlyAmount(entry.amountCents, entry.interval),
     0,
   );
-  const monthlyIncome = incomes.reduce(
-    (sum, entry) => sum + monthlyAmount(entry.amountCents, entry.interval),
-    0,
-  );
+
+  const nextDue = [...expenses].sort((a, b) =>
+    a.nextDue.localeCompare(b.nextDue),
+  )[0];
+
+  const priciest = [...expenses].sort(
+    (a, b) =>
+      monthlyAmount(b.amountCents, b.interval) -
+      monthlyAmount(a.amountCents, a.interval),
+  )[0];
 
   const buckets = new Map<string, number>();
   for (const entry of expenses) {
@@ -55,10 +62,10 @@ export default async function SubscriptionsPage() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">
-            Abos &amp; Daueraufträge
+            Abos
           </h1>
           <p className="text-sm text-default-500">
-            Alles was regelmäßig kommt oder geht.
+            Alle regelmäßigen Ausgaben, auf Monat und Jahr gerechnet.
           </p>
         </div>
         <RecurringDialog categories={categories} lockType="expense" />
@@ -94,28 +101,30 @@ export default async function SubscriptionsPage() {
         <Card className="border border-default-100 bg-content1/60 backdrop-blur">
           <CardBody className="gap-1 p-5">
             <span className="text-tiny uppercase tracking-wide text-default-400">
-              Feste Einnahmen
+              Nächste Zahlung
             </span>
-            <span className="text-2xl font-semibold tabular-nums text-success">
-              {formatMoney(monthlyIncome)}
+            <span className="text-2xl font-semibold tabular-nums">
+              {nextDue ? formatDate(nextDue.nextDue) : "-"}
             </span>
-            <span className="text-tiny text-default-400">pro Monat</span>
+            <span className="truncate text-tiny text-default-400">
+              {nextDue ? nextDue.title : "keine aktiven Abos"}
+            </span>
           </CardBody>
         </Card>
 
         <Card className="border border-default-100 bg-content1/60 backdrop-blur">
           <CardBody className="gap-1 p-5">
             <span className="text-tiny uppercase tracking-wide text-default-400">
-              Fixkosten-Saldo
+              Teuerstes Abo
             </span>
-            <span
-              className={`text-2xl font-semibold tabular-nums ${
-                monthlyIncome - monthlyExpense >= 0 ? "text-success" : "text-danger"
-              }`}
-            >
-              {formatMoney(monthlyIncome - monthlyExpense)}
+            <span className="text-2xl font-semibold tabular-nums text-danger">
+              {priciest
+                ? formatMoney(monthlyAmount(priciest.amountCents, priciest.interval))
+                : "-"}
             </span>
-            <span className="text-tiny text-default-400">pro Monat übrig</span>
+            <span className="truncate text-tiny text-default-400">
+              {priciest ? `${priciest.title} pro Monat` : "keine aktiven Abos"}
+            </span>
           </CardBody>
         </Card>
       </section>
@@ -126,13 +135,13 @@ export default async function SubscriptionsPage() {
             <h2 className="text-sm font-semibold">Alle Einträge</h2>
           </CardHeader>
           <CardBody className="p-5">
-            {entries.length === 0 ? (
+            {abos.length === 0 ? (
               <p className="py-10 text-center text-sm text-default-400">
                 Noch keine Abos angelegt.
               </p>
             ) : (
               <ul className="flex flex-col divide-y divide-default-100">
-                {entries.map((entry) => {
+                {abos.map((entry) => {
                   const category = entry.categoryId
                     ? byId.get(entry.categoryId)
                     : undefined;
@@ -150,7 +159,7 @@ export default async function SubscriptionsPage() {
                             backgroundColor: `${category?.color ?? "#64748b"}22`,
                           }}
                         >
-                          {category?.icon || (entry.type === "income" ? "+" : "-")}
+                          {category?.icon || "•"}
                         </span>
 
                         <div className="min-w-0">
@@ -175,11 +184,7 @@ export default async function SubscriptionsPage() {
                       </div>
 
                       <div className="text-right">
-                        <p
-                          className={`text-sm tabular-nums ${
-                            entry.type === "income" ? "text-success" : "text-danger"
-                          }`}
-                        >
+                        <p className="text-sm tabular-nums text-danger">
                           {formatMoney(entry.amountCents)}
                         </p>
                         <p className="text-tiny text-default-400">

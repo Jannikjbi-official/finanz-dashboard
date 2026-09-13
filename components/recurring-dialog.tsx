@@ -69,11 +69,24 @@ export function RecurringDialog({
           {() => (
             <form action={formAction}>
               <ModalHeader className="flex-col items-start gap-1">
-                {entry
-                  ? "Abo bearbeiten"
-                  : lockType === "expense"
-                    ? "Neues Abo"
-                    : "Neues Abo / Dauerauftrag"}
+                {(() => {
+                  const label =
+                    lockType === "income"
+                      ? "feste Einnahme"
+                      : lockType === "expense"
+                        ? "Abo"
+                        : "Abo / Dauerauftrag";
+
+                  if (entry) {
+                    return label === "feste Einnahme"
+                      ? "Feste Einnahme bearbeiten"
+                      : `${label} bearbeiten`;
+                  }
+
+                  return label === "feste Einnahme"
+                    ? "Neue feste Einnahme"
+                    : `Neues ${label}`;
+                })()}
               </ModalHeader>
 
               <ModalBody className="gap-4">

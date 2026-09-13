@@ -120,6 +120,8 @@ export type DashboardData = {
   recurringMonthlyExpense: number;
   recurringMonthlyIncome: number;
   activeSubscriptions: number;
+  /** Feste Einnahmen werden auf dem Dashboard verwaltet, nicht unter Abos. */
+  recurringIncome: Recurring[];
   upcoming: Recurring[];
   recent: Transaction[];
   categories: Category[];
@@ -206,7 +208,11 @@ export async function getDashboard(
       .filter((entry) => entry.type === "income")
       .reduce((sum, entry) => sum + monthlyAmount(entry.amountCents, entry.interval), 0),
     activeSubscriptions: active.filter((entry) => entry.type === "expense").length,
-    upcoming: [...active].sort((a, b) => a.nextDue.localeCompare(b.nextDue)).slice(0, 5),
+    recurringIncome: recurringList.filter((entry) => entry.type === "income"),
+    upcoming: [...active]
+      .filter((entry) => entry.type === "expense")
+      .sort((a, b) => a.nextDue.localeCompare(b.nextDue))
+      .slice(0, 5),
     recent: monthTx.slice(0, 8),
     categories: cats,
   };

@@ -6,6 +6,10 @@ import { formatDate, formatMoney, formatSigned } from "@/lib/money";
 import { CategoryBars, Donut, TrendChart } from "@/components/charts";
 import { MonthSwitcher } from "@/components/month-switcher";
 import { TransactionDialog } from "@/components/transaction-dialog";
+import { RecurringDialog } from "@/components/recurring-dialog";
+import { ActionButton } from "@/components/action-button";
+import { deleteRecurring, toggleRecurring } from "@/lib/actions";
+import { monthlyAmount } from "@/lib/dates";
 
 function Stat({
   label,
@@ -78,7 +82,7 @@ export default async function DashboardPage({
         </div>
       </header>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-3">
         <Stat
           label="Einnahmen"
           value={formatMoney(data.monthTotals.income)}
@@ -97,14 +101,48 @@ export default async function DashboardPage({
           hint={`Gesamt: ${formatSigned(data.allTime.income - data.allTime.expense)}`}
           tone={saldo >= 0 ? "success" : "danger"}
         />
-        <Stat
-          label="Abos monatlich"
-          value={formatMoney(data.recurringMonthlyExpense)}
-          hint={`${data.activeSubscriptions} aktiv - ${formatMoney(
-            data.recurringMonthlyExpense * 12,
-          )} pro Jahr`}
-          tone="primary"
-        />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold">Fixkosten</h2>
+          <span className="text-tiny text-default-400">
+            Abos und feste Einnahmen, auf den Monat gerechnet
+          </span>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Stat
+            label="Abos pro Monat"
+            value={formatMoney(data.recurringMonthlyExpense)}
+            hint={`${data.activeSubscriptions} aktive Abos`}
+            tone="danger"
+          />
+          <Stat
+            label="Abos pro Jahr"
+            value={formatMoney(data.recurringMonthlyExpense * 12)}
+            hint="hochgerechnet"
+            tone="danger"
+          />
+          <Stat
+            label="Feste Einnahmen"
+            value={formatMoney(data.recurringMonthlyIncome)}
+            hint="pro Monat"
+            tone="success"
+          />
+          <Stat
+            label="Fixkosten-Saldo"
+            value={formatSigned(
+              data.recurringMonthlyIncome - data.recurringMonthlyExpense,
+            )}
+            hint="pro Monat übrig"
+            tone={
+              data.recurringMonthlyIncome - data.recurringMonthlyExpense >= 0
+                ? "success"
+                : "danger"
+            }
+          />
+        </div>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">
@@ -245,6 +283,108 @@ export default async function DashboardPage({
                         {tx.type === "income" ? "+" : "-"}
                         {formatMoney(tx.amountCents)}
                       </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardBody>
+        </Card>
+      </section>
+
+      <section>
+        <Card className="border border-default-100 bg-content1/60 backdrop-blur">
+          <CardHeader className="flex items-center justify-between pb-0">
+            <div>
+              <h2 className="text-sm font-semibold">Feste Einnahmen</h2>
+              <p className="text-tiny text-default-400">
+                Gehalt und andere regelmäßige Eingänge
+              </p>
+            </div>
+            <RecurringDialog
+              categories={data.categories}
+              lockType="income"
+              trigger={
+                <span className="inline-flex h-8 cursor-pointer items-center rounded-lg bg-success/15 px-3 text-tiny font-medium text-success hover:bg-success/25">
+                  Feste Einnahme anlegen
+                </span>
+              }
+            />
+          </CardHeader>
+
+          <CardBody className="p-5">
+            {data.recurringIncome.length === 0 ? (
+              <p className="py-6 text-center text-sm text-default-400">
+                Noch keine festen Einnahmen hinterlegt.
+              </p>
+            ) : (
+              <ul className="flex flex-col divide-y divide-default-100">
+                {data.recurringIncome.map((entry) => {
+                  const category = data.categories.find(
+                    (item) => item.id === entry.categoryId,
+                  );
+
+                  return (
+                    <li
+                      key={entry.id}
+                      className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-2 truncate text-sm">
+                          {category?.icon ? `${category.icon} ` : ""}
+                          {entry.title}
+                          {!entry.active ? (
+                            <Chip size="sm" variant="flat">
+                              pausiert
+                            </Chip>
+                          ) : null}
+                        </p>
+                        <p className="text-tiny text-default-400">
+                          {INTERVAL_LABEL[entry.interval]} &middot; nächste Zahlung{" "}
+                          {formatDate(entry.nextDue)}
+                        </p>
+                      </div>
+
+                      <div className="text-right">
+                        <p className="text-sm tabular-nums text-success">
+                          {formatMoney(entry.amountCents)}
+                        </p>
+                        <p className="text-tiny text-default-400">
+                          ={" "}
+                          {formatMoney(
+                            monthlyAmount(entry.amountCents, entry.interval),
+                          )}
+                          /Monat
+                        </p>
+                      </div>
+
+                      <div className="flex gap-1">
+                        <ActionButton
+                          action={toggleRecurring}
+                          id={entry.id}
+                          title={entry.active ? "Pausieren" : "Aktivieren"}
+                        >
+                          {entry.active ? "Pause" : "Start"}
+                        </ActionButton>
+                        <RecurringDialog
+                          categories={data.categories}
+                          entry={entry}
+                          lockType="income"
+                          trigger={
+                            <span className="inline-flex h-8 cursor-pointer items-center rounded-lg px-3 text-tiny text-default-500 hover:bg-default-100 hover:text-foreground">
+                              Bearbeiten
+                            </span>
+                          }
+                        />
+                        <ActionButton
+                          action={deleteRecurring}
+                          id={entry.id}
+                          color="danger"
+                          confirm="Feste Einnahme wirklich löschen?"
+                        >
+                          Löschen
+                        </ActionButton>
+                      </div>
                     </li>
                   );
                 })}
