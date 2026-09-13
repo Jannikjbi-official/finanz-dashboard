@@ -71,7 +71,12 @@ export default async function TransactionsPage({
       </header>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <TransactionFilters categories={categories} />
+        <TransactionFilters
+          categories={categories}
+          month={month}
+          type={params.type ?? "all"}
+          category={params.cat ?? "all"}
+        />
 
         <div className="flex gap-2">
           <Chip variant="flat" color="success">
@@ -96,7 +101,7 @@ export default async function TransactionsPage({
               <TableColumn>Bezeichnung</TableColumn>
               <TableColumn>Kategorie</TableColumn>
               <TableColumn align="end">Betrag</TableColumn>
-              <TableColumn align="end">{" "}</TableColumn>
+              <TableColumn align="end">Aktionen</TableColumn>
             </TableHeader>
             <TableBody emptyContent="Keine Buchungen in diesem Monat.">
               {rows.map((tx) => {
