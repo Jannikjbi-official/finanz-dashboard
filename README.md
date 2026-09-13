@@ -77,7 +77,9 @@ Nach jeder Änderung an den Environment Variables einmal neu deployen.
 - **Dashboard** – Einnahmen, Ausgaben, Saldo und Abo-Kosten des Monats,
   Vergleich zum Vormonat, 6-Monats-Verlauf, Kategorie-Donut, fällige Abos.
 - **Buchungen** – anlegen, bearbeiten, löschen; Filter nach Typ und Kategorie,
-  Monatswechsel, Summen pro Auswahl.
+  Monatswechsel, Summen pro Auswahl. Der Dialog legt wahlweise eine einmalige
+  Buchung oder direkt einen Dauerauftrag an (Umschalter „Einmalig /
+  Dauerauftrag"), er ist aus dem Dashboard und aus der Buchungsliste erreichbar.
 - **Abos** – Daueraufträge mit Intervall (wöchentlich, monatlich,
   vierteljährlich, jährlich). Alles wird auf Monats- und Jahreskosten
   hochgerechnet, inklusive Aufteilung nach Kategorie. „Buchen" übernimmt eine

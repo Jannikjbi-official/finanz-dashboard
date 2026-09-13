@@ -18,11 +18,14 @@ import {
   addToast,
   useDisclosure,
 } from "@heroui/react";
-import { saveTransaction, type ActionState } from "@/lib/actions";
-import { todayISO } from "@/lib/dates";
-import type { Category, Kind, Transaction } from "@/lib/types";
+import { saveRecurring, saveTransaction, type ActionState } from "@/lib/actions";
+import { INTERVAL_LABEL, todayISO } from "@/lib/dates";
+import type { Category, Interval, Kind, Transaction } from "@/lib/types";
 
 const INITIAL: ActionState = { ok: true };
+const INTERVALS: Interval[] = ["monthly", "yearly", "quarterly", "weekly"];
+
+type Mode = "once" | "recurring";
 
 export function TransactionDialog({
   categories,
@@ -36,8 +39,15 @@ export function TransactionDialog({
   defaultType?: Kind;
 }) {
   const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
-  const [state, formAction, pending] = useActionState(saveTransaction, INITIAL);
+
+  const [mode, setMode] = useState<Mode>("once");
   const [type, setType] = useState<Kind>(transaction?.type ?? defaultType);
+
+  const [txState, txAction, txPending] = useActionState(saveTransaction, INITIAL);
+  const [recState, recAction, recPending] = useActionState(saveRecurring, INITIAL);
+
+  const state = mode === "once" ? txState : recState;
+  const pending = mode === "once" ? txPending : recPending;
 
   useEffect(() => {
     if (state.ok && state.message) {
@@ -47,6 +57,10 @@ export function TransactionDialog({
   }, [state, onClose]);
 
   const options = categories.filter((category) => category.kind === type);
+  const categoryOptions = [
+    { id: "none", name: "Ohne Kategorie", icon: "" },
+    ...options,
+  ];
 
   return (
     <>
@@ -63,9 +77,13 @@ export function TransactionDialog({
       <Modal isOpen={isOpen} onOpenChange={onOpenChange} placement="center" size="lg">
         <ModalContent>
           {() => (
-            <form action={formAction}>
+            <form action={mode === "once" ? txAction : recAction} key={mode}>
               <ModalHeader className="flex-col items-start gap-1">
-                {transaction ? "Buchung bearbeiten" : "Neue Buchung"}
+                {transaction
+                  ? "Buchung bearbeiten"
+                  : mode === "once"
+                    ? "Neue Buchung"
+                    : "Neuer Dauerauftrag"}
               </ModalHeader>
 
               <ModalBody className="gap-4">
@@ -73,6 +91,23 @@ export function TransactionDialog({
                   <input type="hidden" name="id" value={transaction.id} />
                 ) : null}
                 <input type="hidden" name="type" value={type} />
+                {mode === "recurring" ? (
+                  <input type="hidden" name="active" value="true" />
+                ) : null}
+
+                {/* Beim Bearbeiten bleibt es eine Buchung - kein Moduswechsel. */}
+                {transaction ? null : (
+                  <Tabs
+                    aria-label="Art"
+                    fullWidth
+                    size="sm"
+                    selectedKey={mode}
+                    onSelectionChange={(key) => setMode(key as Mode)}
+                  >
+                    <Tab key="once" title="Einmalig" />
+                    <Tab key="recurring" title="Dauerauftrag" />
+                  </Tabs>
+                )}
 
                 <Tabs
                   aria-label="Typ"
@@ -96,13 +131,15 @@ export function TransactionDialog({
                     label="Bezeichnung"
                     variant="bordered"
                     defaultValue={transaction?.title}
-                    placeholder="z.B. Wocheneinkauf"
+                    placeholder={
+                      mode === "once" ? "z.B. Wocheneinkauf" : "z.B. Spotify"
+                    }
                   />
 
                   <Input
                     isRequired
                     name="amount"
-                    label="Betrag"
+                    label={mode === "once" ? "Betrag" : "Betrag pro Zahlung"}
                     variant="bordered"
                     inputMode="decimal"
                     defaultValue={
@@ -113,11 +150,27 @@ export function TransactionDialog({
                     }
                   />
 
+                  {mode === "recurring" ? (
+                    <Select
+                      isRequired
+                      name="interval"
+                      label="Intervall"
+                      variant="bordered"
+                      defaultSelectedKeys={["monthly"]}
+                    >
+                      {INTERVALS.map((value) => (
+                        <SelectItem key={value} textValue={INTERVAL_LABEL[value]}>
+                          {INTERVAL_LABEL[value]}
+                        </SelectItem>
+                      ))}
+                    </Select>
+                  ) : null}
+
                   <Input
                     isRequired
-                    name="date"
+                    name={mode === "once" ? "date" : "startDate"}
                     type="date"
-                    label="Datum"
+                    label={mode === "once" ? "Datum" : "Erste Zahlung"}
                     variant="bordered"
                     defaultValue={transaction?.date ?? todayISO()}
                   />
@@ -130,10 +183,7 @@ export function TransactionDialog({
                       transaction?.categoryId ? [transaction.categoryId] : ["none"]
                     }
                   >
-                    {[
-                      { id: "none", name: "Ohne Kategorie", icon: "" },
-                      ...options,
-                    ].map((category) => (
+                    {categoryOptions.map((category) => (
                       <SelectItem key={category.id} textValue={category.name}>
                         {category.icon ? `${category.icon} ` : ""}
                         {category.name}
@@ -149,6 +199,14 @@ export function TransactionDialog({
                   minRows={2}
                   defaultValue={transaction?.note ?? ""}
                 />
+
+                {mode === "recurring" ? (
+                  <p className="text-tiny text-default-400">
+                    Daueraufträge landen unter „Abos“ und werden dort auf Monats-
+                    und Jahreskosten hochgerechnet. Eine fällige Zahlung übernimmst
+                    du per Klick als echte Buchung.
+                  </p>
+                ) : null}
               </ModalBody>
 
               <ModalFooter>
