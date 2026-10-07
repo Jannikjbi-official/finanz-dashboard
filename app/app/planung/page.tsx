@@ -1,7 +1,8 @@
 import { requireUser } from "@/lib/session";
 import { loadFinancialPicture } from "@/lib/server/finance";
 import { listTransactions } from "@/lib/server/ledger";
-import { addDays, daysBetween, isMonthKey, monthEnd, monthStart } from "@/lib/domain/calendar";
+import { getSettings } from "@/lib/server/user-data";
+import { addDays, daysBetween, isMonthKey, monthEnd, monthStart, todayIn } from "@/lib/domain/calendar";
 import { formatMoney } from "@/lib/format";
 import { CalendarView, type CalendarDay, type CalendarItem } from "@/features/planung/calendar-view";
 
@@ -15,15 +16,15 @@ export default async function KalenderPage({ searchParams }: { searchParams: Pro
   const params = await searchParams;
 
   // Erst "heute" kennen, dann die Prognose so weit rechnen, dass der Monat abgedeckt ist
-  const base = await loadFinancialPicture(user.id, { horizonDays: 1 });
-  const today = base.today;
+  const settings = await getSettings(user.id);
+  const today = todayIn(settings.timeZone);
   const month = isMonthKey(params.monat) ? params.monat : today.slice(0, 7);
   const start = monthStart(month);
   const end = monthEnd(month);
   const horizon = Math.min(MAX_HORIZON, Math.max(90, daysBetween(today, end)));
 
   const [picture, booked] = await Promise.all([
-    end >= today ? loadFinancialPicture(user.id, { horizonDays: horizon }) : Promise.resolve(base),
+    loadFinancialPicture(user.id, { horizonDays: horizon }),
     start <= today ? listTransactions(user.id, { month, query: "", type: null, categoryId: null, accountId: null }) : Promise.resolve({ rows: [], truncated: false }),
   ]);
 

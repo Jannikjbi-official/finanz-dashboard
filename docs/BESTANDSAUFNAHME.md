@@ -236,3 +236,28 @@ Jede Phase endet mit `tsc`, Build, Tests und lauffähiger App.
 8. Website, Login/Registrierung, Onboarding, Rechtliches
 9. Security-Header, Datenschutz-Center, Performance
 10. E2E-Tests, Polish, Doku
+
+---
+
+## 11. Stand der Umsetzung (07.10.2026)
+
+Alle zehn Phasen sind umgesetzt, auf dem Branch `neuaufbau` (je Phase ein Commit).
+
+| Bereich | Stand |
+| --- | --- |
+| Multi-User | jede Abfrage an `userId` gebunden, Eigentumsprüfung für Referenzen, Isolationstests gegen MongoDB |
+| Auth | Closed Beta (Warteliste, Einladungen), Rate Limit in MongoDB, Linking nur verifiziert, Konto löschen, Sitzungen verwalten |
+| Datenmigration | 001–004 nur ergänzend und idempotent, Backup/Restore-Skripte, Probelauf |
+| Fachlogik | Prognose, Sicherheitszone, Spielraum, Kaufcheck, Sandbox, Ziele, Budgets, Auffälligkeiten – getestet |
+| Oberfläche | komplett neu (eigenes Designsystem, HeroUI entfernt), Hell/Dunkel, mobil geprüft (keine Überläufe bei 375 px) |
+| Website | Landingpage, Funktionen, Sicherheit, FAQ, Warteliste, Impressum, Datenschutz |
+| Sicherheit | CSP und weitere Header, CSV-Injection entschärft, keine Telemetrie, keine Finanzdaten in Logs |
+| Qualität | 56 Tests, Typecheck, CI auf GitHub |
+
+### Offen – braucht Entscheidungen oder Zugänge des Betreibers
+
+1. **Produktname** endgültig festlegen (aktuell „Spielraum“ in `lib/brand.ts`), Marke/Domain prüfen.
+2. **Impressum/Datenschutz:** `LEGAL_*` setzen und Texte rechtlich prüfen lassen, dann `LEGAL_REVIEWED=true`.
+3. **Mail-Dienst** für E-Mail-Bestätigung und „Passwort vergessen“ – Voraussetzung für die offene Registrierung.
+4. **Produktionsdaten:** Backup ziehen, `db:migrate --dry-run`, dann `db:migrate` – vor dem Merge auf `main`.
+5. Mehrwährungsfähigkeit (aktuell nur Euro) und Zeitzone in allen Actions (aktuell Europe/Berlin als Standard).
