@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { startTransition, useActionState, useEffect, useRef } from "react";
 import type { ActionState } from "@/lib/actions";
 import { useToast } from "./toast";
 import { cx } from "./cx";
@@ -40,8 +40,19 @@ export function ActionForm({
     }
   }, [state, toast, onSuccess, silent]);
 
+  // Absenden ueber onSubmit statt action-Attribut: React setzt Formulare mit
+  // action nach jedem Absenden zurueck - bei einem Fehler waeren alle Eingaben weg.
   return (
-    <form id={id} action={formAction} className={cx(className)} noValidate>
+    <form
+      id={id}
+      className={cx(className)}
+      noValidate
+      onSubmit={(event) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        startTransition(() => formAction(data));
+      }}
+    >
       {children({ pending, error: state.ok ? null : (state.error ?? null) })}
     </form>
   );

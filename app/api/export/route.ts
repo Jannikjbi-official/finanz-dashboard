@@ -1,7 +1,8 @@
 import { getCurrentUser } from "@/lib/session";
-import { getAccounts, getCategories, getTransactions } from "@/lib/queries";
+import { accounts, categories } from "@/lib/mongo";
 import { toCsv } from "@/lib/csv";
-import { formatDate } from "@/lib/money";
+import { formatDate } from "@/lib/format";
+import { exportTransactions } from "@/lib/server/ledger";
 import { limitUser } from "@/lib/server/rate-limit";
 import { exportUserData } from "@/lib/server/user-data";
 
@@ -29,16 +30,7 @@ export async function GET(request: Request) {
 
   if (url.searchParams.get("format") === "json") {
     const data = await exportUserData(user.id);
-    const body = JSON.stringify(
-      {
-        exportedAt: new Date().toISOString(),
-        user: { name: user.name, email: user.email },
-        ...data,
-      },
-      null,
-      2,
-    );
-
+    const body = JSON.stringify({ exportedAt: new Date().toISOString(), user: { name: user.name, email: user.email }, ...data }, null, 2);
     return new Response(body, {
       headers: {
         ...NO_STORE,
@@ -51,16 +43,14 @@ export async function GET(request: Request) {
   const yearParam = url.searchParams.get("year");
   const year = yearParam && /^\d{4}$/.test(yearParam) ? yearParam : null;
 
-  const [categories, accounts, all] = await Promise.all([
-    getCategories(user.id),
-    getAccounts(user.id),
-    getTransactions(user.id),
+  const [rows, categoryDocs, accountDocs] = await Promise.all([
+    exportTransactions(user.id, year),
+    categories.find({ userId: user.id }).toArray(),
+    accounts.find({ userId: user.id }).toArray(),
   ]);
 
-  const rows = year ? all.filter((tx) => tx.date.startsWith(year)) : all;
-
-  const categoryById = new Map(categories.map((entry) => [entry.id, entry.name]));
-  const accountById = new Map(accounts.map((entry) => [entry.id, entry.name]));
+  const categoryById = new Map(categoryDocs.map((doc) => [doc._id.toString(), doc.name]));
+  const accountById = new Map(accountDocs.map((doc) => [doc._id.toString(), doc.name]));
 
   const csv = toCsv(
     rows.map((tx) => ({
@@ -75,13 +65,11 @@ export async function GET(request: Request) {
     })),
   );
 
-  const name = year ? `buchungen-${year}.csv` : `buchungen-${stamp}.csv`;
-
   return new Response(csv, {
     headers: {
       ...NO_STORE,
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${name}"`,
+      "Content-Disposition": `attachment; filename="${year ? `buchungen-${year}` : `buchungen-${stamp}`}.csv"`,
     },
   });
 }

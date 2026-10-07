@@ -1,8 +1,4 @@
 @import "tailwindcss";
-/* HeroUI nur noch fuer die alte Oberflaeche - entfaellt mit deren Entfernung */
-@plugin '../hero.ts';
-@source '../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}';
-@custom-variant dark (&:is(.dark *));
 
 /* -------------------------------------------------------------------------
    Designsystem
@@ -187,18 +183,4 @@ body {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
-}
-
-/* -------------------------------------------------------------------------
-   Alte Oberflaeche (HeroUI) - eigener Rahmen, bis sie entfernt ist
-   ------------------------------------------------------------------------- */
-.legacy {
-  min-height: 100vh;
-  color: hsl(var(--heroui-foreground));
-  background:
-    radial-gradient(1200px 600px at 15% -10%, rgba(99, 102, 241, 0.18), transparent 60%),
-    radial-gradient(900px 500px at 100% 0%, rgba(34, 197, 94, 0.1), transparent 55%),
-    hsl(var(--heroui-background));
-  background-attachment: fixed;
-  font-family: ui-sans-serif, system-ui, sans-serif;
 }

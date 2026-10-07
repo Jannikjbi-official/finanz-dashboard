@@ -1,5 +1,5 @@
 {
-  "name": "finanz-dashboard",
+  "name": "spielraum",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -14,17 +14,14 @@
     "db:migrate": "tsx --env-file=.env scripts/migrate.mts",
     "beta:invite": "tsx --env-file=.env scripts/invite.mts",
     "dev:db": "tsx scripts/dev-db.mts",
-    "dev:seed": "tsx --env-file=.env scripts/seed-demo.mts"
+    "dev:seed": "tsx --env-file=.env scripts/seed-demo.mts",
+    "waitlist": "tsx --env-file=.env scripts/waitlist.mts"
   },
   "dependencies": {
-    "@heroui/react": "^2.8.10",
-    "@heroui/theme": "^2.4.26",
     "@phosphor-icons/react": "^2.1.10",
     "@radix-ui/react-dialog": "^1.2.0",
     "@radix-ui/react-dropdown-menu": "^2.1.25",
-    "@radix-ui/react-popover": "^1.2.0",
     "better-auth": "^1.7.4",
-    "framer-motion": "^13.2.0",
     "mongodb": "^7.6.0",
     "next": "^15.5.25",
     "react": "^19.3.0",

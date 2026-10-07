@@ -71,3 +71,10 @@ export async function listTransactions(userId: string, filter: LedgerFilter) {
 
   return { rows, truncated: docs.length > LEDGER_LIMIT };
 }
+
+/** Alle Buchungen fuer den Export, optional nur ein Jahr - ohne Obergrenze. */
+export async function exportTransactions(userId: string, year: string | null) {
+  const filter: Filter<TransactionDoc> = { userId };
+  if (year) filter.date = { $gte: `${year}-01-01`, $lte: `${year}-12-31` };
+  return transactions.find(filter).sort({ date: -1, createdAt: -1 }).toArray();
+}
