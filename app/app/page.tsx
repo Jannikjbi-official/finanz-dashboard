@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
 import { requireUser } from "@/lib/session";
 import { getBalanceHistory, getMonthFlows, loadFinancialPicture } from "@/lib/server/finance";
@@ -29,6 +30,9 @@ export default async function LagePage() {
   const { today, safety, forecast } = picture;
   const month = monthOf(today);
 
+  // Neue Nutzer zuerst durch die Einrichtung
+  if (!picture.settings.onboardingCompletedAt && picture.accounts.length === 0) redirect("/willkommen");
+
   const liquidIds = picture.usesAccounts
     ? picture.accounts.filter((a) => a.liquid && !a.archived).map((a) => a.id)
     : null;
@@ -52,7 +56,7 @@ export default async function LagePage() {
           Lage 90 Tage voraus.
         </p>
         <div className="mt-6 flex flex-wrap gap-2">
-          <ButtonLink href="/app/willkommen" variant="primary">
+          <ButtonLink href="/willkommen" variant="primary">
             Einrichtung starten
           </ButtonLink>
           <ButtonLink href="/app/geld/import">Buchungen importieren</ButtonLink>
@@ -128,14 +132,19 @@ export default async function LagePage() {
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-[15px] font-semibold">60 Tage zurück, 90 Tage voraus</h2>
           <p className="text-[12px] text-ink-3">
-            Prognose aus Fixkosten, Geplantem, Sparraten und Ø variablen Ausgaben ({formatMoney(picture.monthly.variableCents, { whole: true })}/Monat)
+            Prognose aus Fixkosten, Geplantem, Sparraten und{" "}
+            {picture.monthly.variableSource === "history"
+              ? `Ø variablen Ausgaben (${formatMoney(picture.monthly.variableCents, { whole: true })}/Monat)`
+              : picture.monthly.variableSource === "estimate"
+                ? `geschätzten Alltagsausgaben (${formatMoney(picture.monthly.variableCents, { whole: true })}/Monat)`
+                : "noch ohne Alltagsausgaben"}
           </p>
         </div>
         <TimelineChart
           series={{ past: history, future: forecast.days.map((d) => ({ date: d.date, balanceCents: d.balanceCents })) }}
           events={forecast.events.map((e) => ({ date: e.date, amountCents: e.amountCents, label: e.label }))}
           reserveCents={safety.reserveCents}
-          ariaLabel={`Kontostand: heute ${formatMoney(picture.openingBalanceCents)}, tiefster Stand der nächsten 90 Tage ${formatMoney(safety.low90.balanceCents)} am ${formatDayShort(safety.low90.date)}.`}
+          ariaLabel={`Kontostand: heute ${formatMoney(picture.openingBalanceCents)}, tiefster Stand der nächsten 90 Tage ${formatMoney(safety.low90.balanceCents)} am ${formatDayShort(safety.low90.date)}`}
         />
         <Figures
           className="mt-2"

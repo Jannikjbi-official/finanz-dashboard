@@ -88,6 +88,11 @@ export type UserSettingsDoc = {
   timeZone: string;
   /** Mindestreserve; null = automatisch ein Monat Fixkosten. */
   reserveCents: number | null;
+  /**
+   * Geschaetzte variable Ausgaben pro Monat. Gilt nur, solange es noch
+   * keinen vollen Monat mit Buchungen gibt.
+   */
+  variableEstimateCents?: number | null;
   onboardingCompletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;

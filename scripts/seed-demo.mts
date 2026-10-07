@@ -7,7 +7,7 @@
  * Erst im Browser registrieren (Adresse vorher mit beta:invite freischalten),
  * dann dieses Skript ausfuehren.
  *
- * Lokales Testkonto (nur .devdb): demo@example.test / lokal-testkonto-2026
+ * Lokale Testkonten (nur .devdb): demo@example.test und neu@example.test, Passwort lokal-testkonto-2026
  */
 import { closeScriptDb, openScriptDb } from "./lib/db";
 

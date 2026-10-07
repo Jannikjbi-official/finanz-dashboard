@@ -169,6 +169,17 @@ export async function buildInsights(userId: string, picture: FinancialPicture): 
     });
   }
 
+  if (picture.monthly.variableSource === "none") {
+    insights.push({
+      id: "no-variable",
+      tone: "warn",
+      title: "Die Prognose kennt deine Alltagsausgaben noch nicht",
+      detail: "Ohne Lebensmittel, Freizeit und Kleinkram sieht die Zukunft zu rosig aus. Trag eine grobe Schätzung ein – oder importiere Buchungen.",
+      href: "/app/einstellungen",
+      action: "Schätzung eintragen",
+    });
+  }
+
   if (unassigned > 0) {
     insights.push({
       id: "unassigned",
@@ -185,7 +196,7 @@ export async function buildInsights(userId: string, picture: FinancialPicture): 
       id: "calm",
       tone: "pos",
       title: "Nichts Auffälliges",
-      detail: `Budgets im Rahmen, keine Ausreißer. Nächster Eingang: ${nextIncome.label} am ${formatDayShort(nextIncome.date)}.`,
+      detail: `Budgets im Rahmen, keine Ausreißer. Nächster Eingang: ${nextIncome.label} am ${formatDayShort(nextIncome.date)}`,
     });
   }
 

@@ -24,8 +24,12 @@ export function parseAmountToCents(input: string): number | null {
   const cleaned = input.trim().replace(/\s|\u20AC/g, "");
   if (!cleaned) return null;
 
-  const normalized =
-    cleaned.includes(",") && cleaned.includes(".")
+  // "1.499" oder "12.000" sind deutsche Tausenderpunkte, kein Dezimalpunkt
+  const thousandsOnly = /^\d{1,3}(\.\d{3})+$/.test(cleaned);
+
+  const normalized = thousandsOnly
+    ? cleaned.replace(/\./g, "")
+    : cleaned.includes(",") && cleaned.includes(".")
       ? cleaned.replace(/\./g, "").replace(",", ".")
       : cleaned.replace(",", ".");
 

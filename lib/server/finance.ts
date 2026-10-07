@@ -216,13 +216,19 @@ export async function loadFinancialPicture(userId: string, options: { horizonDay
     0,
   );
 
+  // Ohne vollen Monat mit Buchungen gilt die eigene Schaetzung aus den Einstellungen
+  const estimate = userSettings.variableEstimateCents ?? null;
+  const variableSource: "history" | "estimate" | "none" =
+    variable.basisMonths > 0 ? "history" : estimate !== null ? "estimate" : "none";
+  const variableMonthlyCents = variableSource === "history" ? variable.monthlyCents : (estimate ?? 0);
+
   const forecastInput: Omit<ForecastInput, "horizonDays" | "extraEvents"> = {
     today,
     openingBalanceCents,
     recurring: recurringInput,
     planned: plannedInput,
     goals: goalInput,
-    variableMonthlyCents: variable.monthlyCents,
+    variableMonthlyCents,
     variableSpentThisMonthCents: variable.spentThisMonthCents,
   };
 
@@ -240,7 +246,8 @@ export async function loadFinancialPicture(userId: string, options: { horizonDay
       fixedCents: monthlyFixedCents,
       incomeCents: monthlyIncomeCents,
       goalCents: monthlyGoalCents,
-      variableCents: variable.monthlyCents,
+      variableCents: variableMonthlyCents,
+      variableSource,
       variableBasisMonths: variable.basisMonths,
       variableSpentThisMonthCents: variable.spentThisMonthCents,
     },

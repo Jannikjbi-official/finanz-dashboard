@@ -12,6 +12,7 @@ import { checkAffordability, purchaseEvents } from "./affordability";
 import { goalState } from "./goals";
 import { projectBudget } from "./budgets";
 import { findAnomalies, savingsRate } from "./insights";
+import { expandScenario } from "./scenario";
 
 const eur = (cents: number) => `${(cents / 100).toFixed(2)} €`;
 const day = (date: string) => date;
@@ -262,5 +263,33 @@ describe("Auffaelligkeiten", () => {
   it("sparquote", () => {
     expect(savingsRate(2000_00, 1500_00)).toBe(0.25);
     expect(savingsRate(0, 100)).toBeNull();
+  });
+});
+
+describe("Sandbox", () => {
+  it("loest monatliche Ereignisse bis zum Ende auf", () => {
+    const events = expandScenario(
+      [
+        { id: "a", label: "Fitnessstudio", amountCents: -40_00, repeat: "monthly", date: "2026-10-31", until: "2027-01-31" },
+        { id: "b", label: "Bonus", amountCents: 500_00, repeat: "once", date: "2026-12-15", until: null },
+      ],
+      "2027-06-30",
+    );
+    expect(events.map((e) => `${e.date} ${e.amountCents}`)).toEqual([
+      "2026-10-31 -4000",
+      "2026-11-30 -4000",
+      "2026-12-31 -4000",
+      "2027-01-31 -4000",
+      "2026-12-15 50000",
+    ]);
+  });
+
+  it("veraendert nur die Prognose, nicht die Eingabe", () => {
+    const input = baseInput();
+    const before = JSON.stringify(input);
+    const extra = expandScenario([{ id: "x", label: "Kauf", amountCents: -100_00, repeat: "once", date: "2026-10-08", until: null }], "2027-01-05");
+    const forecast = buildForecast({ ...input, extraEvents: extra });
+    expect(forecast.days[1].balanceCents).toBe(1500_00 - 100_00);
+    expect(JSON.stringify(input)).toBe(before);
   });
 });

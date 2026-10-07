@@ -7,11 +7,13 @@ import {
   categories,
   ensureIndexes,
   goals,
+  planned,
   recurring,
   refunds,
   toObjectId,
   transactions,
   type AccountDoc,
+  type GoalDoc,
 } from "./mongo";
 import { requireUser } from "./session";
 import { advance, endOfMonth, nextDueFrom, todayISO } from "./dates";
@@ -170,6 +172,10 @@ export async function deleteCategory(
     { $set: { categoryId: null } },
   );
   await recurring.updateMany(
+    { userId: user.id, categoryId: id },
+    { $set: { categoryId: null } },
+  );
+  await planned.updateMany(
     { userId: user.id, categoryId: id },
     { $set: { categoryId: null } },
   );
@@ -377,6 +383,21 @@ export async function bookRecurring(
   const today = todayISO();
   const bookedDate = entry.nextDue > today ? today : entry.nextDue;
 
+  // Konto aus dem Formular, sonst das erste verfuegbare - sonst fehlt die
+  // Buchung im Kontostand
+  const refs = await ownedRefs(user.id, {
+    accountId: { collection: "accounts", raw: formData.get("accountId") },
+  });
+  if (!refs.ok) return fail(REF_ERROR.accountId);
+  let accountId = refs.values.accountId;
+  if (!accountId && !formData.has("accountId")) {
+    const fallback = await accounts.findOne(
+      { userId: user.id, archived: false, kind: { $ne: "savings" } },
+      { sort: { createdAt: 1 } },
+    );
+    accountId = fallback?._id.toString() ?? null;
+  }
+
   await transactions.insertOne({
     userId: user.id,
     type: entry.type,
@@ -384,7 +405,10 @@ export async function bookRecurring(
     title: entry.title,
     note: entry.note ?? null,
     date: bookedDate,
+    dateEnd: null,
+    datePrecision: "day",
     categoryId: entry.categoryId ?? null,
+    accountId,
     recurringId: entry._id.toString(),
     createdAt: new Date(),
   });
@@ -429,7 +453,7 @@ export async function saveGoal(
   const colorRaw = String(formData.get("color") ?? "#6366f1");
   const color = /^#[0-9a-fA-F]{6}$/.test(colorRaw) ? colorRaw : "#6366f1";
 
-  const payload = {
+  const payload: Partial<GoalDoc> = {
     title: title.slice(0, 60),
     targetCents,
     deadline,
@@ -437,15 +461,31 @@ export async function saveGoal(
     note: String(formData.get("note") ?? "").trim().slice(0, 200) || null,
   };
 
+  // Sparrate und Konto nur aus Formularen, die sie kennen
+  if (formData.get("planField") === "1") {
+    const rateRaw = String(formData.get("monthlyContribution") ?? "").trim();
+    const rate = rateRaw ? parseAmountToCents(rateRaw) : null;
+    if (rateRaw && rate === null) return fail("Sparrate ungültig");
+    payload.monthlyContributionCents = rate && rate > 0 ? rate : null;
+
+    const refs = await ownedRefs(user.id, {
+      accountId: { collection: "accounts", raw: formData.get("accountId") },
+    });
+    if (!refs.ok) return fail(REF_ERROR.accountId);
+    payload.accountId = refs.values.accountId;
+  }
+
   const id = String(formData.get("id") ?? "").trim();
 
   if (id) {
     const objectId = toObjectId(id);
     if (!objectId) return fail("Sparziel nicht gefunden");
+    // Beim Bearbeiten darf auch der gesparte Betrag korrigiert werden
+    if (savedRaw) payload.savedCents = savedCents;
     await goals.updateOne({ _id: objectId, userId: user.id }, { $set: payload });
   } else {
     await goals.insertOne({
-      ...payload,
+      ...(payload as Omit<GoalDoc, "userId" | "createdAt" | "savedCents">),
       savedCents,
       userId: user.id,
       createdAt: new Date(),
@@ -593,11 +633,12 @@ export async function deleteAccount(
 
   const id = objectId.toString();
   await accounts.deleteOne({ _id: objectId, userId: user.id });
-  // Buchungen bleiben erhalten, verlieren aber die Zuordnung.
-  await transactions.updateMany(
-    { userId: user.id, accountId: id },
-    { $set: { accountId: null } },
-  );
+  // Buchungen, Geplantes und Ziele bleiben erhalten, verlieren aber die Zuordnung.
+  await Promise.all([
+    transactions.updateMany({ userId: user.id, accountId: id }, { $set: { accountId: null } }),
+    planned.updateMany({ userId: user.id, accountId: id }, { $set: { accountId: null } }),
+    goals.updateMany({ userId: user.id, accountId: id }, { $set: { accountId: null } }),
+  ]);
 
   refresh();
   return done("Konto gelöscht");

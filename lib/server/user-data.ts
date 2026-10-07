@@ -10,6 +10,7 @@ export function defaultSettings(userId: string): UserSettingsDoc {
     locale: "de-DE",
     timeZone: "Europe/Berlin",
     reserveCents: null,
+    variableEstimateCents: null,
     onboardingCompletedAt: null,
     createdAt: now,
     updatedAt: now,
