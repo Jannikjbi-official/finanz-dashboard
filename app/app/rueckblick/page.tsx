@@ -11,6 +11,7 @@ import { formatDayShort, formatMoney, formatMonth, formatPercent, monthName } fr
 import { Empty, Figures, Note, Section, Swatch } from "@/ui/layout";
 import { Delta, Money } from "@/ui/money";
 import { cx } from "@/ui/cx";
+import { CHART_COLORS, Donut } from "@/ui/donut";
 
 export const metadata = { title: "Monatsbericht" };
 
@@ -30,12 +31,12 @@ export default async function MonatsberichtPage({ searchParams }: { searchParams
   const name = monthName(month);
   const nav = (
     <div className="flex items-center gap-1">
-      <Link aria-label="Vorheriger Monat" href={`?monat=${shiftMonth(month, -1)}`} className="rounded-sm p-2 text-ink-2 hover:bg-sunken">
+      <Link aria-label="Vorheriger Monat" href={`?monat=${shiftMonth(month, -1)}`} className="rounded-full bg-surface p-2.5 text-ink-2 hover:text-ink">
         <CaretLeft size={16} />
       </Link>
       <span className="min-w-36 text-center text-[14px] font-medium">{formatMonth(month)}</span>
       {month < today.slice(0, 7) ? (
-        <Link aria-label="Nächster Monat" href={`?monat=${shiftMonth(month, 1)}`} className="rounded-sm p-2 text-ink-2 hover:bg-sunken">
+        <Link aria-label="Nächster Monat" href={`?monat=${shiftMonth(month, 1)}`} className="rounded-full bg-surface p-2.5 text-ink-2 hover:text-ink">
           <CaretRight size={16} />
         </Link>
       ) : (
@@ -62,7 +63,7 @@ export default async function MonatsberichtPage({ searchParams }: { searchParams
   const top = report.categories[0];
 
   return (
-    <article className="flex flex-col gap-12">
+    <article className="flex flex-col gap-4">
       <header className="flex flex-col gap-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-[13px] text-ink-3">
@@ -101,17 +102,26 @@ export default async function MonatsberichtPage({ searchParams }: { searchParams
         ]}
       />
 
-      <div className="grid gap-12 lg:grid-cols-[1.4fr_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <Section title="Wofür das Geld ging" description="Im Vergleich zum Durchschnitt der drei Vormonate">
+          <div className="mb-5 flex justify-center">
+            <Donut
+              slices={report.categories.slice(0, 6).map((line, index) => ({ label: line.name, cents: line.cents, color: CHART_COLORS[index % CHART_COLORS.length] }))}
+              centerLabel="Ausgaben"
+              centerValue={report.expenseCents}
+              size={200}
+              thickness={22}
+            />
+          </div>
           <ul>
-            {report.categories.slice(0, 10).map((line) => (
+            {report.categories.slice(0, 10).map((line, index) => (
               <li key={line.categoryId ?? "none"} className="grid grid-cols-[1fr_auto] gap-x-4 border-b border-line py-2.5 sm:grid-cols-[11rem_1fr_6rem_5rem]">
                 <span className="flex items-center gap-2 text-[14px]">
-                  <Swatch color={line.color} />
+                  <Swatch color={index < 6 ? CHART_COLORS[index] : line.color} />
                   <span className="truncate">{line.name}</span>
                 </span>
                 <span className="relative col-span-2 row-start-2 mt-1 h-1.5 rounded-full bg-sunken sm:col-span-1 sm:row-start-auto sm:mt-2" aria-hidden>
-                  <span className="absolute inset-y-0 left-0 rounded-full bg-ink" style={{ width: `${line.share * 100}%` }} />
+                  <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${line.share * 100}%`, background: index < 6 ? CHART_COLORS[index] : "var(--ink-3)" }} />
                 </span>
                 <Money cents={line.cents} whole className="text-right text-[14px]" />
                 <span className="hidden text-right text-[12px] sm:block">
@@ -122,7 +132,7 @@ export default async function MonatsberichtPage({ searchParams }: { searchParams
           </ul>
         </Section>
 
-        <div className="flex flex-col gap-12">
+        <div className="flex flex-col gap-4">
           <Section title="Auffällig">
             {report.anomalies.length === 0 ? (
               <p className="text-[14px] text-ink-3">Keine Kategorie weicht deutlich von deinem Durchschnitt ab.</p>

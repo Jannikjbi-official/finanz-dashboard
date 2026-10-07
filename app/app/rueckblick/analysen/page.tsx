@@ -35,7 +35,7 @@ export default async function AnalysenPage() {
   const max = Math.max(...analysis.months.map((m) => Math.max(m.incomeCents, m.expenseCents)), 1);
 
   return (
-    <div className="flex flex-col gap-12">
+    <div className="flex flex-col gap-4">
       <PageHeader title="Analysen" description="Die letzten zwölf Monate: wie sich Einnahmen, Ausgaben und Kategorien entwickeln." />
 
       <Figures
@@ -52,10 +52,10 @@ export default async function AnalysenPage() {
         aside={
           <span className="flex gap-4 text-[12px] text-ink-3">
             <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-1.5 bg-pos" /> Einnahmen
+              <span className="size-2.5 rounded-full bg-accent" /> Einnahmen
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-1.5 bg-ink" /> Ausgaben
+              <span className="size-2.5 rounded-full bg-[var(--chart-3)]" /> Ausgaben
             </span>
           </span>
         }
@@ -63,8 +63,8 @@ export default async function AnalysenPage() {
         <div className="grid grid-cols-12 items-end gap-1 sm:gap-2" style={{ height: 200 }} role="img" aria-label="Einnahmen und Ausgaben der letzten zwölf Monate">
           {analysis.months.map((m) => (
             <div key={m.month} className="flex h-full items-end justify-center gap-[2px]" title={`${formatMonth(m.month)}: +${formatMoney(m.incomeCents)} / −${formatMoney(m.expenseCents)}`}>
-              <span className="w-1/3 max-w-3 bg-pos" style={{ height: `${(m.incomeCents / max) * 100}%` }} />
-              <span className={cx("w-1/3 max-w-3", m.month === today.slice(0, 7) ? "bg-ink-3" : "bg-ink")} style={{ height: `${(m.expenseCents / max) * 100}%` }} />
+              <span className="w-[42%] max-w-5 rounded-t-[6px] bg-accent" style={{ height: `${(m.incomeCents / max) * 100}%` }} />
+              <span className={cx("w-[42%] max-w-5 rounded-t-[6px]", m.month === today.slice(0, 7) ? "bg-[var(--chart-3)]/50" : "bg-[var(--chart-3)]")} style={{ height: `${(m.expenseCents / max) * 100}%` }} />
             </div>
           ))}
         </div>
@@ -79,7 +79,7 @@ export default async function AnalysenPage() {
             </div>
           ))}
         </div>
-        <p className="mt-2 text-[12px] text-ink-3">Unter den Monaten: übrig in Euro und Sparquote. Der laufende Monat ist grau.</p>
+        <p className="mt-2 text-[12px] text-ink-3">Unter den Monaten: übrig in Euro und Sparquote. Der laufende Monat ist blasser.</p>
       </Section>
 
       <Section title="Kategorien im Verlauf" description="Ausgaben der letzten sechs Monate; Trend vergleicht die letzten drei mit den drei davor">
@@ -110,7 +110,7 @@ export default async function AnalysenPage() {
                     </td>
                     {row.values.map((value, index) => (
                       <td key={index} className="relative py-2.5 pr-3 text-right">
-                        <span className="absolute bottom-1 right-3 h-[2px] bg-ink/25" style={{ width: `${(value / rowMax) * 70}%` }} aria-hidden />
+                        <span className="absolute bottom-1 right-3 h-[3px] rounded-full bg-accent/50" style={{ width: `${(value / rowMax) * 70}%` }} aria-hidden />
                         <span className={cx("num", value === 0 && "text-ink-3")}>{value ? formatMoney(value, { whole: true }).replace(/\s?€/, "") : "–"}</span>
                       </td>
                     ))}

@@ -49,7 +49,7 @@ export default async function KaufcheckPage({ searchParams }: { searchParams: Pr
     : null;
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Kann ich mir das leisten?"
         description="Rechnet einen Kauf gegen deine Prognose: Kontostand, Fixkosten, Geplantes, Sparziele und Reserve. Eine Liquiditätsrechnung – keine Finanzberatung."
@@ -155,8 +155,8 @@ function Result({ result, picture }: { result: AffordabilityResult; picture: Awa
   ];
 
   return (
-    <div className="flex flex-col gap-10">
-      <section>
+    <div className="flex flex-col gap-4">
+      <section className="card">
         <p className={cx("text-[14px] font-semibold", VERDICT_TONE[result.verdict])}>{VERDICT_LABEL[result.verdict]}</p>
         <h2 className="mt-1 max-w-3xl font-serif text-[30px] leading-[1.15] tracking-[-0.01em] sm:text-[36px]">{headline(result)}</h2>
         <ul className="mt-4 flex max-w-3xl flex-col gap-1.5 text-[15px] leading-relaxed text-ink-2">

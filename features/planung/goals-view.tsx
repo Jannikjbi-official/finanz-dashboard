@@ -35,7 +35,7 @@ const STATUS: Record<GoalState["status"], { label: string; tone: "pos" | "warn" 
   overdue: { label: "Frist verstrichen", tone: "caution" },
 };
 
-const COLORS = ["#2e6a3e", "#0d5a5c", "#9a6510", "#b0502a", "#4a5a8a", "#6b4f7a"];
+const COLORS = ["#c6f24e", "#6ee7d8", "#8b9cff", "#ff9a52", "#f472b6", "#f5c451"];
 
 export function GoalsPage({ goals, accounts }: { goals: GoalView[]; accounts: AccountOption[] }) {
   const [editing, setEditing] = useState<GoalView | null>(null);
@@ -67,7 +67,7 @@ export function GoalsPage({ goals, accounts }: { goals: GoalView[]; accounts: Ac
       ) : (
         <>
           <Figures
-            className="mb-10"
+            className="mb-4"
             items={[
               { label: "Gespart", value: <Money cents={saved} whole />, note: `von ${formatMoney(target, { whole: true })}` },
               { label: "Sparraten", value: <Money cents={monthly} whole />, note: "pro Monat, fließt in die Prognose" },
@@ -75,15 +75,15 @@ export function GoalsPage({ goals, accounts }: { goals: GoalView[]; accounts: Ac
             ]}
           />
 
-          <ul className="border-t border-ink/80">
+          <ul className="grid gap-4 md:grid-cols-2">
             {goals.map((goal) => {
               const status = STATUS[goal.state.status];
               return (
-                <li key={goal.id} className="border-b border-line py-5">
+                <li key={goal.id} className="card flex flex-col">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <button type="button" onClick={() => setEditing(goal)} className="text-left">
                       <span className="flex items-center gap-2">
-                        <span className="text-[16px] font-semibold hover:underline">{goal.title}</span>
+                        <span className="text-[18px] font-bold tracking-[-0.02em] hover:underline">{goal.title}</span>
                         <Pill tone={status.tone}>{status.label}</Pill>
                       </span>
                       {goal.note ? <span className="mt-0.5 block text-[13px] text-ink-3">{goal.note}</span> : null}
@@ -97,13 +97,13 @@ export function GoalsPage({ goals, accounts }: { goals: GoalView[]; accounts: Ac
 
                   {/* Fortschritt */}
                   <div className="mt-4 flex items-center gap-4">
-                    <div className="relative h-2 flex-1 rounded-full bg-sunken" aria-hidden>
+                    <div className="relative h-3 flex-1 overflow-hidden rounded-full bg-sunken" aria-hidden>
                       <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${goal.state.progress * 100}%`, background: goal.color }} />
                     </div>
-                    <span className="num w-12 text-right text-[13px] text-ink-2">{formatPercent(goal.state.progress)}</span>
+                    <span className="num w-14 text-right text-[18px] font-extrabold tracking-[-0.03em]" style={{ color: goal.color }}>{formatPercent(goal.state.progress)}</span>
                   </div>
 
-                  <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-[13px] sm:grid-cols-4">
+                  <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 rounded-[16px] bg-surface-2 p-4 text-[13px]">
                     <div>
                       <dt className="text-ink-3">Gespart</dt>
                       <dd>

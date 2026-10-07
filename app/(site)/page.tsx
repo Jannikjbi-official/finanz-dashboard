@@ -76,8 +76,8 @@ export default function LandingPage() {
       {/* ------------------------------- Einstieg ------------------------------- */}
       <section className="mx-auto grid max-w-[1120px] gap-12 px-5 pb-16 pt-14 sm:px-8 sm:pt-20 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
         <div className="flex flex-col justify-center">
-          <p className="text-[13px] font-medium uppercase tracking-[0.08em] text-accent">Kostenlos · im Aufbau</p>
-          <h1 className="mt-4 font-serif text-[42px] leading-[1.05] tracking-[-0.015em] sm:text-[56px]">
+          <p className="inline-flex self-start rounded-full bg-accent-soft px-3.5 py-1.5 text-[12px] font-bold text-accent">Kostenlos · gerade im Aufbau</p>
+          <h1 className="mt-5 text-[44px] font-extrabold leading-[1.02] tracking-[-0.05em] sm:text-[64px]">
             Weißt du, was du dir leisten kannst?
           </h1>
           <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-ink-2">
@@ -88,11 +88,11 @@ export default function LandingPage() {
           <p className="mt-4 text-[13px] text-ink-3">Keine Bankzugangsdaten. Kein Tracking. Keine Werbung.</p>
         </div>
 
-        <figure className="flex flex-col justify-center border-t border-line pt-8 lg:border-l lg:border-t-0 lg:pl-12 lg:pt-0">
+        <figure className="card flex flex-col justify-center self-center shadow-float lg:rotate-[-1deg]">
           <div className="flex items-end justify-between gap-4">
             <div>
               <p className="text-[12px] text-ink-3">Verfügbar heute</p>
-              <Money cents={forecast.openingBalanceCents} className="text-[34px] font-medium tracking-[-0.02em]" />
+              <Money cents={forecast.openingBalanceCents} className="text-[38px] font-extrabold tracking-[-0.045em]" />
             </div>
             <SafetyScale level={safety.level} />
           </div>
@@ -112,8 +112,8 @@ export default function LandingPage() {
       </section>
 
       {/* --------------------------- Drei Fragen --------------------------- */}
-      <section className="border-y border-line bg-surface">
-        <div className="mx-auto max-w-[1120px] px-5 py-16 sm:px-8">
+      <section className="mx-auto max-w-[1120px] px-5 sm:px-8">
+        <div className="card px-6 py-12 sm:px-10">
           <h2 className="max-w-2xl font-serif text-[30px] leading-tight sm:text-[36px]">Drei Fragen, die ein Haushaltsbuch nicht beantwortet.</h2>
           <ol className="mt-10 grid gap-10 md:grid-cols-3 md:gap-8">
             {[
@@ -133,8 +133,8 @@ export default function LandingPage() {
                 text: "Betrag eingeben, Wirkung sehen: Kontostand vorher und nachher, Reserve, Sparziele, und wie lange es dauert, bis der Betrag wieder drin ist.",
               },
             ].map((item) => (
-              <li key={item.n} className="border-t border-ink pt-4">
-                <p className="num text-[13px] text-ink-3">{item.n}</p>
+              <li key={item.n} className="rounded-[18px] bg-surface-2 p-5">
+                <p className="num inline-flex rounded-full bg-accent px-2.5 py-0.5 text-[12px] font-extrabold text-accent-ink">{item.n}</p>
                 <h3 className="mt-2 text-[18px] font-semibold tracking-[-0.01em]">{item.title}</h3>
                 <p className="mt-2 text-[15px] leading-relaxed text-ink-2">{item.text}</p>
               </li>
@@ -156,7 +156,7 @@ export default function LandingPage() {
             Wie die Rechnung funktioniert →
           </Link>
         </div>
-        <div className="border border-line bg-surface p-6 sm:p-8">
+        <div className="card shadow-float">
           <p className="text-[12px] text-ink-3">Beispiel · Laptop, 1.499 €, heute</p>
           <p className={cx("mt-2 text-[14px] font-semibold", VERDICT_TONE[purchase.verdict])}>{VERDICT_LABEL[purchase.verdict]}</p>
           <table className="mt-5 w-full text-[14px]">
@@ -194,8 +194,8 @@ export default function LandingPage() {
       </section>
 
       {/* --------------------------- Transparenz --------------------------- */}
-      <section className="border-y border-line bg-surface">
-        <div className="mx-auto grid max-w-[1120px] gap-12 px-5 py-16 sm:px-8 lg:grid-cols-2">
+      <section className="mx-auto max-w-[1120px] px-5 sm:px-8">
+        <div className="card grid gap-12 px-6 py-12 sm:px-10 lg:grid-cols-2">
           <div>
             <h2 className="font-serif text-[30px] leading-tight sm:text-[34px]">Keine Blackbox. Jede Zahl erklärt sich.</h2>
             <p className="mt-4 max-w-md text-[16px] leading-relaxed text-ink-2">
@@ -210,9 +210,9 @@ export default function LandingPage() {
               ["critical", "Kritisch", "Er fällt in den nächsten 30 Tagen unter die Reserve."],
               ["below", "Unter Mindestreserve", "Dein verfügbares Geld liegt schon heute darunter."],
             ].map(([level, label, text]) => (
-              <div key={level} className="grid grid-cols-[10.5rem_1fr] items-baseline gap-4 border-t border-line pt-4">
+              <div key={level} className="grid items-center gap-3 rounded-[16px] bg-surface-2 p-4 sm:grid-cols-[13rem_1fr]">
                 <dt>
-                  <SafetyScale level={level as "stable"} className="[&>span]:text-[13px]" />
+                  <SafetyScale level={level as "stable"} />
                 </dt>
                 <dd className="text-ink-2">
                   <span className="sr-only">{label}: </span>
@@ -225,13 +225,13 @@ export default function LandingPage() {
       </section>
 
       {/* ------------------------------ Daten ------------------------------ */}
-      <section className="mx-auto grid max-w-[1120px] gap-10 px-5 py-20 sm:px-8 md:grid-cols-3">
+      <section className="mx-auto grid max-w-[1120px] gap-4 px-5 py-16 sm:px-8 md:grid-cols-3">
         {[
           { title: "Ohne Bankzugang", text: "Du trägst ein oder importierst eine CSV aus deinem Online-Banking. Zugangsdaten zu deiner Bank brauchen wir nie." },
           { title: "Deine Daten bleiben deine", text: "Kein Tracking, keine Werbung, kein Verkauf. Vollständiger Export als CSV oder JSON und Löschung mit einem Klick." },
           { title: "Planung, keine Beratung", text: "Wir rechnen mit deinen Zahlen und zeigen Folgen. Wir empfehlen keine Produkte und verdienen nicht an deinen Entscheidungen." },
         ].map((item) => (
-          <div key={item.title} className="border-t border-ink pt-4">
+          <div key={item.title} className="card">
             <h3 className="text-[17px] font-semibold">{item.title}</h3>
             <p className="mt-2 text-[15px] leading-relaxed text-ink-2">{item.text}</p>
           </div>
@@ -239,15 +239,15 @@ export default function LandingPage() {
       </section>
 
       {/* ------------------------------ Schluss ------------------------------ */}
-      <section className="border-t border-line bg-ink text-paper">
-        <div className="mx-auto flex max-w-[1120px] flex-col gap-8 px-5 py-16 sm:px-8 md:flex-row md:items-end md:justify-between">
+      <section className="mx-auto max-w-[1120px] px-5 pb-16 sm:px-8">
+        <div className="flex flex-col gap-8 rounded-[28px] bg-accent px-6 py-14 text-accent-ink sm:px-12 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 className="font-serif text-[32px] leading-tight">Gerade im Aufbau.</h2>
+            <h2 className="text-[36px] font-extrabold leading-tight tracking-[-0.045em]">Gerade im Aufbau.</h2>
             <p className="mt-3 max-w-md text-[16px] leading-relaxed opacity-80">
               {BRAND.name} startet als geschlossene Beta. Trag dich ein – wir melden uns, sobald ein Platz frei ist.
             </p>
           </div>
-          <Link href="/warteliste" className={buttonClass("secondary", "md", "h-11 border-paper/40 bg-transparent px-5 text-paper hover:border-paper")}>
+          <Link href="/warteliste" className="inline-flex h-12 items-center rounded-full bg-accent-ink px-6 text-[15px] font-bold text-accent">
             Auf die Warteliste
           </Link>
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { formatDayWithWeekday, formatMoney } from "@/lib/format";
 import { cx } from "./cx";
 
@@ -42,6 +42,7 @@ export function TimelineChart({
   const wrap = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [hover, setHover] = useState<number | null>(null);
+  const gid = useId().replace(/:/g, "");
 
   useEffect(() => {
     const element = wrap.current;
@@ -75,8 +76,8 @@ export function TimelineChart({
   }, [series, events, reserveCents]);
 
   const left = 4;
-  const right = 64;
-  const top = 18;
+  const right = 70;
+  const top = 26;
   const bottom = 26;
   const innerW = Math.max(1, width - left - right);
   const innerH = height - top - bottom;
@@ -117,21 +118,37 @@ export function TimelineChart({
     setHover(Math.max(0, Math.min(n - 1, Math.round(ratio * (n - 1)))));
   }
 
+  // Flaechen unter den Linien
+  const area = (from: number, to: number, source = model.points, offset = 0) => {
+    const line = source
+      .slice(from - offset, to - offset + 1)
+      .map((point, i) => `${i === 0 ? "M" : "L"}${x(from + i).toFixed(1)},${y(point.balanceCents).toFixed(1)}`)
+      .join(" ");
+    return `${line} L${x(to).toFixed(1)},${(top + innerH).toFixed(1)} L${x(from).toFixed(1)},${(top + innerH).toFixed(1)} Z`;
+  };
+  const low = model.points[lowIndex];
+  const lowLabelAnchor = lowIndex > n * 0.82 ? "end" : lowIndex < n * 0.18 ? "start" : "middle";
+
   return (
     <div ref={wrap} className={cx("relative w-full select-none", className)} style={{ height }}>
       {width > 0 && n > 1 ? (
         <svg width={width} height={height} role="img" aria-label={ariaLabel} className="block overflow-visible">
           <defs>
-            <pattern id="reserve-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-              <line x1="0" y1="0" x2="0" y2="6" stroke="var(--caution)" strokeOpacity="0.28" strokeWidth="1" />
-            </pattern>
+            <linearGradient id={`${gid}-future`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.32" />
+              <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id={`${gid}-past`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--ink)" stopOpacity="0.12" />
+              <stop offset="100%" stopColor="var(--ink)" stopOpacity="0" />
+            </linearGradient>
           </defs>
 
           {/* Raster */}
           {model.ticks.map((tick) => (
             <g key={tick}>
-              <line x1={left} x2={left + innerW} y1={y(tick)} y2={y(tick)} stroke="var(--line)" strokeWidth="1" />
-              <text x={left + innerW + 8} y={y(tick) + 4} className="num" fontSize="11" fill="var(--ink-3)">
+              <line x1={left} x2={left + innerW} y1={y(tick)} y2={y(tick)} stroke="var(--line)" strokeWidth="1" strokeDasharray="3 5" />
+              <text x={left + innerW + 10} y={y(tick) + 4} className="num" fontSize="11" fontWeight="600" fill="var(--ink-3)">
                 {formatMoney(tick, { whole: true })}
               </text>
             </g>
@@ -140,9 +157,9 @@ export function TimelineChart({
           {/* Reserve-Zone */}
           {model.reserveVisible ? (
             <g>
-              <rect x={left} y={reserveY} width={innerW} height={Math.max(0, top + innerH - reserveY)} fill="url(#reserve-hatch)" />
-              <line x1={left} x2={left + innerW} y1={reserveY} y2={reserveY} stroke="var(--caution)" strokeWidth="1" strokeDasharray="2 3" />
-              <text x={left + 4} y={reserveY - 5} fontSize="11" fill="var(--caution)">
+              <rect x={left} y={reserveY} width={innerW} height={Math.max(0, top + innerH - reserveY)} fill="var(--caution)" fillOpacity="0.07" rx="6" />
+              <line x1={left} x2={left + innerW} y1={reserveY} y2={reserveY} stroke="var(--caution)" strokeWidth="1.2" strokeDasharray="4 4" />
+              <text x={left + 8} y={reserveY - 7} fontSize="11" fontWeight="700" fill="var(--caution)">
                 Reserve {formatMoney(reserveCents, { whole: true })}
               </text>
             </g>
@@ -153,60 +170,51 @@ export function TimelineChart({
           ) : null}
 
           {/* Nulllinie */}
-          {model.min < 0 ? (
-            <line x1={left} x2={left + innerW} y1={y(0)} y2={y(0)} stroke="var(--neg)" strokeWidth="1" />
-          ) : null}
+          {model.min < 0 ? <line x1={left} x2={left + innerW} y1={y(0)} y2={y(0)} stroke="var(--neg)" strokeWidth="1.2" /> : null}
 
-          {/* Monatsgrenzen */}
+          {/* Monate */}
           {monthTicks.map(({ point, index }) => (
-            <g key={point.date}>
-              <line x1={x(index)} x2={x(index)} y1={top + innerH} y2={top + innerH + 5} stroke="var(--line-strong)" />
-              <text x={x(index)} y={height - 6} fontSize="11" textAnchor="middle" fill="var(--ink-3)">
-                {MONTHS[Number(point.date.slice(5, 7)) - 1]}
-              </text>
-            </g>
+            <text key={point.date} x={x(index)} y={height - 6} fontSize="11" fontWeight="600" textAnchor="middle" fill="var(--ink-3)">
+              {MONTHS[Number(point.date.slice(5, 7)) - 1]}
+            </text>
           ))}
 
-          {/* Heute */}
-          <line x1={x(todayIndex)} x2={x(todayIndex)} y1={top - 6} y2={top + innerH} stroke="var(--ink-3)" strokeWidth="1" />
-          <text x={x(todayIndex)} y={top - 9} fontSize="11" textAnchor="middle" fill="var(--ink-2)" fontWeight="500">
-            Heute
-          </text>
-
-          {/* Linien */}
-          {todayIndex > 0 ? <path d={path(0, todayIndex)} fill="none" stroke="var(--ink)" strokeWidth="1.6" strokeLinejoin="round" /> : null}
-          {comparePath ? (
-            <path d={comparePath} fill="none" stroke="var(--ink-3)" strokeWidth="1.4" strokeDasharray="1 3" strokeLinecap="round" />
+          {/* Flaechen und Linien */}
+          {todayIndex > 0 ? (
+            <>
+              <path d={area(0, todayIndex)} fill={`url(#${gid}-past)`} />
+              <path d={path(0, todayIndex)} fill="none" stroke="var(--ink-2)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+            </>
           ) : null}
-          <path d={path(todayIndex, futureEnd)} fill="none" stroke="var(--accent)" strokeWidth="1.8" strokeDasharray="5 3" strokeLinejoin="round" />
+          {comparePath ? (
+            <path d={comparePath} fill="none" stroke="var(--ink-3)" strokeWidth="2" strokeDasharray="2 5" strokeLinecap="round" />
+          ) : null}
+          <path d={area(todayIndex, futureEnd)} fill={`url(#${gid}-future)`} />
+          <path d={path(todayIndex, futureEnd)} fill="none" stroke="var(--accent)" strokeWidth="2.6" strokeLinejoin="round" strokeLinecap="round" />
+
+          {/* Heute */}
+          <line x1={x(todayIndex)} x2={x(todayIndex)} y1={top} y2={top + innerH} stroke="var(--ink-3)" strokeWidth="1" strokeDasharray="2 4" />
+          <g transform={`translate(${x(todayIndex)},${top - 4})`}>
+            <rect x={-22} y={-14} width={44} height={18} rx={9} fill="var(--ink)" />
+            <text y={-1} fontSize="10.5" fontWeight="700" textAnchor="middle" fill="var(--paper)">
+              Heute
+            </text>
+          </g>
+          <circle cx={x(todayIndex)} cy={y(model.points[todayIndex].balanceCents)} r="5" fill="var(--accent)" stroke="var(--surface)" strokeWidth="2.5" />
 
           {/* Ereignisse auf der Prognoselinie */}
           {model.points.map((point, index) =>
-            index >= todayIndex && model.eventsByDate.has(point.date) ? (
-              <circle
-                key={point.date}
-                cx={x(index)}
-                cy={y(point.balanceCents)}
-                r="2.4"
-                fill="var(--paper)"
-                stroke="var(--accent)"
-                strokeWidth="1.3"
-              />
+            index > todayIndex && model.eventsByDate.has(point.date) ? (
+              <circle key={point.date} cx={x(index)} cy={y(point.balanceCents)} r="2.6" fill="var(--accent)" />
             ) : null,
           )}
 
           {/* Tiefpunkt */}
           {lowIndex > todayIndex ? (
             <g>
-              <circle cx={x(lowIndex)} cy={y(model.points[lowIndex].balanceCents)} r="4" fill="none" stroke="var(--ink)" strokeWidth="1.2" />
-              <text
-                x={x(lowIndex)}
-                y={y(model.points[lowIndex].balanceCents) + 17}
-                fontSize="11"
-                textAnchor={lowIndex > n * 0.85 ? "end" : "middle"}
-                fill="var(--ink-2)"
-              >
-                Tiefpunkt
+              <circle cx={x(lowIndex)} cy={y(low.balanceCents)} r="5.5" fill="var(--surface)" stroke="var(--ink)" strokeWidth="2" />
+              <text x={x(lowIndex)} y={y(low.balanceCents) + 20} fontSize="11" fontWeight="700" textAnchor={lowLabelAnchor} fill="var(--ink)">
+                Tiefpunkt {formatMoney(low.balanceCents, { whole: true })}
               </text>
             </g>
           ) : null}
@@ -214,8 +222,8 @@ export function TimelineChart({
           {/* Hover */}
           {hover !== null && hoverPoint ? (
             <g pointerEvents="none">
-              <line x1={x(hover)} x2={x(hover)} y1={top} y2={top + innerH} stroke="var(--ink)" strokeOpacity="0.35" />
-              <circle cx={x(hover)} cy={y(hoverPoint.balanceCents)} r="3.5" fill="var(--ink)" />
+              <line x1={x(hover)} x2={x(hover)} y1={top} y2={top + innerH} stroke="var(--ink)" strokeOpacity="0.4" />
+              <circle cx={x(hover)} cy={y(hoverPoint.balanceCents)} r="5" fill="var(--ink)" stroke="var(--surface)" strokeWidth="2" />
             </g>
           ) : null}
 
@@ -234,25 +242,23 @@ export function TimelineChart({
 
       {hover !== null && hoverPoint ? (
         <div
-          className="pointer-events-none absolute top-0 z-10 w-56 rounded-sm border border-line bg-paper px-3 py-2.5 text-[12px] shadow-float"
+          className="pointer-events-none absolute top-0 z-10 w-56 rounded-[14px] border border-line bg-surface-2 px-3.5 py-3 text-[12px] shadow-float"
           style={{
             left: Math.min(Math.max(0, x(hover) - 112), Math.max(0, width - 224)),
-            transform: "translateY(-100%) translateY(-6px)",
+            transform: "translateY(-100%) translateY(-8px)",
           }}
         >
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-ink-3">
-              {formatDayWithWeekday(hoverPoint.date)}
-              {hover > todayIndex ? " · Prognose" : hover === todayIndex ? " · heute" : ""}
-            </span>
-          </div>
-          <p className="num mt-0.5 text-[15px] font-medium">{formatMoney(hoverPoint.balanceCents)}</p>
+          <span className="font-medium text-ink-3">
+            {formatDayWithWeekday(hoverPoint.date)}
+            {hover > todayIndex ? " · Prognose" : hover === todayIndex ? " · heute" : ""}
+          </span>
+          <p className="num mt-0.5 text-[17px] font-bold tracking-[-0.02em]">{formatMoney(hoverPoint.balanceCents)}</p>
           {hoverEvents.length > 0 ? (
-            <ul className="mt-1.5 flex flex-col gap-0.5 border-t border-line pt-1.5">
+            <ul className="mt-2 flex flex-col gap-1 border-t border-line pt-2">
               {hoverEvents.slice(0, 4).map((event, index) => (
                 <li key={index} className="flex justify-between gap-2">
                   <span className="truncate text-ink-2">{event.label}</span>
-                  <span className={cx("num", event.amountCents > 0 ? "text-pos" : "text-ink")}>
+                  <span className={cx("num font-semibold", event.amountCents > 0 ? "text-pos" : "text-ink")}>
                     {formatMoney(event.amountCents, { signed: true })}
                   </span>
                 </li>
@@ -264,17 +270,13 @@ export function TimelineChart({
       ) : null}
 
       {series.compare ? (
-        <div className="absolute right-16 top-0 flex gap-4 text-[11px] text-ink-3">
+        <div className="absolute left-0 top-0 flex gap-4 text-[11px] font-semibold text-ink-3">
           <span className="flex items-center gap-1.5">
-            <svg width="18" height="4" aria-hidden>
-              <line x1="0" y1="2" x2="18" y2="2" stroke="var(--accent)" strokeWidth="1.8" strokeDasharray="5 3" />
-            </svg>
+            <span className="h-[3px] w-4 rounded-full bg-accent" />
             {series.futureLabel ?? "Prognose"}
           </span>
           <span className="flex items-center gap-1.5">
-            <svg width="18" height="4" aria-hidden>
-              <line x1="0" y1="2" x2="18" y2="2" stroke="var(--ink-3)" strokeWidth="1.4" strokeDasharray="1 3" strokeLinecap="round" />
-            </svg>
+            <span className="h-[3px] w-4 rounded-full bg-ink-3" />
             {series.compareLabel ?? "Vergleich"}
           </span>
         </div>

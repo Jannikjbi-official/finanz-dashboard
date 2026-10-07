@@ -16,7 +16,7 @@ export default async function DatenPage() {
     .reverse();
 
   return (
-    <div className="flex max-w-3xl flex-col gap-12">
+    <div className="flex max-w-3xl flex-col gap-4">
       <PageHeader title="Daten & Datenschutz" description="Deine Daten gehören dir. Hier nimmst du sie mit oder löschst sie." />
 
       <Section title="Exportieren">

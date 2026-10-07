@@ -28,7 +28,7 @@ const KIND_OPTIONS = [
   { value: "other", label: "Sonstiges" },
 ] as const;
 
-const COLORS = ["#0d5a5c", "#2e6a3e", "#9a6510", "#b0502a", "#4a5a8a", "#6b4f7a", "#5b5f66"];
+const COLORS = ["#c6f24e", "#6ee7d8", "#8b9cff", "#ff9a52", "#f472b6", "#f5c451", "#9aa3ad"];
 
 export function AccountSheet({
   open,

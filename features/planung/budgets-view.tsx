@@ -50,11 +50,11 @@ export function BudgetsView({ month, today, lines }: { month: string; today: str
         description="Monatsgrenzen für variable Ausgaben – mit Hochrechnung, wo du am Monatsende landest."
         actions={
           <div className="flex items-center gap-1">
-            <Link aria-label="Vorheriger Monat" href={`?monat=${addMonths(`${month}-01`, -1).slice(0, 7)}`} className="rounded-sm p-2 text-ink-2 hover:bg-sunken">
+            <Link aria-label="Vorheriger Monat" href={`?monat=${addMonths(`${month}-01`, -1).slice(0, 7)}`} className="rounded-full bg-surface p-2.5 text-ink-2 hover:text-ink">
               <CaretLeft size={16} />
             </Link>
             <span className="min-w-36 text-center text-[14px] font-medium">{formatMonth(month)}</span>
-            <Link aria-label="Nächster Monat" href={`?monat=${addMonths(`${month}-01`, 1).slice(0, 7)}`} className="rounded-sm p-2 text-ink-2 hover:bg-sunken">
+            <Link aria-label="Nächster Monat" href={`?monat=${addMonths(`${month}-01`, 1).slice(0, 7)}`} className="rounded-full bg-surface p-2.5 text-ink-2 hover:text-ink">
               <CaretRight size={16} />
             </Link>
           </div>
@@ -62,7 +62,7 @@ export function BudgetsView({ month, today, lines }: { month: string; today: str
       />
 
       <Figures
-        className="mb-10"
+        className="mb-4"
         items={[
           { label: "Budget gesamt", value: <Money cents={budgetTotal} whole />, note: `${withBudget.length} Kategorien` },
           { label: "Verbraucht", value: <Money cents={spentTotal} />, note: budgetTotal ? `${formatPercent(spentTotal / budgetTotal)} des Budgets` : undefined },
@@ -78,11 +78,11 @@ export function BudgetsView({ month, today, lines }: { month: string; today: str
       {lines.length === 0 ? (
         <Empty title="Keine Ausgaben-Kategorien.">Lege unter Einstellungen → Kategorien welche an.</Empty>
       ) : (
-        <div className="flex flex-col gap-12">
+        <div className="flex flex-col gap-4">
           {withBudget.length > 0 ? (
             <section>
-              <h2 className="mb-3 text-[15px] font-semibold">Mit Budget</h2>
-              <ul className="border-t border-ink/80">
+              <h2 className="mb-3 px-1 text-[17px] font-bold tracking-[-0.02em]">Mit Budget</h2>
+              <ul className="grid gap-4 md:grid-cols-2">
                 {withBudget.map((line) => (
                   <BudgetRow key={line.categoryId} line={line} onEdit={() => setEditing(line)} showElapsed={isCurrent} />
                 ))}
@@ -90,10 +90,10 @@ export function BudgetsView({ month, today, lines }: { month: string; today: str
             </section>
           ) : null}
 
-          <section>
-            <h2 className="mb-1 text-[15px] font-semibold">Ohne Budget</h2>
+          <section className="card">
+            <h2 className="mb-1 text-[17px] font-bold tracking-[-0.02em]">Ohne Budget</h2>
             <p className="mb-3 text-[13px] text-ink-3">Der Durchschnitt der letzten drei Monate hilft beim Festlegen.</p>
-            <ul className="border-t border-ink/80">
+            <ul>
               {without.map((line) => (
                 <li key={line.categoryId} className="grid grid-cols-[1fr_auto] items-center gap-3 border-b border-line py-3 sm:grid-cols-[1fr_8rem_8rem_auto]">
                   <span className="flex items-center gap-2 text-[14px]">
@@ -132,54 +132,55 @@ function BudgetRow({ line, onEdit, showElapsed }: { line: BudgetLine; onEdit: ()
   const scale = Math.max(budget, projection.projectedCents, projection.spentCents) || 1;
   const status = STATUS[projection.status];
   const pct = (value: number) => `${Math.min(100, (value / scale) * 100)}%`;
+  const used = budget > 0 ? projection.spentCents / budget : 0;
   const barColor =
-    projection.status === "over" ? "bg-neg" : projection.status === "projected-over" ? "bg-caution" : projection.status === "watch" ? "bg-warn" : "bg-ink";
+    projection.status === "over" ? "var(--neg)" : projection.status === "projected-over" ? "var(--caution)" : projection.status === "watch" ? "var(--warn)" : line.color;
 
   return (
-    <li className="border-b border-line py-4">
-      <button type="button" onClick={onEdit} className="grid w-full grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-left sm:grid-cols-[14rem_1fr_auto]">
-        <span className="flex items-center gap-2">
-          <Swatch color={line.color} />
-          <span className="text-[14px] font-medium">{line.name}</span>
+    <li>
+      <button type="button" onClick={onEdit} className="card flex w-full flex-col gap-4 text-left transition-colors hover:border-line-strong">
+        <span className="flex items-start justify-between gap-3">
+          <span className="flex items-center gap-2.5">
+            <span className="size-3 rounded-full" style={{ background: line.color }} />
+            <span className="text-[16px] font-bold tracking-[-0.02em]">{line.name}</span>
+          </span>
           {status ? <Pill tone={status.tone}>{status.label}</Pill> : null}
         </span>
 
-        {/* Balken: verbraucht (voll), Hochrechnung (schraffiert), Budget (Strich), Monatsfortschritt (Punkt) */}
-        <span className="relative col-span-2 row-start-2 h-5 sm:col-span-1 sm:row-start-auto" aria-hidden>
-          <span className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-sunken" />
+        <span className="flex items-end justify-between gap-3">
+          <span>
+            <Money cents={projection.spentCents} className="block text-[26px] font-extrabold tracking-[-0.04em]" />
+            <span className="text-[13px] text-ink-3">von {formatMoney(budget, { whole: true })}</span>
+          </span>
+          <span className="num text-[22px] font-extrabold tracking-[-0.03em]" style={{ color: barColor }}>
+            {formatPercent(used)}
+          </span>
+        </span>
+
+        {/* Verbraucht (voll), Hochrechnung (blass), Budgetgrenze (Strich), Monatsfortschritt (Punkt) */}
+        <span className="relative h-3 rounded-full bg-sunken" aria-hidden>
           {projection.projectedCents > projection.spentCents ? (
-            <span className="hatch absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full" style={{ left: 0, width: pct(projection.projectedCents) }} />
+            <span className="absolute inset-y-0 left-0 rounded-full opacity-25" style={{ width: pct(projection.projectedCents), background: barColor }} />
           ) : null}
-          <span className={cx("absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full", barColor)} style={{ left: 0, width: pct(projection.spentCents) }} />
-          <span className="absolute top-0 h-5 w-px bg-ink" style={{ left: pct(budget) }} />
+          <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: pct(projection.spentCents), background: barColor }} />
+          <span className="absolute -top-1 h-5 w-[2px] rounded-full bg-ink" style={{ left: pct(budget) }} />
           {showElapsed ? (
-            <span className="absolute top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-ink-3 bg-paper" style={{ left: pct(budget * projection.elapsed) }} />
+            <span className="absolute top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-ink" style={{ left: pct(budget * projection.elapsed) }} />
           ) : null}
         </span>
 
-        <span className="text-right text-[14px]">
-          <Money cents={projection.spentCents} /> <span className="text-ink-3">/ {formatMoney(budget, { whole: true })}</span>
-        </span>
-
-        <span className="col-span-2 row-start-3 flex flex-wrap gap-x-5 text-[12px] text-ink-3 sm:col-span-3">
-          <span>
-            Rest <span className={cx("num", (projection.remainingCents ?? 0) < 0 && "text-neg")}>{formatMoney(projection.remainingCents ?? 0)}</span>
+        <span className="grid grid-cols-3 gap-2 text-[12px]">
+          <span className="rounded-[12px] bg-surface-2 px-3 py-2">
+            <span className="block text-ink-3">Rest</span>
+            <span className={cx("num font-bold", (projection.remainingCents ?? 0) < 0 && "text-neg")}>{formatMoney(projection.remainingCents ?? 0, { whole: true })}</span>
           </span>
-          {projection.method !== "closed" ? (
-            <span>
-              Hochrechnung <span className="num">{formatMoney(projection.projectedCents, { whole: true })}</span>
-            </span>
-          ) : null}
-          <span>
-            Ø 3 Monate <span className="num">{formatMoney(projection.averageCents, { whole: true })}</span>
+          <span className="rounded-[12px] bg-surface-2 px-3 py-2">
+            <span className="block text-ink-3">{projection.method === "closed" ? "Ergebnis" : "Prognose"}</span>
+            <span className="num font-bold">{formatMoney(projection.projectedCents, { whole: true })}</span>
           </span>
-          <span className="hidden sm:inline">
-            Vormonate{" "}
-            {line.history.map((h) => (
-              <span key={h.month} className="num ml-1.5">
-                {formatMonth(h.month, { short: true }).split(" ")[0]} {formatMoney(h.cents, { whole: true })}
-              </span>
-            ))}
+          <span className="rounded-[12px] bg-surface-2 px-3 py-2">
+            <span className="block text-ink-3">Ø 3 Monate</span>
+            <span className="num font-bold">{formatMoney(projection.averageCents, { whole: true })}</span>
           </span>
         </span>
       </button>

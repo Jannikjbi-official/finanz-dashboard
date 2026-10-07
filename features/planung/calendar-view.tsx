@@ -70,11 +70,11 @@ export function CalendarView({
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1">
-          <Link aria-label="Vorheriger Monat" href={`?monat=${addMonths(`${month}-01`, -1).slice(0, 7)}`} className="rounded-sm p-2 text-ink-2 hover:bg-sunken">
+          <Link aria-label="Vorheriger Monat" href={`?monat=${addMonths(`${month}-01`, -1).slice(0, 7)}`} className="rounded-full bg-surface p-2.5 text-ink-2 hover:text-ink">
             <CaretLeft size={16} />
           </Link>
-          <h1 className="min-w-44 text-center text-[22px] font-semibold tracking-[-0.02em]">{formatMonth(month)}</h1>
-          <Link aria-label="Nächster Monat" href={`?monat=${addMonths(`${month}-01`, 1).slice(0, 7)}`} className="rounded-sm p-2 text-ink-2 hover:bg-sunken">
+          <h1 className="min-w-48 text-center text-[26px] font-bold tracking-[-0.035em]">{formatMonth(month)}</h1>
+          <Link aria-label="Nächster Monat" href={`?monat=${addMonths(`${month}-01`, 1).slice(0, 7)}`} className="rounded-full bg-surface p-2.5 text-ink-2 hover:text-ink">
             <CaretRight size={16} />
           </Link>
           {month !== today.slice(0, 7) ? (
@@ -104,18 +104,18 @@ export function CalendarView({
       </div>
 
       {view === "month" ? (
-        <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
-          <div>
-            <div className="grid grid-cols-7 border-b border-ink/80 pb-1.5 text-[12px] text-ink-3">
+        <div className="grid gap-5 lg:grid-cols-[1fr_20rem]">
+          <div className="card !p-3 sm:!p-4">
+            <div className="grid grid-cols-7 pb-2 text-[12px] font-bold text-ink-3">
               {WEEKDAYS.map((d) => (
-                <span key={d} className="px-1.5">
+                <span key={d} className="px-2">
                   {d}
                 </span>
               ))}
             </div>
-            <div className="grid grid-cols-7">
+            <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
               {cells.map((date, index) => {
-                if (!date) return <div key={index} className="min-h-16 border-b border-r border-line/60 bg-sunken/30 sm:min-h-24" />;
+                if (!date) return <div key={index} className="min-h-16 sm:min-h-24" />;
                 const day = byDate.get(date);
                 const isToday = date === today;
                 const isPast = date < today;
@@ -129,16 +129,16 @@ export function CalendarView({
                     aria-pressed={selected === date}
                     aria-label={`${formatDayWithWeekday(date)}${day?.items.length ? `, ${day.items.length} Einträge` : ""}`}
                     className={cx(
-                      "flex min-h-16 flex-col items-stretch gap-1 border-b border-r border-line/60 p-1.5 text-left transition-colors hover:bg-sunken/60 sm:min-h-24",
-                      (index + 1) % 7 === 0 && "border-r-0",
-                      selected === date && "bg-accent-soft/60 hover:bg-accent-soft/60",
+                      "flex min-h-16 flex-col items-stretch gap-1 rounded-[12px] border p-1.5 text-left transition-colors sm:min-h-24 sm:rounded-[14px] sm:p-2",
+                      selected === date ? "border-accent bg-accent-soft" : "border-transparent bg-surface-2 hover:border-line-strong",
+                      isPast && selected !== date && "opacity-60",
                     )}
                   >
                     <span className="flex items-center justify-between">
                       <span
                         className={cx(
-                          "num flex size-6 items-center justify-center rounded-full text-[12px]",
-                          isToday ? "bg-ink font-semibold text-paper" : isPast ? "text-ink-3" : "text-ink",
+                          "num flex size-6 items-center justify-center rounded-full text-[12px] font-bold",
+                          isToday ? "bg-accent text-accent-ink" : isPast ? "text-ink-3" : "text-ink",
                         )}
                       >
                         {Number(date.slice(8))}
@@ -147,19 +147,19 @@ export function CalendarView({
                     </span>
                     {day && day.items.length > 0 ? (
                       <>
-                        <span className="hidden truncate text-[11px] leading-tight text-ink-2 sm:block">
+                        <span className="hidden truncate text-[11px] font-medium leading-tight text-ink-2 sm:block">
                           {day.items.filter((i) => i.kind !== "deadline")[0]?.label}
                           {day.items.length > 1 ? ` +${day.items.length - 1}` : ""}
                         </span>
                         {net !== 0 ? (
-                          <span className={cx("num mt-auto text-right text-[11px]", net > 0 ? "text-pos" : "text-ink-2", !isPast && "italic")}>
+                          <span className={cx("num mt-auto self-end rounded-full px-1.5 py-px text-[10.5px] font-bold", net > 0 ? "bg-pos-soft text-pos" : "bg-sunken text-ink-2")}>
                             {formatMoney(net, { signed: true, whole: true })}
                           </span>
                         ) : null}
                       </>
                     ) : null}
                     {day?.balanceCents !== null && day?.balanceCents !== undefined && !isPast ? (
-                      <span className={cx("num hidden text-right text-[10px] sm:block", belowReserve ? "text-caution" : "text-ink-3", !(day.items.length > 0 && net !== 0) && "mt-auto")}>
+                      <span className={cx("num hidden text-right text-[10px] font-semibold sm:block", belowReserve ? "text-caution" : "text-ink-3", !(day.items.length > 0 && net !== 0) && "mt-auto")}>
                         {formatMoney(day.balanceCents, { whole: true })}
                       </span>
                     ) : null}
@@ -167,15 +167,15 @@ export function CalendarView({
                 );
               })}
             </div>
-            <p className="mt-3 text-[12px] text-ink-3">
-              Vergangene Tage: gebuchte Bewegungen. Ab heute: erwartete Ereignisse (kursiv) und der prognostizierte Stand am Tagesende.
+            <p className="mt-3 px-1 text-[12px] text-ink-3">
+              Vergangene Tage: gebuchte Bewegungen. Ab heute: erwartete Ereignisse und der prognostizierte Stand am Tagesende.
               {horizonEnd < `${month}-${String(length).padStart(2, "0")}` ? ` Die Prognose reicht bis ${formatDayWithWeekday(horizonEnd)}.` : ""}
             </p>
           </div>
 
-          <aside className="lg:border-l lg:border-line lg:pl-6">
+          <aside className="card self-start">
             <p className="text-[13px] text-ink-3">{selected === today ? "Heute" : selected < today ? "Gebucht" : "Erwartet"}</p>
-            <h2 className="text-[17px] font-semibold">{formatDayWithWeekday(selected)}</h2>
+            <h2 className="text-[20px] font-bold tracking-[-0.03em]">{formatDayWithWeekday(selected)}</h2>
             <DayItems day={selectedDay} />
             {selectedDay?.balanceCents !== null && selectedDay?.balanceCents !== undefined && selected >= today ? (
               <p className="mt-4 border-t border-line pt-3 text-[13px] text-ink-2">
@@ -185,10 +185,10 @@ export function CalendarView({
           </aside>
         </div>
       ) : (
-        <ol className="border-t border-ink/80">
+        <ol className="card flex flex-col gap-1 !p-2">
           {monthItems.length === 0 ? <li className="py-6 text-[14px] text-ink-3">In diesem Monat steht nichts an.</li> : null}
           {monthItems.map((day) => (
-            <li key={day.date} className={cx("grid grid-cols-[7rem_1fr] gap-3 border-b border-line py-3 sm:grid-cols-[9rem_1fr]", day.date === today && "bg-accent-soft/40")}>
+            <li key={day.date} className={cx("grid grid-cols-[7rem_1fr] gap-3 rounded-[14px] px-3 py-3 sm:grid-cols-[9rem_1fr]", day.date === today ? "bg-accent-soft" : "hover:bg-surface-2")}>
               <span className={cx("text-[13px]", day.date < today ? "text-ink-3" : "font-medium")}>{formatDayWithWeekday(day.date)}</span>
               <DayItems day={day} compact />
             </li>

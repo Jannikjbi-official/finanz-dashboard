@@ -68,7 +68,7 @@ export function PlannedPage({
       );
     }
     return (
-      <ul className="border-t border-ink/80">
+      <ul className="border-t border-line">
         {items.map((item) => {
           const overdue = (item.kind === "expense" ? (item.dateFrom ?? item.dateTo) : (item.dateTo ?? item.dateFrom)) ?? "9999";
           return (
@@ -112,18 +112,18 @@ export function PlannedPage({
         }
       />
 
-      <div className="flex flex-col gap-12">
-        <section>
+      <div className="flex flex-col gap-4">
+        <section className="card">
           <h2 className="mb-3 text-[15px] font-semibold">Erwartete Einnahmen</h2>
           {list(income, "income")}
         </section>
-        <section>
+        <section className="card">
           <h2 className="mb-3 text-[15px] font-semibold">Geplante Ausgaben</h2>
           {list(expense, "expense")}
         </section>
 
         {done.length > 0 ? (
-          <section>
+          <section className="card">
             <h2 className="mb-3 text-[15px] font-semibold text-ink-2">Zuletzt erledigt</h2>
             <ul className="border-t border-line">
               {done.map((item) => (

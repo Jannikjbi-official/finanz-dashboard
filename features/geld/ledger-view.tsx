@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { ArrowsLeftRight, CaretLeft, CaretRight, MagnifyingGlass, Repeat } from "@phosphor-icons/react/dist/ssr";
+import { ArrowDownLeft, ArrowsLeftRight, ArrowUpRight, CaretLeft, CaretRight, MagnifyingGlass, Repeat } from "@phosphor-icons/react/dist/ssr";
 import { formatDayWithWeekday, formatMoney, formatMonth, formatWindow } from "@/lib/format";
 import { addMonths } from "@/lib/domain/calendar";
-import { Empty, Swatch } from "@/ui/layout";
+import { Empty, IconTile, Swatch } from "@/ui/layout";
 import { Money } from "@/ui/money";
 import { Select } from "@/ui/field";
 import { cx } from "@/ui/cx";
@@ -86,7 +86,7 @@ export function LedgerView({
       <header className="flex flex-col gap-4 pb-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-[26px] font-semibold tracking-[-0.02em] sm:text-[28px]">Buchungen</h1>
+            <h1 className="text-[30px] font-bold tracking-[-0.035em] sm:text-[36px]">Buchungen</h1>
             <p className="mt-1 text-[14px] text-ink-2">
               {allMonths ? "Alle Monate" : formatMonth(month!)}
               {filtered ? " · gefiltert" : ""}
@@ -98,7 +98,7 @@ export function LedgerView({
                 <Link
                   aria-label="Vorheriger Monat"
                   href={`?${withParam(params, "monat", addMonths(`${month}-01`, -1).slice(0, 7))}`}
-                  className="rounded-sm p-2 text-ink-2 hover:bg-sunken"
+                  className="rounded-full bg-surface p-2.5 text-ink-2 hover:text-ink"
                 >
                   <CaretLeft size={16} />
                 </Link>
@@ -107,12 +107,12 @@ export function LedgerView({
                   value={month}
                   onChange={(event) => event.target.value && update({ monat: event.target.value })}
                   aria-label="Monat wählen"
-                  className="num h-9 rounded-sm border border-line-strong bg-surface px-2 text-[13px]"
+                  className="num h-10 rounded-full bg-surface px-3 text-[13px] font-semibold"
                 />
                 <Link
                   aria-label="Nächster Monat"
                   href={`?${withParam(params, "monat", addMonths(`${month}-01`, 1).slice(0, 7))}`}
-                  className="rounded-sm p-2 text-ink-2 hover:bg-sunken"
+                  className="rounded-full bg-surface p-2.5 text-ink-2 hover:text-ink"
                 >
                   <CaretRight size={16} />
                 </Link>
@@ -122,8 +122,8 @@ export function LedgerView({
               type="button"
               onClick={() => update({ monat: allMonths ? today.slice(0, 7) : "alle" })}
               className={cx(
-                "ml-1 h-9 rounded-sm border px-3 text-[13px]",
-                allMonths ? "border-ink bg-ink text-paper" : "border-line-strong text-ink-2 hover:border-ink-3",
+                "ml-1 h-10 rounded-full px-4 text-[13px] font-semibold",
+                allMonths ? "bg-accent text-accent-ink" : "bg-surface text-ink-2 hover:text-ink",
               )}
             >
               Alle Monate
@@ -135,13 +135,13 @@ export function LedgerView({
         <div className="grid gap-2 sm:grid-cols-[1fr_9rem_11rem_11rem]">
           <label className="relative">
             <span className="sr-only">Suchen</span>
-            <MagnifyingGlass size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
+            <MagnifyingGlass size={16} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-3" />
             <input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Bezeichnung oder Notiz suchen"
-              className="h-10 w-full rounded-sm border border-line-strong bg-surface pl-9 pr-3 text-[14px] placeholder:text-ink-3 focus:border-accent focus:outline-none"
+              className="h-11 w-full rounded-full border border-transparent bg-surface pl-10 pr-4 text-[14px] placeholder:text-ink-3 focus:border-accent focus:outline-none"
             />
           </label>
           <Select aria-label="Typ" value={filters.typ || "alle-typen"} onChange={(e) => update({ typ: e.target.value })}>
@@ -170,19 +170,19 @@ export function LedgerView({
           </Select>
         </div>
 
-        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 border-y border-line py-2.5 text-[13px] text-ink-3">
-          <span>
+        <div className="flex flex-wrap items-center gap-2 text-[13px]">
+          <span className="rounded-full bg-surface px-3.5 py-1.5 font-semibold text-ink-2">
             {rows.length}
             {truncated ? "+" : ""} Buchungen
           </span>
-          <span>
-            Eingänge <Money cents={totals.income} className="text-pos" />
+          <span className="rounded-full bg-pos-soft px-3.5 py-1.5 font-semibold text-pos">
+            + <Money cents={totals.income} whole />
           </span>
-          <span>
-            Ausgänge <Money cents={-totals.expense} className="text-ink" />
+          <span className="rounded-full bg-surface px-3.5 py-1.5 font-semibold">
+            <Money cents={-totals.expense} whole />
           </span>
-          <span>
-            Saldo <Money cents={totals.income - totals.expense} tone="flow" />
+          <span className="rounded-full bg-surface px-3.5 py-1.5 font-semibold text-ink-2">
+            Saldo <Money cents={totals.income - totals.expense} whole tone="flow" />
           </span>
           {filtered ? (
             <button
@@ -191,7 +191,7 @@ export function LedgerView({
                 setSearch("");
                 update({ q: "", typ: "", kategorie: "", konto: "" });
               }}
-              className="ml-auto text-accent hover:underline"
+              className="ml-auto font-semibold text-accent hover:underline"
             >
               Filter zurücksetzen
             </button>
@@ -205,36 +205,37 @@ export function LedgerView({
             {filtered ? "Filter lockern oder den Zeitraum auf „Alle Monate“ stellen." : "Über „Erfassen“ oben rechts legst du eine an – oder importierst eine CSV-Datei aus dem Online-Banking."}
           </Empty>
         ) : (
-          <ol>
+          <ol className="flex flex-col gap-3">
             {[...byDay.entries()].map(([date, items]) => {
               const daySum = items.reduce(
                 (sum, row) => (row.transferGroupId ? sum : sum + (row.type === "income" ? row.amountCents : -row.amountCents)),
                 0,
               );
               return (
-                <li key={date}>
-                  <div className="sticky top-[97px] z-10 flex items-baseline justify-between bg-paper py-2 pt-5 text-[12px] lg:top-[97px]">
-                    <span className="font-medium text-ink-2">{formatDayWithWeekday(date)}</span>
-                    <span className="num text-ink-3">{formatMoney(daySum, { signed: true })}</span>
+                <li key={date} className="rounded-[22px] border border-line bg-surface p-2">
+                  <div className="flex items-baseline justify-between px-3 pb-1 pt-2 text-[12px]">
+                    <span className="font-bold text-ink-2">{formatDayWithWeekday(date)}</span>
+                    <span className="num font-semibold text-ink-3">{formatMoney(daySum, { signed: true })}</span>
                   </div>
-                  <ul className="border-t border-line">
+                  <ul>
                     {items.map((row) => {
                       const category = row.categoryId ? categoryById.get(row.categoryId) : null;
                       const account = row.accountId ? accountById.get(row.accountId) : null;
                       const signed = row.type === "income" ? row.amountCents : -row.amountCents;
+                      const color = row.transferGroupId ? "var(--ink-3)" : (category?.color ?? "var(--ink-3)");
+                      const Icon = row.transferGroupId ? ArrowsLeftRight : row.recurringId ? Repeat : row.type === "income" ? ArrowDownLeft : ArrowUpRight;
                       return (
                         <li key={row.id}>
                           <button
                             type="button"
                             onClick={() => setEditing(row)}
-                            className="grid w-full grid-cols-[1fr_auto] items-center gap-x-4 border-b border-line py-3 text-left hover:bg-sunken/60 sm:grid-cols-[1fr_10rem_9rem_8rem]"
+                            className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-x-3 rounded-[16px] px-2 py-2.5 text-left transition-colors hover:bg-surface-2 sm:grid-cols-[auto_1fr_10rem_9rem_8rem]"
                           >
+                            <IconTile color={color}>
+                              <Icon size={18} weight="bold" />
+                            </IconTile>
                             <span className="min-w-0">
-                              <span className="flex items-center gap-1.5">
-                                {row.transferGroupId ? <ArrowsLeftRight size={14} className="shrink-0 text-ink-3" aria-label="Umbuchung" /> : null}
-                                {row.recurringId ? <Repeat size={14} className="shrink-0 text-ink-3" aria-label="Aus Fixkosten" /> : null}
-                                <span className="truncate text-[14px]">{row.title}</span>
-                              </span>
+                              <span className="block truncate text-[14px] font-semibold">{row.title}</span>
                               <span className="mt-0.5 block truncate text-[12px] text-ink-3">
                                 {row.datePrecision !== "day" ? `${formatWindow(row.date, row.dateEnd)} · ` : ""}
                                 {row.note ?? ""}
@@ -244,7 +245,7 @@ export function LedgerView({
                                 </span>
                               </span>
                             </span>
-                            <span className="hidden min-w-0 items-center gap-2 text-[13px] text-ink-2 sm:flex">
+                            <span className="hidden min-w-0 items-center gap-2 text-[13px] font-medium text-ink-2 sm:flex">
                               {row.transferGroupId ? (
                                 <span className="text-ink-3">Umbuchung</span>
                               ) : category ? (
@@ -257,7 +258,7 @@ export function LedgerView({
                               )}
                             </span>
                             <span className="hidden truncate text-[13px] text-ink-3 sm:block">{account?.name ?? "–"}</span>
-                            <Money cents={signed} tone={row.transferGroupId ? "muted" : "flow"} className="text-right text-[14px]" />
+                            <Money cents={signed} tone={row.transferGroupId ? "muted" : "flow"} className="text-right text-[15px] font-bold" />
                           </button>
                         </li>
                       );

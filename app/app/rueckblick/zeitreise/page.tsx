@@ -47,7 +47,7 @@ export default async function ZeitreisePage({ searchParams }: { searchParams: Pr
   ];
 
   return (
-    <div className="flex flex-col gap-12">
+    <div className="flex flex-col gap-4">
       <header className="flex flex-col gap-5">
         <p className="text-[13px] text-ink-3">Zeitreise</p>
         <h1 className="max-w-3xl font-serif text-[32px] leading-[1.15] tracking-[-0.01em] sm:text-[40px]">
@@ -113,7 +113,7 @@ export default async function ZeitreisePage({ searchParams }: { searchParams: Pr
                       </tr>
                     );
                   })}
-                <tr className="border-t-2 border-ink font-medium">
+                <tr className="border-t border-line font-medium">
                   <td className="py-2.5 pr-3">Verfügbar</td>
                   <td className="py-2.5 pr-3 text-right"><Money cents={liquid(then)} /></td>
                   <td className="py-2.5 pr-3 text-right"><Money cents={liquid(now)} /></td>
@@ -160,7 +160,7 @@ export default async function ZeitreisePage({ searchParams }: { searchParams: Pr
         </table>
       </Section>
 
-      <div className="grid gap-12 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {[
           { title: `Ausgaben ${formatMonth(thenMonth)}`, report: reportThen },
           { title: `Ausgaben ${formatMonth(lastFull)}`, report: reportNow },

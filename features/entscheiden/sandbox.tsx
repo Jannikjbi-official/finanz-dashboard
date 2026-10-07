@@ -142,7 +142,7 @@ export function Sandbox({
   }
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-4">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="mb-1.5 flex items-center gap-1.5 text-[13px] text-ink-3">
@@ -176,10 +176,10 @@ export function Sandbox({
         </div>
       </header>
 
-      <div className="grid gap-10 lg:grid-cols-[26rem_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[26rem_1fr]">
         {/* Ereignisse */}
         <section className="flex flex-col gap-4">
-          <h2 className="border-b border-ink/80 pb-2 text-[15px] font-semibold">Ereignisse</h2>
+          <h2 className="border-b border-line pb-2 text-[15px] font-semibold">Ereignisse</h2>
           {drafts.length === 0 ? <p className="text-[14px] text-ink-3">Noch nichts angenommen. Starte mit einer Vorlage:</p> : null}
 
           <ul className="flex flex-col gap-3">

@@ -13,7 +13,7 @@ export default async function EinstellungenPage() {
   const picture = await loadFinancialPicture(user.id);
 
   return (
-    <div className="flex max-w-3xl flex-col gap-12">
+    <div className="flex max-w-3xl flex-col gap-4">
       <PageHeader title="Einstellungen" description={user.email} />
 
       <Section title="Profil">

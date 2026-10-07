@@ -61,7 +61,7 @@ export function ActionForm({
 export function FormError({ error }: { error: string | null }) {
   if (!error) return null;
   return (
-    <p role="alert" className="rounded-sm border border-neg/30 bg-neg-soft px-3 py-2 text-[13px] text-neg">
+    <p role="alert" className="rounded-[12px] bg-neg-soft px-3.5 py-2.5 text-[13px] font-medium text-neg">
       {error}
     </p>
   );

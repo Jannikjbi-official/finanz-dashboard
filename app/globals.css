@@ -1,94 +1,81 @@
 @import "tailwindcss";
 
 /* -------------------------------------------------------------------------
-   Designsystem
-   Papier, Tinte, eine Akzentfarbe (Petrol), gedaempfte Statusfarben.
-   Linien statt Boxen, kleine Radien, kaum Schatten.
+   Designsystem "Dark Fintech"
+   Fast schwarzer Grund, abgerundete Karten, Limette als Akzent,
+   kraeftige Statusfarben. Dunkel ist Standard, hell gibt es auf Wunsch.
    ------------------------------------------------------------------------- */
 
 :root {
-  --paper: #f4f2ec;
-  --surface: #fbfaf6;
-  --sunken: #ebe8e0;
-  --ink: #16181b;
-  --ink-2: #464a50;
-  --ink-3: #7b7f85;
-  --line: #dcd8ce;
-  --line-strong: #c3bdb1;
-  --accent: #0d5a5c;
-  --accent-hover: #0a4a4c;
-  --accent-ink: #ffffff;
-  --accent-soft: #dde9e6;
-  --pos: #2e6a3e;
-  --pos-soft: #dfeadf;
-  --warn: #9a6510;
-  --warn-soft: #f1e6cf;
-  --caution: #b0502a;
-  --caution-soft: #f3dfd3;
-  --neg: #a3302a;
-  --neg-soft: #f2dbd7;
-  --focus: #0d5a5c;
-  --shadow: 0 1px 2px rgb(22 24 27 / 0.06), 0 8px 24px -12px rgb(22 24 27 / 0.18);
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #111315;
-    --surface: #181b1e;
-    --sunken: #0c0e0f;
-    --ink: #ebe8e1;
-    --ink-2: #a8acb1;
-    --ink-3: #747980;
-    --line: #2a2e33;
-    --line-strong: #3a3f45;
-    --accent: #6cb8b2;
-    --accent-hover: #86c7c2;
-    --accent-ink: #0b1414;
-    --accent-soft: #1b2e2d;
-    --pos: #86bf92;
-    --pos-soft: #1b2a1f;
-    --warn: #d7a64d;
-    --warn-soft: #2e2615;
-    --caution: #e08457;
-    --caution-soft: #33221a;
-    --neg: #e3756a;
-    --neg-soft: #351d1b;
-    --focus: #6cb8b2;
-    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 30px -12px rgb(0 0 0 / 0.6);
-    color-scheme: dark;
-  }
-}
-
-:root[data-theme="dark"] {
-  --paper: #111315;
-  --surface: #181b1e;
-  --sunken: #0c0e0f;
-  --ink: #ebe8e1;
-  --ink-2: #a8acb1;
-  --ink-3: #747980;
-  --line: #2a2e33;
-  --line-strong: #3a3f45;
-  --accent: #6cb8b2;
-  --accent-hover: #86c7c2;
-  --accent-ink: #0b1414;
-  --accent-soft: #1b2e2d;
-  --pos: #86bf92;
-  --pos-soft: #1b2a1f;
-  --warn: #d7a64d;
-  --warn-soft: #2e2615;
-  --caution: #e08457;
-  --caution-soft: #33221a;
-  --neg: #e3756a;
-  --neg-soft: #351d1b;
-  --focus: #6cb8b2;
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 30px -12px rgb(0 0 0 / 0.6);
+  --paper: #0b0d10;
+  --surface: #14171c;
+  --surface-2: #1b1f25;
+  --sunken: #1f242b;
+  --ink: #f3f5f6;
+  --ink-2: #aab1ba;
+  --ink-3: #6f7781;
+  --line: rgb(255 255 255 / 0.07);
+  --line-strong: rgb(255 255 255 / 0.14);
+  --accent: #c6f24e;
+  --accent-hover: #d6ff66;
+  --accent-ink: #0b0d10;
+  --accent-soft: rgb(198 242 78 / 0.12);
+  --pos: #8be36b;
+  --pos-soft: rgb(139 227 107 / 0.13);
+  --warn: #f5c451;
+  --warn-soft: rgb(245 196 81 / 0.13);
+  --caution: #ff9a52;
+  --caution-soft: rgb(255 154 82 / 0.14);
+  --neg: #ff6b6b;
+  --neg-soft: rgb(255 107 107 / 0.14);
+  --focus: #c6f24e;
+  --chart-1: #c6f24e;
+  --chart-2: #6ee7d8;
+  --chart-3: #8b9cff;
+  --chart-4: #ff9a52;
+  --chart-5: #f472b6;
+  --chart-6: #f5c451;
+  --shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 20px 40px -20px rgb(0 0 0 / 0.8);
   color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --paper: #f2f4f7;
+  --surface: #ffffff;
+  --surface-2: #f7f8fa;
+  --sunken: #eceff3;
+  --ink: #0b0d10;
+  --ink-2: #4a525c;
+  --ink-3: #8a929c;
+  --line: rgb(11 13 16 / 0.07);
+  --line-strong: rgb(11 13 16 / 0.14);
+  --accent: #0b0d10;
+  --accent-hover: #262b33;
+  --accent-ink: #c6f24e;
+  --accent-soft: rgb(132 184 0 / 0.14);
+  --pos: #2f9e44;
+  --pos-soft: rgb(47 158 68 / 0.12);
+  --warn: #c78a00;
+  --warn-soft: rgb(199 138 0 / 0.13);
+  --caution: #e8590c;
+  --caution-soft: rgb(232 89 12 / 0.12);
+  --neg: #e03131;
+  --neg-soft: rgb(224 49 49 / 0.11);
+  --focus: #0b0d10;
+  --chart-1: #84b800;
+  --chart-2: #12b5a5;
+  --chart-3: #5c6fff;
+  --chart-4: #f76707;
+  --chart-5: #e64980;
+  --chart-6: #f2a900;
+  --shadow: 0 1px 2px rgb(11 13 16 / 0.05), 0 12px 32px -16px rgb(11 13 16 / 0.18);
+  color-scheme: light;
 }
 
 @theme inline {
   --color-paper: var(--paper);
   --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
   --color-sunken: var(--sunken);
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
@@ -108,15 +95,28 @@
   --color-neg: var(--neg);
   --color-neg-soft: var(--neg-soft);
 
-  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, monospace;
-  --font-serif: var(--font-source-serif), ui-serif, Georgia, serif;
+  /* Frueher Serife - jetzt ueberall die gleiche moderne Groteske */
+  --font-serif: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
 
-  --radius-xs: 2px;
-  --radius-sm: 4px;
-  --radius-md: 6px;
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
 
   --shadow-float: var(--shadow);
+}
+
+/* Karte: die Grundflaeche fuer fast alle Inhalte */
+@utility card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 1.25rem;
+  @media (width >= 40rem) {
+    padding: 1.5rem;
+  }
 }
 
 html,
@@ -128,10 +128,15 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-sans);
-  font-feature-settings: "ss02";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* Ehemalige Serifen-Ueberschriften kraeftig statt duenn */
+.font-serif {
+  font-weight: 700;
+  letter-spacing: -0.035em;
 }
 
 /* Betraege: Tabellenziffern, damit Spalten exakt fluchten */
@@ -143,19 +148,20 @@ body {
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
-  border-radius: 2px;
+  border-radius: 6px;
 }
 
 ::selection {
-  background: var(--accent-soft);
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
-/* Schraffur fuer die Reserve-Zone im Verlauf */
+/* Schraffur fuer Hochrechnungen */
 .hatch {
   background-image: repeating-linear-gradient(
     135deg,
-    color-mix(in srgb, var(--caution) 22%, transparent) 0 1px,
-    transparent 1px 6px
+    color-mix(in srgb, var(--ink) 30%, transparent) 0 1.5px,
+    transparent 1.5px 6px
   );
 }
 
@@ -173,6 +179,10 @@ body {
 }
 @keyframes toast-in {
   from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes rise {
+  from { transform: translateY(6px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
 

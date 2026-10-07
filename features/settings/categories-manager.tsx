@@ -21,7 +21,7 @@ export type CategoryRow = {
   usage: number;
 };
 
-const PALETTE = ["#2e6a3e", "#4f7f5c", "#0d5a5c", "#4a6b6d", "#3f5f86", "#5b5f8a", "#8a5a7a", "#8a4b3a", "#b0502a", "#9a6510", "#5a7a4f", "#6b6f75"];
+const PALETTE = ["#c6f24e", "#8be36b", "#6ee7d8", "#38bdf8", "#8b9cff", "#c084fc", "#f472b6", "#ff6b6b", "#ff9a52", "#f5c451", "#a3e635", "#9aa3ad"];
 
 export function CategoriesManager({ categories }: { categories: CategoryRow[] }) {
   const [editing, setEditing] = useState<CategoryRow | null>(null);
@@ -34,10 +34,10 @@ export function CategoriesManager({ categories }: { categories: CategoryRow[] })
 
   return (
     <>
-      <div className="flex flex-col gap-10">
+      <div className="flex flex-col gap-4">
         {groups.map((group) => (
-          <section key={group.kind}>
-            <div className="flex items-baseline justify-between border-b border-ink/80 pb-2">
+          <section key={group.kind} className="card">
+            <div className="flex items-baseline justify-between border-b border-line pb-2">
               <h2 className="text-[15px] font-semibold">{group.title}</h2>
               <Button size="sm" variant="ghost" onClick={() => setCreating(group.kind)}>
                 <Plus size={13} weight="bold" /> Kategorie
@@ -48,7 +48,7 @@ export function CategoriesManager({ categories }: { categories: CategoryRow[] })
                 .filter((c) => c.kind === group.kind)
                 .map((category) => (
                   <li key={category.id}>
-                    <button type="button" onClick={() => setEditing(category)} className="grid w-full grid-cols-[1fr_auto] items-center gap-3 border-b border-line py-3 text-left hover:bg-sunken/60 sm:grid-cols-[1fr_8rem_8rem]">
+                    <button type="button" onClick={() => setEditing(category)} className="grid w-full grid-cols-[1fr_auto] items-center gap-3 border-b border-line py-3 text-left hover:bg-surface-2 sm:grid-cols-[1fr_8rem_8rem]">
                       <span className="flex items-center gap-2.5 text-[14px]">
                         <Swatch color={category.color} className="size-2.5" />
                         {category.name}

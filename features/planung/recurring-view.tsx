@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Plus } from "@phosphor-icons/react/dist/ssr";
 import { bookRecurring, toggleRecurring } from "@/lib/actions";
 import { monthlyAmount, yearlyAmount } from "@/lib/domain/schedule";
-import { formatDayShort, formatMoney, formatRelativeDays } from "@/lib/format";
+import { formatDayShort, formatMoney, formatPercent, formatRelativeDays } from "@/lib/format";
+import { CHART_COLORS } from "@/ui/donut";
 import { ActionButton } from "@/ui/action-button";
 import { Button } from "@/ui/button";
 import { Empty, Figures, Note, PageHeader, Pill, Swatch } from "@/ui/layout";
@@ -35,6 +36,11 @@ export function RecurringPage({
   const fixedYearly = active.filter((e) => e.type === "expense").reduce((s, e) => s + yearlyAmount(e.amountCents, e.interval), 0);
 
   const categoryById = new Map(categories.map((c) => [c.id, c]));
+  const composition = active
+    .filter((e) => e.type === "expense")
+    .map((e) => ({ id: e.id, title: e.title, monthly: monthlyAmount(e.amountCents, e.interval) }))
+    .sort((a, b) => b.monthly - a.monthly)
+    .map((part, index) => ({ ...part, color: CHART_COLORS[index % CHART_COLORS.length] }));
   const daysTo = (date: string) => Math.round((Date.parse(date) - Date.parse(today)) / 86_400_000);
 
   function table(kind: "income" | "expense") {
@@ -63,7 +69,7 @@ export function RecurringPage({
       <div className="overflow-x-auto">
         <table className="w-full min-w-[640px] text-[14px]">
           <thead>
-            <tr className="border-b border-ink/80 text-left text-[12px] text-ink-3">
+            <tr className="border-b border-line text-left text-[12px] text-ink-3">
               <th className="py-2 pr-3 font-medium">{kind === "expense" ? "Zahlung" : "Eingang"}</th>
               <th className="py-2 pr-3 font-medium">Nächster Termin</th>
               <th className="py-2 pr-3 text-right font-medium">Betrag</th>
@@ -85,7 +91,7 @@ export function RecurringPage({
                 <tr
                   key={entry.id}
                   onClick={() => setEditing(entry)}
-                  className={cx("cursor-pointer border-b border-line hover:bg-sunken/60", !entry.active && "text-ink-3")}
+                  className={cx("cursor-pointer border-b border-line hover:bg-surface-2", !entry.active && "text-ink-3")}
                 >
                   <td className="py-3 pr-3">
                     <div className="flex items-center gap-2">
@@ -159,9 +165,9 @@ export function RecurringPage({
       />
 
       <Figures
-        className="mb-10"
+        className="mb-4"
         items={[
-          { label: "Fixkosten pro Monat", value: <Money cents={fixedMonthly} />, note: `${active.filter((e) => e.type === "expense").length} aktive Posten` },
+          { label: "Fixkosten pro Monat", value: <Money cents={fixedMonthly} />, note: `${active.filter((e) => e.type === "expense").length} aktive Posten`, tone: "accent" },
           { label: "pro Jahr", value: <Money cents={fixedYearly} whole /> },
           { label: "in 5 Jahren", value: <Money cents={fixedYearly * 5} whole />, note: "bei gleichbleibenden Beträgen" },
           {
@@ -172,13 +178,35 @@ export function RecurringPage({
         ]}
       />
 
-      <div className="flex flex-col gap-12">
-        <section>
-          <h2 className="mb-3 text-[15px] font-semibold">Ausgaben</h2>
+      {composition.length > 0 ? (
+        <section className="card mb-4">
+          <h2 className="mb-4 text-[17px] font-bold tracking-[-0.02em]">Woraus sich deine Fixkosten zusammensetzen</h2>
+          <div className="flex h-4 gap-1 overflow-hidden rounded-full" aria-hidden>
+            {composition.map((part) => (
+              <span key={part.id} className="h-full rounded-full" style={{ width: `${(part.monthly / fixedMonthly) * 100}%`, background: part.color }} />
+            ))}
+          </div>
+          <ul className="mt-4 grid gap-x-6 gap-y-2 text-[13px] sm:grid-cols-2 lg:grid-cols-3">
+            {composition.map((part) => (
+              <li key={part.id} className="flex items-center justify-between gap-3">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="size-2.5 shrink-0 rounded-full" style={{ background: part.color }} />
+                  <span className="truncate font-medium">{part.title}</span>
+                </span>
+                <span className="num font-semibold text-ink-2">{formatPercent(part.monthly / fixedMonthly)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <div className="flex flex-col gap-4">
+        <section className="card">
+          <h2 className="mb-3 text-[17px] font-bold tracking-[-0.02em]">Ausgaben</h2>
           {table("expense")}
         </section>
-        <section>
-          <h2 className="mb-3 text-[15px] font-semibold">Einnahmen</h2>
+        <section className="card">
+          <h2 className="mb-3 text-[17px] font-bold tracking-[-0.02em]">Einnahmen</h2>
           {table("income")}
         </section>
         <Note>

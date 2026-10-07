@@ -13,7 +13,7 @@ export default async function SicherheitPage() {
   const hasPassword = accounts.some((account) => account.providerId === "credential");
 
   return (
-    <div className="flex max-w-3xl flex-col gap-12">
+    <div className="flex max-w-3xl flex-col gap-4">
       <PageHeader title="Anmeldung & Sicherheit" />
 
       <Section title="Passwort">

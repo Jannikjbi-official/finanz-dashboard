@@ -56,8 +56,8 @@ export function AppShell({
           Zum Inhalt springen
         </a>
 
-        <header className="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur-[2px] supports-[backdrop-filter]:bg-paper/85">
-          <div className="mx-auto flex h-14 max-w-[1240px] items-center gap-6 px-4 sm:px-6">
+        <header className="sticky top-0 z-40 bg-paper/80 backdrop-blur-xl">
+          <div className="mx-auto flex h-16 max-w-[1240px] items-center gap-6 px-4 sm:px-6">
             <Link href="/app" className="flex items-center" aria-label="Zur Lage">
               <span className="hidden sm:inline-flex">
                 <Wordmark />
@@ -68,7 +68,7 @@ export function AppShell({
             </Link>
 
             {/* Bereiche (ab lg in der Kopfzeile, darunter unten) */}
-            <nav aria-label="Bereiche" className="hidden h-full items-stretch gap-1 lg:flex">
+            <nav aria-label="Bereiche" className="hidden items-center gap-1 rounded-full bg-surface p-1 lg:flex">
               {AREAS.map((entry) => {
                 const active = area?.key === entry.key && !inSettings;
                 return (
@@ -77,18 +77,17 @@ export function AppShell({
                     href={entry.href}
                     aria-current={active ? "page" : undefined}
                     className={cx(
-                      "relative flex items-center px-2.5 text-[14px] transition-colors",
-                      active ? "font-medium text-ink" : "text-ink-2 hover:text-ink",
+                      "flex h-9 items-center rounded-full px-4 text-[14px] font-semibold transition-colors",
+                      active ? "bg-ink text-paper" : "text-ink-2 hover:text-ink",
                     )}
                   >
                     {entry.label}
-                    {active ? <span className="absolute inset-x-2.5 -bottom-px h-[2px] bg-ink" /> : null}
                   </Link>
                 );
               })}
             </nav>
 
-            <span className="truncate text-[15px] font-semibold lg:hidden">
+            <span className="truncate text-[17px] font-bold tracking-[-0.02em] lg:hidden">
               {inSettings ? "Einstellungen" : (area?.label ?? "")}
             </span>
 
@@ -102,8 +101,8 @@ export function AppShell({
           </div>
 
           {tabs.length > 0 ? (
-            <nav aria-label="Unterbereiche" className="border-t border-line">
-              <div className="mx-auto flex max-w-[1240px] gap-5 overflow-x-auto px-4 [scrollbar-width:none] sm:px-6">
+            <nav aria-label="Unterbereiche">
+              <div className="mx-auto flex max-w-[1240px] gap-2 overflow-x-auto px-4 pb-3 [scrollbar-width:none] sm:px-6">
                 {tabs.map((tab) => {
                   const active = tab.href === currentTab;
                   return (
@@ -112,12 +111,11 @@ export function AppShell({
                       href={tab.href}
                       aria-current={active ? "page" : undefined}
                       className={cx(
-                        "relative flex h-10 shrink-0 items-center whitespace-nowrap text-[13px] transition-colors",
-                        active ? "font-medium text-ink" : "text-ink-3 hover:text-ink",
+                        "flex h-8 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[13px] font-semibold transition-colors",
+                        active ? "bg-accent text-accent-ink" : "bg-surface text-ink-2 hover:text-ink",
                       )}
                     >
                       {tab.label}
-                      {active ? <span className="absolute inset-x-0 -bottom-px h-[2px] bg-accent" /> : null}
                     </Link>
                   );
                 })}
@@ -126,16 +124,16 @@ export function AppShell({
           ) : null}
         </header>
 
-        <main id="inhalt" className="mx-auto max-w-[1240px] px-4 pb-28 pt-6 sm:px-6 sm:pt-8 lg:pb-16">
+        <main id="inhalt" className="mx-auto max-w-[1240px] px-4 pb-32 pt-4 sm:px-6 sm:pt-6 lg:pb-16">
           {children}
         </main>
 
         {/* Untere Leiste auf Handy und Tablet */}
         <nav
           aria-label="Bereiche"
-          className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] lg:hidden"
+          className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 lg:hidden"
         >
-          <div className="mx-auto grid h-16 max-w-xl grid-cols-5">
+          <div className="mx-auto grid h-16 max-w-md grid-cols-5 rounded-full border border-line bg-surface/90 p-1.5 shadow-float backdrop-blur-xl">
             {AREAS.map((entry) => {
               const Icon = ICONS[entry.key];
               const active = area?.key === entry.key && !inSettings;
@@ -144,12 +142,13 @@ export function AppShell({
                   key={entry.key}
                   href={entry.href}
                   aria-current={active ? "page" : undefined}
+                  aria-label={entry.label}
                   className={cx(
-                    "flex flex-col items-center justify-center gap-1 text-[11px]",
-                    active ? "font-medium text-ink" : "text-ink-3",
+                    "flex flex-col items-center justify-center gap-0.5 rounded-full text-[10px] font-bold transition-colors",
+                    active ? "bg-accent text-accent-ink" : "text-ink-3",
                   )}
                 >
-                  <Icon size={21} weight={active ? "fill" : "regular"} />
+                  <Icon size={20} weight={active ? "fill" : "regular"} />
                   {entry.label}
                 </Link>
               );

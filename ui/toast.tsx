@@ -47,9 +47,9 @@ function ToastItem({ toast, onDone }: { toast: Toast; onDone: () => void }) {
   return (
     <div
       role={toast.tone === "error" ? "alert" : "status"}
-      className="pointer-events-auto flex max-w-md items-center gap-2.5 rounded-sm bg-ink px-3.5 py-2.5 text-[14px] text-paper shadow-float animate-[toast-in_180ms_ease-out]"
+      className="pointer-events-auto flex max-w-md items-center gap-2.5 rounded-full bg-ink px-4 py-2.5 text-[14px] font-semibold text-paper shadow-float animate-[toast-in_180ms_ease-out]"
     >
-      <Icon size={17} weight="fill" className={toast.tone === "ok" ? "text-[var(--pos-soft)]" : "text-[var(--neg-soft)]"} />
+      <Icon size={17} weight="fill" className={toast.tone === "ok" ? "text-pos" : "text-neg"} />
       {toast.text}
     </div>
   );

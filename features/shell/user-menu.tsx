@@ -3,24 +3,21 @@
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Desktop, GearSix, Moon, SignOut, SunDim } from "@phosphor-icons/react/dist/ssr";
+import { GearSix, Moon, SignOut, SunDim } from "@phosphor-icons/react/dist/ssr";
 import { authClient } from "@/lib/auth-client";
 import { cx } from "@/ui/cx";
 
-type Theme = "system" | "light" | "dark";
+type Theme = "light" | "dark";
 
+/** Dunkel ist Standard; nur "hell" wird gespeichert. */
 function applyTheme(theme: Theme) {
+  if (theme === "light") document.documentElement.dataset.theme = "light";
+  else delete document.documentElement.dataset.theme;
   try {
-    if (theme === "system") {
-      localStorage.removeItem("theme");
-      delete document.documentElement.dataset.theme;
-    } else {
-      localStorage.setItem("theme", theme);
-      document.documentElement.dataset.theme = theme;
-    }
+    if (theme === "light") localStorage.setItem("theme", "light");
+    else localStorage.removeItem("theme");
   } catch {
     // Speicher gesperrt (privater Modus) - Wahl gilt dann nur fuer diese Seite
-    if (theme !== "system") document.documentElement.dataset.theme = theme;
   }
 }
 
@@ -29,11 +26,10 @@ const item =
 
 export function UserMenu({ user }: { user: { name: string; email: string } }) {
   const router = useRouter();
-  const [theme, setTheme] = useState<Theme>("system");
+  const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
-    const stored = document.documentElement.dataset.theme;
-    setTheme(stored === "light" || stored === "dark" ? stored : "system");
+    setTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark");
   }, []);
 
   const initials = (user.name || user.email)
@@ -73,12 +69,11 @@ export function UserMenu({ user }: { user: { name: string; email: string } }) {
           </Menu.Item>
           <Menu.Separator className="my-1 h-px bg-line" />
           <Menu.Label className="px-2.5 pb-1 pt-1.5 text-[12px] text-ink-3">Darstellung</Menu.Label>
-          <div className="grid grid-cols-3 gap-1 px-1 pb-1">
+          <div className="grid grid-cols-2 gap-1 px-1 pb-1">
             {(
               [
-                { value: "light", label: "Hell", Icon: SunDim },
                 { value: "dark", label: "Dunkel", Icon: Moon },
-                { value: "system", label: "System", Icon: Desktop },
+                { value: "light", label: "Hell", Icon: SunDim },
               ] as const
             ).map(({ value, label, Icon }) => (
               <button
@@ -91,7 +86,7 @@ export function UserMenu({ user }: { user: { name: string; email: string } }) {
                 aria-pressed={theme === value}
                 className={cx(
                   "flex flex-col items-center gap-1 rounded-xs py-2 text-[12px]",
-                  theme === value ? "bg-ink text-paper" : "text-ink-2 hover:bg-sunken",
+                  theme === value ? "bg-accent text-accent-ink" : "text-ink-2 hover:bg-sunken",
                 )}
               >
                 <Icon size={16} />

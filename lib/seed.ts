@@ -1,21 +1,20 @@
 import { categories, ensureIndexes, type Kind } from "./mongo";
 
 /**
- * Startkategorien fuer neue Nutzer. Gedaempfte Farben, die auf Papier und im
- * Dunkelmodus gleichermassen lesbar bleiben.
+ * Startkategorien fuer neue Nutzer. Kraeftige Farben, die auf dunklem Grund leuchten.
  */
 const DEFAULTS: Array<{ name: string; kind: Kind; color: string }> = [
-  { name: "Gehalt", kind: "income", color: "#2e6a3e" },
-  { name: "Nebeneinkünfte", kind: "income", color: "#4f7f5c" },
-  { name: "Erstattungen", kind: "income", color: "#6b8f72" },
-  { name: "Wohnen", kind: "expense", color: "#8a4b3a" },
-  { name: "Lebensmittel", kind: "expense", color: "#9a6510" },
-  { name: "Mobilität", kind: "expense", color: "#3f5f86" },
-  { name: "Verträge & Abos", kind: "expense", color: "#5b5f8a" },
-  { name: "Versicherungen", kind: "expense", color: "#4a6b6d" },
-  { name: "Freizeit", kind: "expense", color: "#8a5a7a" },
-  { name: "Gesundheit", kind: "expense", color: "#5a7a4f" },
-  { name: "Sonstiges", kind: "expense", color: "#6b6f75" },
+  { name: "Gehalt", kind: "income", color: "#8be36b" },
+  { name: "Nebeneinkünfte", kind: "income", color: "#a3e635" },
+  { name: "Erstattungen", kind: "income", color: "#6ee7d8" },
+  { name: "Wohnen", kind: "expense", color: "#ff9a52" },
+  { name: "Lebensmittel", kind: "expense", color: "#f5c451" },
+  { name: "Mobilität", kind: "expense", color: "#38bdf8" },
+  { name: "Verträge & Abos", kind: "expense", color: "#8b9cff" },
+  { name: "Versicherungen", kind: "expense", color: "#6ee7d8" },
+  { name: "Freizeit", kind: "expense", color: "#f472b6" },
+  { name: "Gesundheit", kind: "expense", color: "#c084fc" },
+  { name: "Sonstiges", kind: "expense", color: "#9aa3ad" },
 ];
 
 export async function seedDefaultCategories(userId: string) {

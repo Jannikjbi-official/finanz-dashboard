@@ -4,7 +4,7 @@ import { forwardRef, useId } from "react";
 import { cx } from "./cx";
 
 const control =
-  "w-full rounded-sm border border-line-strong bg-surface px-3 text-[14px] text-ink placeholder:text-ink-3 transition-colors hover:border-ink-3 focus:border-accent focus:outline-none disabled:opacity-50";
+  "w-full rounded-[12px] border border-transparent bg-sunken px-3.5 text-[15px] text-ink placeholder:text-ink-3 transition-colors hover:border-line-strong focus:border-accent focus:outline-none disabled:opacity-50";
 
 export function Field({
   label,
@@ -41,7 +41,7 @@ export function Field({
 
 export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
   function Input({ className, ...rest }, ref) {
-    return <input ref={ref} className={cx(control, "h-10", className)} {...rest} />;
+    return <input ref={ref} className={cx(control, "h-11", className)} {...rest} />;
   },
 );
 
@@ -55,7 +55,7 @@ export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<H
   function Select({ className, children, ...rest }, ref) {
     return (
       <div className="relative">
-        <select ref={ref} className={cx(control, "h-10 appearance-none pr-8", className)} {...rest}>
+        <select ref={ref} className={cx(control, "h-11 appearance-none pr-8", className)} {...rest}>
           {children}
         </select>
         <svg
@@ -80,7 +80,7 @@ export const AmountInput = forwardRef<HTMLInputElement, React.InputHTMLAttribute
           inputMode="decimal"
           autoComplete="off"
           placeholder="0,00"
-          className={cx(control, "num h-10 pr-8 text-right", className)}
+          className={cx(control, "num h-11 pr-8 text-right font-semibold", className)}
           {...rest}
         />
         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] text-ink-3">€</span>
@@ -111,7 +111,7 @@ export function Segmented<T extends string>({
   return (
     <div
       role="radiogroup"
-      className={cx("inline-flex rounded-sm border border-line-strong bg-surface p-0.5", className)}
+      className={cx("inline-flex rounded-full bg-sunken p-1", className)}
     >
       {options.map((option) => {
         const inputId = `${id}-${option.value}`;
@@ -129,7 +129,7 @@ export function Segmented<T extends string>({
             />
             <span
               className={cx(
-                "flex items-center justify-center whitespace-nowrap rounded-xs px-3 font-medium text-ink-2 transition-colors peer-checked:bg-ink peer-checked:text-paper peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-focus",
+                "flex items-center justify-center whitespace-nowrap rounded-full px-3.5 font-semibold text-ink-2 transition-colors peer-checked:bg-accent peer-checked:text-accent-ink peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-focus",
                 size === "sm" ? "h-7 text-[12px]" : "h-8 text-[13px]",
               )}
             >

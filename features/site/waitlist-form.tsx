@@ -37,11 +37,11 @@ export function WaitlistForm({ compact = false, className }: { compact?: boolean
           placeholder="deine@mail.de"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="h-11 min-w-0 flex-1 rounded-sm border border-line-strong bg-surface px-3.5 text-[15px] placeholder:text-ink-3 focus:border-accent focus:outline-none"
+          className="h-12 min-w-0 flex-1 rounded-full border border-line-strong bg-surface px-5 text-[15px] placeholder:text-ink-3 focus:border-accent focus:outline-none"
         />
         {/* Honeypot fuer Bots - fuer Menschen unsichtbar */}
         <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden className="absolute -left-[9999px] h-0 w-0 opacity-0" />
-        <Button type="submit" variant="primary" pending={pending} className="h-11 px-5 text-[15px]">
+        <Button type="submit" variant="primary" pending={pending} className="h-12 px-6 text-[15px]">
           Auf die Warteliste
         </Button>
       </div>

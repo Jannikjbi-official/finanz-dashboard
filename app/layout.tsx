@@ -1,27 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans, Source_Serif_4 } from "next/font/google";
+import { Manrope } from "next/font/google";
 import { BRAND } from "@/lib/brand";
 import "./globals.css";
 
-const sans = IBM_Plex_Sans({
+const sans = Manrope({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  variable: "--font-plex-sans",
-  display: "swap",
-});
-
-const mono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-plex-mono",
-  display: "swap",
-});
-
-const serif = Source_Serif_4({
-  subsets: ["latin"],
-  weight: ["400", "600"],
-  style: ["normal", "italic"],
-  variable: "--font-source-serif",
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-manrope",
   display: "swap",
 });
 
@@ -31,25 +16,18 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4f2ec" },
-    { media: "(prefers-color-scheme: dark)", color: "#111315" },
-  ],
+  themeColor: "#0b0d10",
 };
 
 /**
- * Setzt das gewaehlte Farbschema vor dem ersten Zeichnen, damit nichts
- * aufblitzt. Ohne Wahl gilt die Systemeinstellung.
+ * Dunkel ist Standard. Wer hell gewaehlt hat, bekommt es vor dem ersten
+ * Zeichnen, damit nichts aufblitzt.
  */
-const THEME_SCRIPT = `try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`;
+const THEME_SCRIPT = `try{if(localStorage.getItem("theme")==="light")document.documentElement.dataset.theme="light"}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="de"
-      className={`${sans.variable} ${mono.variable} ${serif.variable}`}
-      suppressHydrationWarning
-    >
+    <html lang="de" className={sans.variable} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>

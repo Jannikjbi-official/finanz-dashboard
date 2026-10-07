@@ -51,11 +51,11 @@ try {
   const cat = (name: string) => categories.find((c) => c.name === name)?._id.toString() ?? null;
 
   const giro = await db.collection("accounts").insertOne({
-    userId, name: "Girokonto", kind: "giro", startBalanceCents: 1240_00, color: "#0d5a5c",
+    userId, name: "Girokonto", kind: "giro", startBalanceCents: 1240_00, color: "#c6f24e",
     icon: "", archived: false, liquid: true, createdAt: now,
   });
   const tagesgeld = await db.collection("accounts").insertOne({
-    userId, name: "Tagesgeld", kind: "savings", startBalanceCents: 3200_00, color: "#2e6a3e",
+    userId, name: "Tagesgeld", kind: "savings", startBalanceCents: 3200_00, color: "#6ee7d8",
     icon: "", archived: false, liquid: false, createdAt: now,
   });
   const giroId = giro.insertedId.toString();
@@ -104,11 +104,11 @@ try {
 
   await db.collection("goals").insertOne({
     userId, title: "Notgroschen", targetCents: 6000_00, savedCents: 3200_00, deadline: monthDay(-14, 28),
-    color: "#2e6a3e", note: null, monthlyContributionCents: 150_00, accountId: tagesgeld.insertedId.toString(), createdAt: now,
+    color: "#6ee7d8", note: null, monthlyContributionCents: 150_00, accountId: tagesgeld.insertedId.toString(), createdAt: now,
   });
   await db.collection("goals").insertOne({
     userId, title: "Urlaub Portugal", targetCents: 1800_00, savedCents: 420_00, deadline: monthDay(-6, 30),
-    color: "#9a6510", note: null, monthlyContributionCents: 120_00, accountId: null, createdAt: now,
+    color: "#f472b6", note: null, monthlyContributionCents: 120_00, accountId: null, createdAt: now,
   });
 
   await db.collection("planned").insertMany([

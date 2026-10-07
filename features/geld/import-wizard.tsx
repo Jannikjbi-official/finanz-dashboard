@@ -174,7 +174,7 @@ export function ImportWizard({ accounts }: { accounts: AccountOption[] }) {
             {preview.stats.invalid > 0 ? <span className="text-neg">{preview.stats.invalid} fehlerhaft</span> : null}
           </div>
 
-          <section>
+          <section className="card">
             <h2 className="mb-3 text-[14px] font-semibold">Spalten zuordnen</h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {FIELDS.map((field) => (
@@ -206,7 +206,7 @@ export function ImportWizard({ accounts }: { accounts: AccountOption[] }) {
             <section className="overflow-x-auto">
               <table className={cx("w-full min-w-[640px] text-[13px] transition-opacity", pending && "opacity-50")}>
                 <thead>
-                  <tr className="border-b border-ink/80 text-left text-[12px] text-ink-3">
+                  <tr className="border-b border-line text-left text-[12px] text-ink-3">
                     <th className="py-2 pr-3 font-medium">Zeile</th>
                     <th className="py-2 pr-3 font-medium">Datum</th>
                     <th className="py-2 pr-3 font-medium">Bezeichnung</th>
