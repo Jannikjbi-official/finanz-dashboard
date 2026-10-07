@@ -10,6 +10,7 @@ import {
 } from "../mongo";
 import { getSettings } from "./user-data";
 import {
+  addDays,
   addMonths,
   monthEnd,
   monthOf,
@@ -317,3 +318,50 @@ export async function getCategoryMonths(userId: string, from: MonthKey, to: Mont
       })),
     );
 }
+
+/* ------------------------------ Verlauf ------------------------------ */
+
+/**
+ * Taeglicher verfuegbarer Stand der letzten `days` Tage, rueckwaerts aus dem
+ * heutigen Stand gerechnet. Mit Konten zaehlen alle Buchungen der liquiden
+ * Konten (auch Umbuchungen, die Geld zu Sparkonten bewegen), ohne Konten
+ * alle Buchungen ausser Umbuchungen.
+ */
+export async function getBalanceHistory(
+  userId: string,
+  today: ISODate,
+  days: number,
+  openingBalanceCents: number,
+  liquidAccountIds: string[] | null,
+) {
+  const start = addDays(today, -days);
+  const match: Record<string, unknown> = { userId, date: { $gt: start, $lte: today } };
+  if (liquidAccountIds) match.accountId = { $in: liquidAccountIds };
+  else Object.assign(match, NO_TRANSFER);
+
+  const rows = await transactions
+    .aggregate<{ _id: string; net: number }>([
+      { $match: match },
+      {
+        $group: {
+          _id: "$date",
+          net: { $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amountCents", { $multiply: ["$amountCents", -1] }] } },
+        },
+      },
+    ])
+    .toArray();
+
+  const netByDate = new Map(rows.map((row) => [row._id, row.net]));
+  const points: Array<{ date: ISODate; balanceCents: number }> = [];
+  let balance = openingBalanceCents;
+
+  for (let offset = 0; offset <= days; offset += 1) {
+    const date = addDays(today, -offset);
+    points.push({ date, balanceCents: balance });
+    // Stand am Vortag = heutiger Stand minus heutige Bewegung
+    balance -= netByDate.get(date) ?? 0;
+  }
+
+  return points.reverse();
+}
+

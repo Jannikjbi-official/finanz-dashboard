@@ -4,12 +4,14 @@ import { discordEnabled } from "@/lib/auth";
 import { getCurrentUser } from "@/lib/session";
 import { LoginForm } from "@/components/login-form";
 import { LogoMark } from "@/components/logo";
+import { Providers } from "../providers";
 
 export default async function LoginPage() {
   const user = await getCurrentUser();
   if (user) redirect("/");
 
   return (
+    <div className="dark legacy"><Providers>
     <main className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
@@ -27,5 +29,6 @@ export default async function LoginPage() {
         </Suspense>
       </div>
     </main>
+    </Providers></div>
   );
 }

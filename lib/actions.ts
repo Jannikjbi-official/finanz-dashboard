@@ -11,6 +11,7 @@ import {
   refunds,
   toObjectId,
   transactions,
+  type AccountDoc,
 } from "./mongo";
 import { requireUser } from "./session";
 import { advance, endOfMonth, nextDueFrom, todayISO } from "./dates";
@@ -246,6 +247,16 @@ export async function deleteTransaction(
   if (blocked) return blocked;
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Buchung nicht gefunden");
+
+  const existing = await transactions.findOne({ _id: objectId, userId: user.id });
+  if (!existing) return fail("Buchung nicht gefunden");
+
+  // Eine Umbuchung besteht aus zwei Haelften - nie nur eine entfernen
+  if (existing.transferGroupId) {
+    await transactions.deleteMany({ userId: user.id, transferGroupId: existing.transferGroupId });
+    refresh();
+    return done("Umbuchung gelöscht");
+  }
 
   await transactions.deleteOne({ _id: objectId, userId: user.id });
   refresh();
@@ -530,20 +541,28 @@ export async function saveAccount(
   const kindParsed = accountKind.safeParse(formData.get("kind"));
   if (!kindParsed.success) return fail("Kontoart fehlt");
 
-  const startRaw = String(formData.get("startBalance") ?? "").trim();
-  const startBalanceCents = startRaw ? parseAmountToCents(startRaw) : 0;
-  if (startRaw && startBalanceCents === null) return fail("Startsaldo ungültig");
+  // Ueberzogene Konten duerfen mit negativem Stand starten
+  const startRaw = String(formData.get("startBalance") ?? "").trim().replace(/^[−–]/, "-");
+  const negative = startRaw.startsWith("-");
+  const startAbs = startRaw ? parseAmountToCents(startRaw.replace(/^[-+]/, "")) : 0;
+  if (startRaw && startAbs === null) return fail("Startsaldo ungültig");
+  const startBalanceCents = (startAbs ?? 0) * (negative ? -1 : 1);
 
   const colorRaw = String(formData.get("color") ?? "#6366f1");
 
-  const payload = {
+  const payload: Partial<AccountDoc> = {
     name: name.slice(0, 40),
     kind: kindParsed.data,
-    startBalanceCents: startBalanceCents ?? 0,
+    startBalanceCents,
     color: /^#[0-9a-fA-F]{6}$/.test(colorRaw) ? colorRaw : "#6366f1",
     icon: String(formData.get("icon") ?? "").trim().slice(0, 8),
     archived: formData.get("archived") === "true",
   };
+
+  // Nur Formulare, die das Feld kennen, setzen "verfuegbar" - aeltere lassen es unangetastet
+  if (formData.get("liquidField") === "1") {
+    payload.liquid = formData.get("liquid") === "true";
+  }
 
   const id = String(formData.get("id") ?? "").trim();
 
@@ -553,7 +572,7 @@ export async function saveAccount(
     await accounts.updateOne({ _id: objectId, userId: user.id }, { $set: payload });
   } else {
     await accounts.insertOne({
-      ...payload,
+      ...(payload as Omit<AccountDoc, "userId" | "createdAt">),
       userId: user.id,
       createdAt: new Date(),
     });

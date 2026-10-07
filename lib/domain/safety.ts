@@ -50,6 +50,11 @@ export type SafetyReport = {
  * Mindestreserve: eigener Wert aus den Einstellungen, sonst automatisch ein
  * Monat Fixkosten.
  */
+/** Satzende ohne doppelten Punkt ("am 31. Okt.." -> "am 31. Okt."). */
+function sentence(text: string) {
+  return text.replace(/..$/, ".");
+}
+
 export function resolveReserve(customCents: number | null, monthlyFixedCents: number) {
   if (customCents !== null && customCents >= 0) {
     return { reserveCents: customCents, reserveSource: "custom" as const };
@@ -117,11 +122,11 @@ export function evaluateSafety(
   return {
     level,
     ...reserve,
+    reasons: reasons.map(sentence),
     currentCents,
     low30,
     low90,
     breach,
     headroomCents,
-    reasons,
   };
 }

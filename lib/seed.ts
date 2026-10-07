@@ -1,15 +1,21 @@
 import { categories, ensureIndexes, type Kind } from "./mongo";
 
-const DEFAULTS: Array<{ name: string; kind: Kind; color: string; icon: string }> = [
-  { name: "Gehalt", kind: "income", color: "#22c55e", icon: "\u{1F4B6}" },
-  { name: "Nebenjob", kind: "income", color: "#14b8a6", icon: "\u{1F4BC}" },
-  { name: "Geschenke", kind: "income", color: "#a855f7", icon: "\u{1F381}" },
-  { name: "Miete", kind: "expense", color: "#f43f5e", icon: "\u{1F3E0}" },
-  { name: "Lebensmittel", kind: "expense", color: "#f59e0b", icon: "\u{1F6D2}" },
-  { name: "Abos", kind: "expense", color: "#6366f1", icon: "\u{1F501}" },
-  { name: "Mobilität", kind: "expense", color: "#0ea5e9", icon: "\u{1F68C}" },
-  { name: "Freizeit", kind: "expense", color: "#ec4899", icon: "\u{1F3AE}" },
-  { name: "Sonstiges", kind: "expense", color: "#64748b", icon: "\u{1F4E6}" },
+/**
+ * Startkategorien fuer neue Nutzer. Gedaempfte Farben, die auf Papier und im
+ * Dunkelmodus gleichermassen lesbar bleiben.
+ */
+const DEFAULTS: Array<{ name: string; kind: Kind; color: string }> = [
+  { name: "Gehalt", kind: "income", color: "#2e6a3e" },
+  { name: "Nebeneinkünfte", kind: "income", color: "#4f7f5c" },
+  { name: "Erstattungen", kind: "income", color: "#6b8f72" },
+  { name: "Wohnen", kind: "expense", color: "#8a4b3a" },
+  { name: "Lebensmittel", kind: "expense", color: "#9a6510" },
+  { name: "Mobilität", kind: "expense", color: "#3f5f86" },
+  { name: "Verträge & Abos", kind: "expense", color: "#5b5f8a" },
+  { name: "Versicherungen", kind: "expense", color: "#4a6b6d" },
+  { name: "Freizeit", kind: "expense", color: "#8a5a7a" },
+  { name: "Gesundheit", kind: "expense", color: "#5a7a4f" },
+  { name: "Sonstiges", kind: "expense", color: "#6b6f75" },
 ];
 
 export async function seedDefaultCategories(userId: string) {
@@ -21,6 +27,7 @@ export async function seedDefaultCategories(userId: string) {
   await categories.insertMany(
     DEFAULTS.map((entry) => ({
       ...entry,
+      icon: "",
       userId,
       budgetCents: null,
       createdAt: new Date(),

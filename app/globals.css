@@ -1,20 +1,204 @@
 @import "tailwindcss";
+/* HeroUI nur noch fuer die alte Oberflaeche - entfaellt mit deren Entfernung */
 @plugin '../hero.ts';
 @source '../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}';
 @custom-variant dark (&:is(.dark *));
 
-html, body {
-  height: 100%;
+/* -------------------------------------------------------------------------
+   Designsystem
+   Papier, Tinte, eine Akzentfarbe (Petrol), gedaempfte Statusfarben.
+   Linien statt Boxen, kleine Radien, kaum Schatten.
+   ------------------------------------------------------------------------- */
+
+:root {
+  --paper: #f4f2ec;
+  --surface: #fbfaf6;
+  --sunken: #ebe8e0;
+  --ink: #16181b;
+  --ink-2: #464a50;
+  --ink-3: #7b7f85;
+  --line: #dcd8ce;
+  --line-strong: #c3bdb1;
+  --accent: #0d5a5c;
+  --accent-hover: #0a4a4c;
+  --accent-ink: #ffffff;
+  --accent-soft: #dde9e6;
+  --pos: #2e6a3e;
+  --pos-soft: #dfeadf;
+  --warn: #9a6510;
+  --warn-soft: #f1e6cf;
+  --caution: #b0502a;
+  --caution-soft: #f3dfd3;
+  --neg: #a3302a;
+  --neg-soft: #f2dbd7;
+  --focus: #0d5a5c;
+  --shadow: 0 1px 2px rgb(22 24 27 / 0.06), 0 8px 24px -12px rgb(22 24 27 / 0.18);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #111315;
+    --surface: #181b1e;
+    --sunken: #0c0e0f;
+    --ink: #ebe8e1;
+    --ink-2: #a8acb1;
+    --ink-3: #747980;
+    --line: #2a2e33;
+    --line-strong: #3a3f45;
+    --accent: #6cb8b2;
+    --accent-hover: #86c7c2;
+    --accent-ink: #0b1414;
+    --accent-soft: #1b2e2d;
+    --pos: #86bf92;
+    --pos-soft: #1b2a1f;
+    --warn: #d7a64d;
+    --warn-soft: #2e2615;
+    --caution: #e08457;
+    --caution-soft: #33221a;
+    --neg: #e3756a;
+    --neg-soft: #351d1b;
+    --focus: #6cb8b2;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 30px -12px rgb(0 0 0 / 0.6);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #111315;
+  --surface: #181b1e;
+  --sunken: #0c0e0f;
+  --ink: #ebe8e1;
+  --ink-2: #a8acb1;
+  --ink-3: #747980;
+  --line: #2a2e33;
+  --line-strong: #3a3f45;
+  --accent: #6cb8b2;
+  --accent-hover: #86c7c2;
+  --accent-ink: #0b1414;
+  --accent-soft: #1b2e2d;
+  --pos: #86bf92;
+  --pos-soft: #1b2a1f;
+  --warn: #d7a64d;
+  --warn-soft: #2e2615;
+  --caution: #e08457;
+  --caution-soft: #33221a;
+  --neg: #e3756a;
+  --neg-soft: #351d1b;
+  --focus: #6cb8b2;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 30px -12px rgb(0 0 0 / 0.6);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-pos: var(--pos);
+  --color-pos-soft: var(--pos-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-caution: var(--caution);
+  --color-caution-soft: var(--caution-soft);
+  --color-neg: var(--neg);
+  --color-neg-soft: var(--neg-soft);
+
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --font-serif: var(--font-source-serif), ui-serif, Georgia, serif;
+
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+
+  --shadow-float: var(--shadow);
+}
+
+html,
+body {
+  min-height: 100%;
 }
 
 body {
-  background:
-    radial-gradient(1200px 600px at 15% -10%, rgba(99, 102, 241, 0.18), transparent 60%),
-    radial-gradient(900px 500px at 100% 0%, rgba(34, 197, 94, 0.10), transparent 55%),
-    hsl(var(--heroui-background));
-  background-attachment: fixed;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss02";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.25); border-radius: 999px; }
-::-webkit-scrollbar-track { background: transparent; }
+/* Betraege: Tabellenziffern, damit Spalten exakt fluchten */
+.num {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+/* Schraffur fuer die Reserve-Zone im Verlauf */
+.hatch {
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--caution) 22%, transparent) 0 1px,
+    transparent 1px 6px
+  );
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sheet-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes sheet-left {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes toast-in {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   Alte Oberflaeche (HeroUI) - eigener Rahmen, bis sie entfernt ist
+   ------------------------------------------------------------------------- */
+.legacy {
+  min-height: 100vh;
+  color: hsl(var(--heroui-foreground));
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(99, 102, 241, 0.18), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(34, 197, 94, 0.1), transparent 55%),
+    hsl(var(--heroui-background));
+  background-attachment: fixed;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
