@@ -349,7 +349,11 @@ export async function bookRecurring(
 
   await recurring.updateOne(
     { _id: objectId, userId: user.id },
-    { $set: { nextDue: advance(entry.nextDue, entry.interval) } },
+    {
+      $set: {
+        nextDue: advance(entry.nextDue, entry.interval, Number(entry.startDate.slice(8, 10))),
+      },
+    },
   );
 
   refresh();

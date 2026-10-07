@@ -6,3 +6,4 @@ data/*.db-*
 next-env.d.ts
 tsconfig.tsbuildinfo
 *.tsbuildinfo
+backups/
