@@ -21,6 +21,7 @@ export type Transaction = {
   categoryId: string | null;
   recurringId: string | null;
   accountId: string | null;
+  transferGroupId: string | null;
 };
 
 export type DatePrecision = "day" | "range" | "month";

@@ -179,8 +179,14 @@ export function parseCsv(input: string): ParseResult {
   return { rows, errors };
 }
 
-function escapeCell(value: string) {
-  return /[";\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+/**
+ * Zelle fuer CSV aufbereiten. Werte, die mit = + - @ oder Tab beginnen,
+ * wuerde Excel als Formel ausfuehren (CSV-Injection) - sie bekommen ein
+ * fuehrendes Hochkomma.
+ */
+export function escapeCell(value: string) {
+  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  return /[";\r\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 export function toCsv(rows: Array<Record<string, string | number>>) {

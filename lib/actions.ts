@@ -16,6 +16,9 @@ import { requireUser } from "./session";
 import { advance, endOfMonth, nextDueFrom, todayISO } from "./dates";
 import { parseAmountToCents } from "./money";
 import { parseCsv } from "./csv";
+import { ownedRefs } from "./server/ownership";
+import { limitUser } from "./server/rate-limit";
+import { randomUUID } from "node:crypto";
 
 export type ActionState = { ok: boolean; error?: string; message?: string };
 
@@ -26,6 +29,21 @@ function fail(error: string): ActionState {
 function done(message: string): ActionState {
   return { ok: true, message };
 }
+
+/** Angemeldeten Nutzer holen und sein Schreib-Kontingent pruefen. */
+async function authorize(kind: "write" | "import" = "write") {
+  const user = await requireUser();
+  const limit = await limitUser(user.id, kind);
+  const blocked = limit.allowed
+    ? null
+    : fail(`Zu viele Anfragen – bitte in ${limit.retryAfterSeconds} Sekunden erneut versuchen.`);
+  return { user, blocked };
+}
+
+const REF_ERROR = {
+  categoryId: "Kategorie nicht gefunden",
+  accountId: "Konto nicht gefunden",
+} as const;
 
 function refresh() {
   revalidatePath("/", "layout");
@@ -41,11 +59,6 @@ function amountFrom(value: FormDataEntryValue | null) {
   return cents;
 }
 
-function optionalId(value: FormDataEntryValue | null) {
-  const raw = String(value ?? "").trim();
-  if (!raw || raw === "none") return null;
-  return toObjectId(raw) ? raw : null;
-}
 
 
 const datePrecision = z.enum(["day", "range", "month"]);
@@ -94,7 +107,8 @@ export async function saveCategory(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   await ensureIndexes();
 
   const parsed = categorySchema.safeParse({
@@ -143,7 +157,8 @@ export async function deleteCategory(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Kategorie nicht gefunden");
 
@@ -168,7 +183,8 @@ export async function saveTransaction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   await ensureIndexes();
 
   const type = kind.safeParse(formData.get("type"));
@@ -183,6 +199,12 @@ export async function saveTransaction(
   const period = periodFrom(formData);
   if ("error" in period) return fail(period.error);
 
+  const refs = await ownedRefs(user.id, {
+    categoryId: { collection: "categories", raw: formData.get("categoryId") },
+    accountId: { collection: "accounts", raw: formData.get("accountId") },
+  });
+  if (!refs.ok) return fail(REF_ERROR[refs.field]);
+
   const payload = {
     type: type.data,
     amountCents,
@@ -191,8 +213,7 @@ export async function saveTransaction(
     date: period.date,
     dateEnd: period.dateEnd,
     datePrecision: period.precision,
-    categoryId: optionalId(formData.get("categoryId")),
-    accountId: optionalId(formData.get("accountId")),
+    ...refs.values,
   };
 
   const id = String(formData.get("id") ?? "").trim();
@@ -221,7 +242,8 @@ export async function deleteTransaction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Buchung nicht gefunden");
 
@@ -236,7 +258,8 @@ export async function saveRecurring(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   await ensureIndexes();
 
   const type = kind.safeParse(formData.get("type"));
@@ -254,6 +277,11 @@ export async function saveRecurring(
   const startDate = isoDate.safeParse(formData.get("startDate"));
   if (!startDate.success) return fail("Startdatum ungültig");
 
+  const refs = await ownedRefs(user.id, {
+    categoryId: { collection: "categories", raw: formData.get("categoryId") },
+  });
+  if (!refs.ok) return fail(REF_ERROR[refs.field]);
+
   const payload = {
     type: type.data,
     interval: intervalParsed.data,
@@ -262,7 +290,7 @@ export async function saveRecurring(
     note: String(formData.get("note") ?? "").trim().slice(0, 300) || null,
     startDate: startDate.data,
     nextDue: nextDueFrom(startDate.data, intervalParsed.data),
-    categoryId: optionalId(formData.get("categoryId")),
+    categoryId: refs.values.categoryId,
     active: formData.get("active") !== "false",
   };
 
@@ -291,7 +319,8 @@ export async function toggleRecurring(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Eintrag nicht gefunden");
 
@@ -311,7 +340,8 @@ export async function deleteRecurring(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Eintrag nicht gefunden");
 
@@ -325,7 +355,8 @@ export async function bookRecurring(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Eintrag nicht gefunden");
 
@@ -366,7 +397,8 @@ export async function saveGoal(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   await ensureIndexes();
 
   const title = String(formData.get("title") ?? "").trim();
@@ -418,7 +450,8 @@ export async function adjustGoal(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
 
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Sparziel nicht gefunden");
@@ -445,7 +478,8 @@ export async function deleteGoal(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Sparziel nicht gefunden");
 
@@ -459,7 +493,8 @@ export async function setCategoryBudget(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
 
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Kategorie nicht gefunden");
@@ -485,7 +520,8 @@ export async function saveAccount(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   await ensureIndexes();
 
   const name = String(formData.get("name") ?? "").trim();
@@ -531,7 +567,8 @@ export async function deleteAccount(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Konto nicht gefunden");
 
@@ -552,7 +589,8 @@ export async function transferBetweenAccounts(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   await ensureIndexes();
 
   const fromId = String(formData.get("from") ?? "").trim();
@@ -575,6 +613,7 @@ export async function transferBetweenAccounts(
   const base = {
     userId: user.id,
     amountCents,
+    transferGroupId: randomUUID(),
     note: "Umbuchung",
     date: date.data,
     categoryId: null,
@@ -604,7 +643,8 @@ export async function importTransactions(
   _prev: ImportState,
   formData: FormData,
 ): Promise<ImportState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize("import");
+  if (blocked) return blocked;
   await ensureIndexes();
 
   const file = formData.get("file");
@@ -625,7 +665,11 @@ export async function importTransactions(
   }
 
   const createMissing = formData.get("createCategories") === "true";
-  const accountId = optionalId(formData.get("accountId"));
+  const accountRef = await ownedRefs(user.id, {
+    accountId: { collection: "accounts", raw: formData.get("accountId") },
+  });
+  if (!accountRef.ok) return fail(REF_ERROR.accountId);
+  const accountId = accountRef.values.accountId;
 
   const existing = await categories.find({ userId: user.id }).toArray();
   const byName = new Map(
@@ -693,7 +737,8 @@ export async function saveRefund(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   await ensureIndexes();
 
   const title = String(formData.get("title") ?? "").trim();
@@ -713,13 +758,18 @@ export async function saveRefund(
     return fail("Der Zeitraum endet vor dem Start");
   }
 
+  const refs = await ownedRefs(user.id, {
+    categoryId: { collection: "categories", raw: formData.get("categoryId") },
+    accountId: { collection: "accounts", raw: formData.get("accountId") },
+  });
+  if (!refs.ok) return fail(REF_ERROR[refs.field]);
+
   const payload = {
     title: title.slice(0, 80),
     amountCents,
     expectedFrom,
     expectedTo,
-    categoryId: optionalId(formData.get("categoryId")),
-    accountId: optionalId(formData.get("accountId")),
+    ...refs.values,
     note: String(formData.get("note") ?? "").trim().slice(0, 300) || null,
   };
 
@@ -748,7 +798,8 @@ export async function receiveRefund(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
 
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Erstattung nicht gefunden");
@@ -791,7 +842,8 @@ export async function deleteRefund(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Erstattung nicht gefunden");
 

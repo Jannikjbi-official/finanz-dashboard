@@ -17,6 +17,9 @@ export type { Account, Goal, Refund } from "./types";
 export { ACCOUNT_KIND_LABEL } from "./types";
 import { currentMonthKey, lastMonthKeys, monthRange, monthlyAmount } from "./dates";
 
+/** Umbuchungen zwischen eigenen Konten sind weder Einnahme noch Ausgabe. */
+const NO_TRANSFER = { transferGroupId: null };
+
 function mapCategory(doc: WithId<CategoryDoc>): Category {
   return {
     id: doc._id.toString(),
@@ -41,6 +44,7 @@ function mapTransaction(doc: WithId<TransactionDoc>): Transaction {
     categoryId: doc.categoryId ?? null,
     recurringId: doc.recurringId ?? null,
     accountId: doc.accountId ?? null,
+    transferGroupId: doc.transferGroupId ?? null,
   };
 }
 
@@ -98,7 +102,7 @@ type Totals = { income: number; expense: number };
 async function totalsForRange(userId: string, start: string, end: string) {
   const rows = await transactions
     .aggregate<{ _id: "income" | "expense"; sum: number }>([
-      { $match: { userId, date: { $gte: start, $lte: end } } },
+      { $match: { userId, ...NO_TRANSFER, date: { $gte: start, $lte: end } } },
       { $group: { _id: "$type", sum: { $sum: "$amountCents" } } },
     ])
     .toArray();
@@ -156,7 +160,7 @@ export async function getDashboard(
       totalsForRange(userId, previous.start, previous.end),
       transactions
         .aggregate<{ _id: "income" | "expense"; sum: number }>([
-          { $match: { userId } },
+          { $match: { userId, ...NO_TRANSFER } },
           { $group: { _id: "$type", sum: { $sum: "$amountCents" } } },
         ])
         .toArray(),
@@ -173,7 +177,7 @@ export async function getDashboard(
     const buckets = new Map<string | null, number>();
 
     for (const tx of monthTx) {
-      if (tx.type !== kind) continue;
+      if (tx.type !== kind || tx.transferGroupId) continue;
       const key = tx.categoryId ?? null;
       buckets.set(key, (buckets.get(key) ?? 0) + tx.amountCents);
     }
@@ -273,7 +277,7 @@ export async function getYearStats(
         _id: { month: string; type: "income" | "expense" };
         sum: number;
       }>([
-        { $match: { userId, date: { $gte: start, $lte: end } } },
+        { $match: { userId, ...NO_TRANSFER, date: { $gte: start, $lte: end } } },
         {
           $group: {
             _id: { month: { $substrBytes: ["$date", 0, 7] }, type: "$type" },
@@ -283,11 +287,11 @@ export async function getYearStats(
       ])
       .toArray(),
     transactions
-      .find({ userId, type: "expense", date: { $gte: start, $lte: end } })
+      .find({ userId, ...NO_TRANSFER, type: "expense", date: { $gte: start, $lte: end } })
       .sort({ amountCents: -1 })
       .limit(8)
       .toArray(),
-    transactions.countDocuments({ userId, date: { $gte: start, $lte: end } }),
+    transactions.countDocuments({ userId, ...NO_TRANSFER, date: { $gte: start, $lte: end } }),
   ]);
 
   const monthMap = new Map<string, { income: number; expense: number }>();
@@ -328,7 +332,7 @@ export async function getYearStats(
       _id: { categoryId: string | null; type: "income" | "expense" };
       sum: number;
     }>([
-      { $match: { userId, date: { $gte: start, $lte: end } } },
+      { $match: { userId, ...NO_TRANSFER, date: { $gte: start, $lte: end } } },
       {
         $group: {
           _id: { categoryId: "$categoryId", type: "$type" },
@@ -425,6 +429,7 @@ export async function getBudgetOverview(
         {
           $match: {
             userId,
+            ...NO_TRANSFER,
             type: "expense",
             date: { $gte: range.start, $lte: range.end },
           },
@@ -437,6 +442,7 @@ export async function getBudgetOverview(
         {
           $match: {
             userId,
+            ...NO_TRANSFER,
             type: "expense",
             date: { $gte: historyStart, $lte: historyEnd },
           },
