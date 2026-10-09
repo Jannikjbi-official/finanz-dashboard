@@ -1,20 +1,196 @@
 @import "tailwindcss";
-@plugin '../hero.ts';
-@source '../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}';
-@custom-variant dark (&:is(.dark *));
 
-html, body {
-  height: 100%;
+/* -------------------------------------------------------------------------
+   Designsystem "Dark Fintech"
+   Fast schwarzer Grund, abgerundete Karten, Limette als Akzent,
+   kraeftige Statusfarben. Dunkel ist Standard, hell gibt es auf Wunsch.
+   ------------------------------------------------------------------------- */
+
+:root {
+  --paper: #0b0d10;
+  --surface: #14171c;
+  --surface-2: #1b1f25;
+  --sunken: #1f242b;
+  --ink: #f3f5f6;
+  --ink-2: #aab1ba;
+  --ink-3: #6f7781;
+  --line: rgb(255 255 255 / 0.07);
+  --line-strong: rgb(255 255 255 / 0.14);
+  --accent: #c6f24e;
+  --accent-hover: #d6ff66;
+  --accent-ink: #0b0d10;
+  --accent-soft: rgb(198 242 78 / 0.12);
+  --pos: #8be36b;
+  --pos-soft: rgb(139 227 107 / 0.13);
+  --warn: #f5c451;
+  --warn-soft: rgb(245 196 81 / 0.13);
+  --caution: #ff9a52;
+  --caution-soft: rgb(255 154 82 / 0.14);
+  --neg: #ff6b6b;
+  --neg-soft: rgb(255 107 107 / 0.14);
+  --focus: #c6f24e;
+  --chart-1: #c6f24e;
+  --chart-2: #6ee7d8;
+  --chart-3: #8b9cff;
+  --chart-4: #ff9a52;
+  --chart-5: #f472b6;
+  --chart-6: #f5c451;
+  --shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 20px 40px -20px rgb(0 0 0 / 0.8);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --paper: #f2f4f7;
+  --surface: #ffffff;
+  --surface-2: #f7f8fa;
+  --sunken: #eceff3;
+  --ink: #0b0d10;
+  --ink-2: #4a525c;
+  --ink-3: #8a929c;
+  --line: rgb(11 13 16 / 0.07);
+  --line-strong: rgb(11 13 16 / 0.14);
+  --accent: #0b0d10;
+  --accent-hover: #262b33;
+  --accent-ink: #c6f24e;
+  --accent-soft: rgb(132 184 0 / 0.14);
+  --pos: #2f9e44;
+  --pos-soft: rgb(47 158 68 / 0.12);
+  --warn: #c78a00;
+  --warn-soft: rgb(199 138 0 / 0.13);
+  --caution: #e8590c;
+  --caution-soft: rgb(232 89 12 / 0.12);
+  --neg: #e03131;
+  --neg-soft: rgb(224 49 49 / 0.11);
+  --focus: #0b0d10;
+  --chart-1: #84b800;
+  --chart-2: #12b5a5;
+  --chart-3: #5c6fff;
+  --chart-4: #f76707;
+  --chart-5: #e64980;
+  --chart-6: #f2a900;
+  --shadow: 0 1px 2px rgb(11 13 16 / 0.05), 0 12px 32px -16px rgb(11 13 16 / 0.18);
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-sunken: var(--sunken);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-pos: var(--pos);
+  --color-pos-soft: var(--pos-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-caution: var(--caution);
+  --color-caution-soft: var(--caution-soft);
+  --color-neg: var(--neg);
+  --color-neg-soft: var(--neg-soft);
+
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  /* Frueher Serife - jetzt ueberall die gleiche moderne Groteske */
+  --font-serif: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+
+  --shadow-float: var(--shadow);
+}
+
+/* Karte: die Grundflaeche fuer fast alle Inhalte */
+@utility card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 1.25rem;
+  @media (width >= 40rem) {
+    padding: 1.5rem;
+  }
+}
+
+html,
+body {
+  min-height: 100%;
 }
 
 body {
-  background:
-    radial-gradient(1200px 600px at 15% -10%, rgba(99, 102, 241, 0.18), transparent 60%),
-    radial-gradient(900px 500px at 100% 0%, rgba(34, 197, 94, 0.10), transparent 55%),
-    hsl(var(--heroui-background));
-  background-attachment: fixed;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.25); border-radius: 999px; }
-::-webkit-scrollbar-track { background: transparent; }
+/* Ehemalige Serifen-Ueberschriften kraeftig statt duenn */
+.font-serif {
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+/* Betraege: Tabellenziffern, damit Spalten exakt fluchten */
+.num {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* Schraffur fuer Hochrechnungen */
+.hatch {
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--ink) 30%, transparent) 0 1.5px,
+    transparent 1.5px 6px
+  );
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sheet-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes sheet-left {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes toast-in {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes rise {
+  from { transform: translateY(6px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -7,15 +7,19 @@ import {
   categories,
   ensureIndexes,
   goals,
+  planned,
   recurring,
-  refunds,
   toObjectId,
   transactions,
+  type AccountDoc,
+  type GoalDoc,
 } from "./mongo";
 import { requireUser } from "./session";
 import { advance, endOfMonth, nextDueFrom, todayISO } from "./dates";
 import { parseAmountToCents } from "./money";
-import { parseCsv } from "./csv";
+import { ownedRefs } from "./server/ownership";
+import { limitUser } from "./server/rate-limit";
+import { randomUUID } from "node:crypto";
 
 export type ActionState = { ok: boolean; error?: string; message?: string };
 
@@ -26,6 +30,21 @@ function fail(error: string): ActionState {
 function done(message: string): ActionState {
   return { ok: true, message };
 }
+
+/** Angemeldeten Nutzer holen und sein Schreib-Kontingent pruefen. */
+async function authorize(kind: "write" | "import" = "write") {
+  const user = await requireUser();
+  const limit = await limitUser(user.id, kind);
+  const blocked = limit.allowed
+    ? null
+    : fail(`Zu viele Anfragen – bitte in ${limit.retryAfterSeconds} Sekunden erneut versuchen.`);
+  return { user, blocked };
+}
+
+const REF_ERROR = {
+  categoryId: "Kategorie nicht gefunden",
+  accountId: "Konto nicht gefunden",
+} as const;
 
 function refresh() {
   revalidatePath("/", "layout");
@@ -41,11 +60,6 @@ function amountFrom(value: FormDataEntryValue | null) {
   return cents;
 }
 
-function optionalId(value: FormDataEntryValue | null) {
-  const raw = String(value ?? "").trim();
-  if (!raw || raw === "none") return null;
-  return toObjectId(raw) ? raw : null;
-}
 
 
 const datePrecision = z.enum(["day", "range", "month"]);
@@ -94,7 +108,8 @@ export async function saveCategory(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   await ensureIndexes();
 
   const parsed = categorySchema.safeParse({
@@ -143,7 +158,8 @@ export async function deleteCategory(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Kategorie nicht gefunden");
 
@@ -154,6 +170,10 @@ export async function deleteCategory(
     { $set: { categoryId: null } },
   );
   await recurring.updateMany(
+    { userId: user.id, categoryId: id },
+    { $set: { categoryId: null } },
+  );
+  await planned.updateMany(
     { userId: user.id, categoryId: id },
     { $set: { categoryId: null } },
   );
@@ -168,7 +188,8 @@ export async function saveTransaction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   await ensureIndexes();
 
   const type = kind.safeParse(formData.get("type"));
@@ -183,6 +204,12 @@ export async function saveTransaction(
   const period = periodFrom(formData);
   if ("error" in period) return fail(period.error);
 
+  const refs = await ownedRefs(user.id, {
+    categoryId: { collection: "categories", raw: formData.get("categoryId") },
+    accountId: { collection: "accounts", raw: formData.get("accountId") },
+  });
+  if (!refs.ok) return fail(REF_ERROR[refs.field]);
+
   const payload = {
     type: type.data,
     amountCents,
@@ -191,8 +218,7 @@ export async function saveTransaction(
     date: period.date,
     dateEnd: period.dateEnd,
     datePrecision: period.precision,
-    categoryId: optionalId(formData.get("categoryId")),
-    accountId: optionalId(formData.get("accountId")),
+    ...refs.values,
   };
 
   const id = String(formData.get("id") ?? "").trim();
@@ -221,9 +247,20 @@ export async function deleteTransaction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Buchung nicht gefunden");
+
+  const existing = await transactions.findOne({ _id: objectId, userId: user.id });
+  if (!existing) return fail("Buchung nicht gefunden");
+
+  // Eine Umbuchung besteht aus zwei Haelften - nie nur eine entfernen
+  if (existing.transferGroupId) {
+    await transactions.deleteMany({ userId: user.id, transferGroupId: existing.transferGroupId });
+    refresh();
+    return done("Umbuchung gelöscht");
+  }
 
   await transactions.deleteOne({ _id: objectId, userId: user.id });
   refresh();
@@ -236,7 +273,8 @@ export async function saveRecurring(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   await ensureIndexes();
 
   const type = kind.safeParse(formData.get("type"));
@@ -254,6 +292,11 @@ export async function saveRecurring(
   const startDate = isoDate.safeParse(formData.get("startDate"));
   if (!startDate.success) return fail("Startdatum ungültig");
 
+  const refs = await ownedRefs(user.id, {
+    categoryId: { collection: "categories", raw: formData.get("categoryId") },
+  });
+  if (!refs.ok) return fail(REF_ERROR[refs.field]);
+
   const payload = {
     type: type.data,
     interval: intervalParsed.data,
@@ -262,7 +305,7 @@ export async function saveRecurring(
     note: String(formData.get("note") ?? "").trim().slice(0, 300) || null,
     startDate: startDate.data,
     nextDue: nextDueFrom(startDate.data, intervalParsed.data),
-    categoryId: optionalId(formData.get("categoryId")),
+    categoryId: refs.values.categoryId,
     active: formData.get("active") !== "false",
   };
 
@@ -291,7 +334,8 @@ export async function toggleRecurring(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Eintrag nicht gefunden");
 
@@ -311,7 +355,8 @@ export async function deleteRecurring(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Eintrag nicht gefunden");
 
@@ -325,7 +370,8 @@ export async function bookRecurring(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Eintrag nicht gefunden");
 
@@ -335,6 +381,21 @@ export async function bookRecurring(
   const today = todayISO();
   const bookedDate = entry.nextDue > today ? today : entry.nextDue;
 
+  // Konto aus dem Formular, sonst das erste verfuegbare - sonst fehlt die
+  // Buchung im Kontostand
+  const refs = await ownedRefs(user.id, {
+    accountId: { collection: "accounts", raw: formData.get("accountId") },
+  });
+  if (!refs.ok) return fail(REF_ERROR.accountId);
+  let accountId = refs.values.accountId;
+  if (!accountId && !formData.has("accountId")) {
+    const fallback = await accounts.findOne(
+      { userId: user.id, archived: false, kind: { $ne: "savings" } },
+      { sort: { createdAt: 1 } },
+    );
+    accountId = fallback?._id.toString() ?? null;
+  }
+
   await transactions.insertOne({
     userId: user.id,
     type: entry.type,
@@ -342,14 +403,21 @@ export async function bookRecurring(
     title: entry.title,
     note: entry.note ?? null,
     date: bookedDate,
+    dateEnd: null,
+    datePrecision: "day",
     categoryId: entry.categoryId ?? null,
+    accountId,
     recurringId: entry._id.toString(),
     createdAt: new Date(),
   });
 
   await recurring.updateOne(
     { _id: objectId, userId: user.id },
-    { $set: { nextDue: advance(entry.nextDue, entry.interval) } },
+    {
+      $set: {
+        nextDue: advance(entry.nextDue, entry.interval, Number(entry.startDate.slice(8, 10))),
+      },
+    },
   );
 
   refresh();
@@ -362,7 +430,8 @@ export async function saveGoal(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   await ensureIndexes();
 
   const title = String(formData.get("title") ?? "").trim();
@@ -382,7 +451,7 @@ export async function saveGoal(
   const colorRaw = String(formData.get("color") ?? "#6366f1");
   const color = /^#[0-9a-fA-F]{6}$/.test(colorRaw) ? colorRaw : "#6366f1";
 
-  const payload = {
+  const payload: Partial<GoalDoc> = {
     title: title.slice(0, 60),
     targetCents,
     deadline,
@@ -390,15 +459,31 @@ export async function saveGoal(
     note: String(formData.get("note") ?? "").trim().slice(0, 200) || null,
   };
 
+  // Sparrate und Konto nur aus Formularen, die sie kennen
+  if (formData.get("planField") === "1") {
+    const rateRaw = String(formData.get("monthlyContribution") ?? "").trim();
+    const rate = rateRaw ? parseAmountToCents(rateRaw) : null;
+    if (rateRaw && rate === null) return fail("Sparrate ungültig");
+    payload.monthlyContributionCents = rate && rate > 0 ? rate : null;
+
+    const refs = await ownedRefs(user.id, {
+      accountId: { collection: "accounts", raw: formData.get("accountId") },
+    });
+    if (!refs.ok) return fail(REF_ERROR.accountId);
+    payload.accountId = refs.values.accountId;
+  }
+
   const id = String(formData.get("id") ?? "").trim();
 
   if (id) {
     const objectId = toObjectId(id);
     if (!objectId) return fail("Sparziel nicht gefunden");
+    // Beim Bearbeiten darf auch der gesparte Betrag korrigiert werden
+    if (savedRaw) payload.savedCents = savedCents;
     await goals.updateOne({ _id: objectId, userId: user.id }, { $set: payload });
   } else {
     await goals.insertOne({
-      ...payload,
+      ...(payload as Omit<GoalDoc, "userId" | "createdAt" | "savedCents">),
       savedCents,
       userId: user.id,
       createdAt: new Date(),
@@ -414,7 +499,8 @@ export async function adjustGoal(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
 
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Sparziel nicht gefunden");
@@ -441,7 +527,8 @@ export async function deleteGoal(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Sparziel nicht gefunden");
 
@@ -455,7 +542,8 @@ export async function setCategoryBudget(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
 
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Kategorie nicht gefunden");
@@ -481,7 +569,8 @@ export async function saveAccount(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   await ensureIndexes();
 
   const name = String(formData.get("name") ?? "").trim();
@@ -490,20 +579,28 @@ export async function saveAccount(
   const kindParsed = accountKind.safeParse(formData.get("kind"));
   if (!kindParsed.success) return fail("Kontoart fehlt");
 
-  const startRaw = String(formData.get("startBalance") ?? "").trim();
-  const startBalanceCents = startRaw ? parseAmountToCents(startRaw) : 0;
-  if (startRaw && startBalanceCents === null) return fail("Startsaldo ungültig");
+  // Ueberzogene Konten duerfen mit negativem Stand starten
+  const startRaw = String(formData.get("startBalance") ?? "").trim().replace(/^[−–]/, "-");
+  const negative = startRaw.startsWith("-");
+  const startAbs = startRaw ? parseAmountToCents(startRaw.replace(/^[-+]/, "")) : 0;
+  if (startRaw && startAbs === null) return fail("Startsaldo ungültig");
+  const startBalanceCents = (startAbs ?? 0) * (negative ? -1 : 1);
 
   const colorRaw = String(formData.get("color") ?? "#6366f1");
 
-  const payload = {
+  const payload: Partial<AccountDoc> = {
     name: name.slice(0, 40),
     kind: kindParsed.data,
-    startBalanceCents: startBalanceCents ?? 0,
+    startBalanceCents,
     color: /^#[0-9a-fA-F]{6}$/.test(colorRaw) ? colorRaw : "#6366f1",
     icon: String(formData.get("icon") ?? "").trim().slice(0, 8),
     archived: formData.get("archived") === "true",
   };
+
+  // Nur Formulare, die das Feld kennen, setzen "verfuegbar" - aeltere lassen es unangetastet
+  if (formData.get("liquidField") === "1") {
+    payload.liquid = formData.get("liquid") === "true";
+  }
 
   const id = String(formData.get("id") ?? "").trim();
 
@@ -513,7 +610,7 @@ export async function saveAccount(
     await accounts.updateOne({ _id: objectId, userId: user.id }, { $set: payload });
   } else {
     await accounts.insertOne({
-      ...payload,
+      ...(payload as Omit<AccountDoc, "userId" | "createdAt">),
       userId: user.id,
       createdAt: new Date(),
     });
@@ -527,17 +624,19 @@ export async function deleteAccount(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   const objectId = toObjectId(String(formData.get("id") ?? ""));
   if (!objectId) return fail("Konto nicht gefunden");
 
   const id = objectId.toString();
   await accounts.deleteOne({ _id: objectId, userId: user.id });
-  // Buchungen bleiben erhalten, verlieren aber die Zuordnung.
-  await transactions.updateMany(
-    { userId: user.id, accountId: id },
-    { $set: { accountId: null } },
-  );
+  // Buchungen, Geplantes und Ziele bleiben erhalten, verlieren aber die Zuordnung.
+  await Promise.all([
+    transactions.updateMany({ userId: user.id, accountId: id }, { $set: { accountId: null } }),
+    planned.updateMany({ userId: user.id, accountId: id }, { $set: { accountId: null } }),
+    goals.updateMany({ userId: user.id, accountId: id }, { $set: { accountId: null } }),
+  ]);
 
   refresh();
   return done("Konto gelöscht");
@@ -548,7 +647,8 @@ export async function transferBetweenAccounts(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const user = await requireUser();
+  const { user, blocked } = await authorize();
+  if (blocked) return blocked;
   await ensureIndexes();
 
   const fromId = String(formData.get("from") ?? "").trim();
@@ -571,6 +671,7 @@ export async function transferBetweenAccounts(
   const base = {
     userId: user.id,
     amountCents,
+    transferGroupId: randomUUID(),
     note: "Umbuchung",
     date: date.data,
     categoryId: null,
@@ -585,213 +686,4 @@ export async function transferBetweenAccounts(
 
   refresh();
   return done("Umbuchung gespeichert");
-}
-
-/* ----------------------------- Import (CSV) ------------------------------- */
-
-export type ImportState = ActionState & {
-  imported?: number;
-  skipped?: number;
-  createdCategories?: string[];
-  problems?: Array<{ line: number; reason: string }>;
-};
-
-export async function importTransactions(
-  _prev: ImportState,
-  formData: FormData,
-): Promise<ImportState> {
-  const user = await requireUser();
-  await ensureIndexes();
-
-  const file = formData.get("file");
-  const pasted = String(formData.get("csv") ?? "");
-
-  const text =
-    file instanceof File && file.size > 0 ? await file.text() : pasted;
-
-  if (!text.trim()) return fail("Keine Daten – Datei wählen oder CSV einfügen");
-
-  const { rows, errors } = parseCsv(text);
-  if (rows.length === 0) {
-    return {
-      ok: false,
-      error: "Keine gültige Zeile gefunden",
-      problems: errors.slice(0, 5).map(({ line, reason }) => ({ line, reason })),
-    };
-  }
-
-  const createMissing = formData.get("createCategories") === "true";
-  const accountId = optionalId(formData.get("accountId"));
-
-  const existing = await categories.find({ userId: user.id }).toArray();
-  const byName = new Map(
-    existing.map((doc) => [`${doc.kind}:${doc.name.toLowerCase()}`, doc._id.toString()]),
-  );
-
-  const createdCategories: string[] = [];
-
-  for (const row of rows) {
-    if (!row.category) continue;
-
-    const key = `${row.type}:${row.category.toLowerCase()}`;
-    if (byName.has(key) || !createMissing) continue;
-
-    const inserted = await categories.insertOne({
-      userId: user.id,
-      name: row.category.slice(0, 40),
-      kind: row.type,
-      color: row.type === "income" ? "#22c55e" : "#6366f1",
-      icon: "",
-      budgetCents: null,
-      createdAt: new Date(),
-    });
-
-    byName.set(key, inserted.insertedId.toString());
-    createdCategories.push(row.category);
-  }
-
-  const docs = rows.map((row) => ({
-    userId: user.id,
-    type: row.type,
-    amountCents: row.amountCents,
-    title: row.title,
-    note: row.note,
-    date: row.date,
-    categoryId: row.category
-      ? (byName.get(`${row.type}:${row.category.toLowerCase()}`) ?? null)
-      : null,
-    accountId,
-    recurringId: null,
-    createdAt: new Date(),
-  }));
-
-  await transactions.insertMany(docs);
-
-  refresh();
-
-  return {
-    ok: true,
-    message: `${docs.length} Buchungen importiert`,
-    imported: docs.length,
-    skipped: errors.length,
-    createdCategories,
-    problems: errors.slice(0, 5).map(({ line, reason }) => ({ line, reason })),
-  };
-}
-
-/* ------------------------------ Erstattungen ------------------------------ */
-
-/**
- * Geld, das dir jemand zurueckzahlt - Versicherung, Steuer, geliehen an
- * Freunde. Oft ist unklar, wann es kommt, deshalb ist das Datum optional.
- */
-export async function saveRefund(
-  _prev: ActionState,
-  formData: FormData,
-): Promise<ActionState> {
-  const user = await requireUser();
-  await ensureIndexes();
-
-  const title = String(formData.get("title") ?? "").trim();
-  if (!title) return fail("Bezeichnung fehlt");
-
-  const amountCents = amountFrom(formData.get("amount"));
-  if (amountCents === null) return fail("Betrag ungültig");
-
-  const fromRaw = String(formData.get("expectedFrom") ?? "").trim();
-  const toRaw = String(formData.get("expectedTo") ?? "").trim();
-
-  const expectedFrom =
-    fromRaw && isoDate.safeParse(fromRaw).success ? fromRaw : null;
-  const expectedTo = toRaw && isoDate.safeParse(toRaw).success ? toRaw : null;
-
-  if (expectedFrom && expectedTo && expectedTo < expectedFrom) {
-    return fail("Der Zeitraum endet vor dem Start");
-  }
-
-  const payload = {
-    title: title.slice(0, 80),
-    amountCents,
-    expectedFrom,
-    expectedTo,
-    categoryId: optionalId(formData.get("categoryId")),
-    accountId: optionalId(formData.get("accountId")),
-    note: String(formData.get("note") ?? "").trim().slice(0, 300) || null,
-  };
-
-  const id = String(formData.get("id") ?? "").trim();
-
-  if (id) {
-    const objectId = toObjectId(id);
-    if (!objectId) return fail("Erstattung nicht gefunden");
-    await refunds.updateOne({ _id: objectId, userId: user.id }, { $set: payload });
-  } else {
-    await refunds.insertOne({
-      ...payload,
-      userId: user.id,
-      status: "open",
-      receivedDate: null,
-      createdAt: new Date(),
-    });
-  }
-
-  refresh();
-  return done(id ? "Erstattung aktualisiert" : "Erstattung angelegt");
-}
-
-/** Erstattung ist eingegangen: als Einnahme buchen und abhaken. */
-export async function receiveRefund(
-  _prev: ActionState,
-  formData: FormData,
-): Promise<ActionState> {
-  const user = await requireUser();
-
-  const objectId = toObjectId(String(formData.get("id") ?? ""));
-  if (!objectId) return fail("Erstattung nicht gefunden");
-
-  const refund = await refunds.findOne({ _id: objectId, userId: user.id });
-  if (!refund) return fail("Erstattung nicht gefunden");
-  if (refund.status === "received") return fail("Schon als erhalten markiert");
-
-  const dateRaw = String(formData.get("date") ?? "").trim();
-  const date = dateRaw && isoDate.safeParse(dateRaw).success ? dateRaw : todayISO();
-
-  // Betrag kann abweichen - manchmal kommt weniger zurueck als erwartet
-  const actual = amountFrom(formData.get("amount")) ?? refund.amountCents;
-
-  await transactions.insertOne({
-    userId: user.id,
-    type: "income",
-    amountCents: actual,
-    title: refund.title,
-    note: refund.note ?? "Erstattung",
-    date,
-    dateEnd: null,
-    datePrecision: "day",
-    categoryId: refund.categoryId ?? null,
-    accountId: refund.accountId ?? null,
-    recurringId: null,
-    createdAt: new Date(),
-  });
-
-  await refunds.updateOne(
-    { _id: objectId, userId: user.id },
-    { $set: { status: "received", receivedDate: date, amountCents: actual } },
-  );
-
-  refresh();
-  return done("Als erhalten gebucht");
-}
-
-export async function deleteRefund(
-  _prev: ActionState,
-  formData: FormData,
-): Promise<ActionState> {
-  const user = await requireUser();
-  const objectId = toObjectId(String(formData.get("id") ?? ""));
-  if (!objectId) return fail("Erstattung nicht gefunden");
-
-  await refunds.deleteOne({ _id: objectId, userId: user.id });
-  refresh();
-  return done("Erstattung gelöscht");
 }

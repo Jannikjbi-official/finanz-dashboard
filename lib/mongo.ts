@@ -45,7 +45,77 @@ export type TransactionDoc = {
   recurringId: string | null;
   /** Optional - aeltere Buchungen haben kein Konto. */
   accountId?: string | null;
+  /**
+   * Beide Haelften einer Umbuchung tragen dieselbe ID. Solche Buchungen
+   * bewegen nur Geld zwischen eigenen Konten und zaehlen nie als Einnahme
+   * oder Ausgabe.
+   */
+  transferGroupId?: string | null;
+  /** Herkunft beim Import, fuer die Dublettenerkennung. */
+  importHash?: string | null;
   createdAt: Date;
+};
+
+/**
+ * Einmalige, noch nicht gebuchte Ereignisse: geplante Ausgaben und erwartete
+ * Einnahmen (z. B. Erstattungen). Speist die Prognose.
+ */
+export type PlannedDoc = {
+  userId: string;
+  kind: Kind;
+  title: string;
+  amountCents: number;
+  /** Fruehester und spaetester Termin; beide null = Zeitpunkt unbekannt. */
+  dateFrom: string | null;
+  dateTo: string | null;
+  /** fixed = steht fest, expected = wird erwartet (zaehlt vorsichtig). */
+  certainty: "fixed" | "expected";
+  status: "open" | "done" | "cancelled";
+  categoryId: string | null;
+  accountId: string | null;
+  note: string | null;
+  /** Buchung, die beim Erledigen entstanden ist. */
+  transactionId: string | null;
+  /** Herkunft aus der alten Erstattungs-Collection (Migration). */
+  legacyRefundId?: string | null;
+  createdAt: Date;
+};
+
+export type UserSettingsDoc = {
+  _id: string; // userId
+  currency: "EUR";
+  locale: "de-DE";
+  timeZone: string;
+  /** Mindestreserve; null = automatisch ein Monat Fixkosten. */
+  reserveCents: number | null;
+  /**
+   * Geschaetzte variable Ausgaben pro Monat. Gilt nur, solange es noch
+   * keinen vollen Monat mit Buchungen gibt.
+   */
+  variableEstimateCents?: number | null;
+  onboardingCompletedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+/** Gespeicherte Szenarien der Sandbox - nie echte Buchungen. */
+export type ScenarioDoc = {
+  userId: string;
+  name: string;
+  events: ScenarioEvent[];
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type ScenarioEvent = {
+  id: string;
+  label: string;
+  /** Vorzeichenbehaftet: negativ = Ausgabe. */
+  amountCents: number;
+  repeat: "once" | "monthly";
+  date: string;
+  /** Nur bei monthly: letzter Monat, null = unbegrenzt. */
+  until: string | null;
 };
 
 export type RecurringDoc = {
@@ -85,6 +155,10 @@ export type GoalDoc = {
   deadline: string | null;
   color: string;
   note: string | null;
+  /** Geplante monatliche Sparrate; fliesst als Abfluss in die Prognose. */
+  monthlyContributionCents?: number | null;
+  /** Konto, auf dem das Geld liegt (nur zur Anzeige). */
+  accountId?: string | null;
   createdAt: Date;
 };
 
@@ -96,6 +170,11 @@ export type AccountDoc = {
   color: string;
   icon: string;
   archived: boolean;
+  /**
+   * Zaehlt zum verfuegbaren Geld (Prognose, Sicherheitszone). Fehlt das
+   * Feld, gilt: alles ausser Sparkonten.
+   */
+  liquid?: boolean;
   createdAt: Date;
 };
 
@@ -105,6 +184,21 @@ export const recurring = db.collection<RecurringDoc>("recurring");
 export const goals = db.collection<GoalDoc>("goals");
 export const refunds = db.collection<RefundDoc>("refunds");
 export const accounts = db.collection<AccountDoc>("accounts");
+export const planned = db.collection<PlannedDoc>("planned");
+export const settings = db.collection<UserSettingsDoc>("user_settings");
+export const scenarios = db.collection<ScenarioDoc>("scenarios");
+
+/** Alle Collections mit Finanzdaten eines Nutzers (Export, Loeschung). */
+export const USER_DATA_COLLECTIONS = [
+  "accounts",
+  "categories",
+  "transactions",
+  "recurring",
+  "planned",
+  "goals",
+  "refunds",
+  "scenarios",
+] as const;
 
 /** Indizes einmal pro Prozess anlegen. */
 export function ensureIndexes(): Promise<void> {
@@ -119,6 +213,17 @@ export function ensureIndexes(): Promise<void> {
     await goals.createIndex({ userId: 1 });
     await refunds.createIndex({ userId: 1, status: 1 });
     await accounts.createIndex({ userId: 1, archived: 1 });
+    await transactions.createIndex({ userId: 1, accountId: 1 });
+    await transactions.createIndex(
+      { userId: 1, importHash: 1 },
+      { partialFilterExpression: { importHash: { $type: "string" } } },
+    );
+    await planned.createIndex({ userId: 1, status: 1, dateFrom: 1 });
+    await planned.createIndex(
+      { userId: 1, legacyRefundId: 1 },
+      { unique: true, partialFilterExpression: { legacyRefundId: { $type: "string" } } },
+    );
+    await scenarios.createIndex({ userId: 1, updatedAt: -1 });
   })().catch((error) => {
     globalForMongo.__mongoIndexes = undefined;
     throw error;

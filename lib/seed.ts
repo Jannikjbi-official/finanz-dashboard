@@ -1,15 +1,20 @@
 import { categories, ensureIndexes, type Kind } from "./mongo";
 
-const DEFAULTS: Array<{ name: string; kind: Kind; color: string; icon: string }> = [
-  { name: "Gehalt", kind: "income", color: "#22c55e", icon: "\u{1F4B6}" },
-  { name: "Nebenjob", kind: "income", color: "#14b8a6", icon: "\u{1F4BC}" },
-  { name: "Geschenke", kind: "income", color: "#a855f7", icon: "\u{1F381}" },
-  { name: "Miete", kind: "expense", color: "#f43f5e", icon: "\u{1F3E0}" },
-  { name: "Lebensmittel", kind: "expense", color: "#f59e0b", icon: "\u{1F6D2}" },
-  { name: "Abos", kind: "expense", color: "#6366f1", icon: "\u{1F501}" },
-  { name: "Mobilität", kind: "expense", color: "#0ea5e9", icon: "\u{1F68C}" },
-  { name: "Freizeit", kind: "expense", color: "#ec4899", icon: "\u{1F3AE}" },
-  { name: "Sonstiges", kind: "expense", color: "#64748b", icon: "\u{1F4E6}" },
+/**
+ * Startkategorien fuer neue Nutzer. Kraeftige Farben, die auf dunklem Grund leuchten.
+ */
+const DEFAULTS: Array<{ name: string; kind: Kind; color: string }> = [
+  { name: "Gehalt", kind: "income", color: "#8be36b" },
+  { name: "Nebeneinkünfte", kind: "income", color: "#a3e635" },
+  { name: "Erstattungen", kind: "income", color: "#6ee7d8" },
+  { name: "Wohnen", kind: "expense", color: "#ff9a52" },
+  { name: "Lebensmittel", kind: "expense", color: "#f5c451" },
+  { name: "Mobilität", kind: "expense", color: "#38bdf8" },
+  { name: "Verträge & Abos", kind: "expense", color: "#8b9cff" },
+  { name: "Versicherungen", kind: "expense", color: "#6ee7d8" },
+  { name: "Freizeit", kind: "expense", color: "#f472b6" },
+  { name: "Gesundheit", kind: "expense", color: "#c084fc" },
+  { name: "Sonstiges", kind: "expense", color: "#9aa3ad" },
 ];
 
 export async function seedDefaultCategories(userId: string) {
@@ -21,6 +26,7 @@ export async function seedDefaultCategories(userId: string) {
   await categories.insertMany(
     DEFAULTS.map((entry) => ({
       ...entry,
+      icon: "",
       userId,
       budgetCents: null,
       createdAt: new Date(),
