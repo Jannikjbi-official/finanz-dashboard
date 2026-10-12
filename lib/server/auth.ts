@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import { twoFactor } from "better-auth/plugins/two-factor";
+import { dash } from "@better-auth/infra";
 import { ACCESS_DENIED, isAllowedEmail, sessionRejection } from "./access";
 import { resolveAuthUrls } from "./auth-urls";
 import { db, toObjectId } from "./db";
@@ -13,6 +14,14 @@ const discordSecret = process.env.DISCORD_CLIENT_SECRET;
 const DAY = 60 * 60 * 24;
 
 const urls = resolveAuthUrls();
+
+/**
+ * Better-Auth-Dashboard (dash.better-auth.com): nur aktiv, wenn
+ * BETTER_AUTH_API_KEY gesetzt ist. Anfragen des Dashboards sind ueber
+ * signierte Tokens von Better Auth abgesichert; Freigabeliste und
+ * Sitzungspruefung unten gelten auch fuer alles, was darueber angelegt wird.
+ */
+const dashboard = process.env.BETTER_AUTH_API_KEY?.trim() ? [dash()] : [];
 
 export const auth = betterAuth({
   appName: "Jannikjbi Finanzen",
@@ -44,6 +53,7 @@ export const auth = betterAuth({
       trustDeviceMaxAge: 30 * DAY,
       backupCodeOptions: { amount: 10, length: 10 },
     }),
+    ...dashboard,
   ],
   session: {
     // Kuerzer als frueher: nach 7 Tagen ohne Nutzung neu anmelden

@@ -106,7 +106,14 @@ docs/DESIGNSYSTEM.md Farben, Typografie, Abstände, Komponenten, Diagramme
 - Jede Abfrage und jede Server Action ist an die `userId` der Sitzung gebunden; referenzierte
   Konten/Kategorien werden auf Eigentum geprüft (getestet). Sitzungs-Tokens gehen nie an den Browser.
 - Serverseitige Validierung mit Zod, CSP und weitere Sicherheits-Header, `noindex`,
-  CSV-Export gegen Formel-Injection entschärft, keine Telemetrie, keine Secrets im Client.
+  CSV-Export gegen Formel-Injection entschärft, keine Secrets im Client.
+
+**Better-Auth-Dashboard (optional)**
+- Ist `BETTER_AUTH_API_KEY` gesetzt, ist das Plugin `dash()` aktiv: dash.better-auth.com kann Nutzer
+  und Sitzungen anzeigen und verwalten, Anmelde-Ereignisse gehen an Better Auth.
+- Die Endpunkte unter `/api/auth/dash/*` sind nur mit einem von Better Auth signierten Token nutzbar
+  (ohne: 401). Freigabeliste und Sitzungsprüfung gelten auch für alles, was über das Dashboard passiert.
+- Ohne API-Key ist das Plugin aus und es gehen keine Daten an Dritte.
 
 **Empfehlung für Vercel**
 - `ALLOWED_EMAILS` in Production **und** Preview setzen – sonst ist die jeweilige Umgebung gesperrt.
