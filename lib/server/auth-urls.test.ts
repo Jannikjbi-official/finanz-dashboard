@@ -24,6 +24,11 @@ describe("Auth-Adressen", () => {
     });
   });
 
+  it("ohne BETTER_AUTH_URL: Produktionsdomain von Vercel, Schraegstrich am Ende egal", () => {
+    expect(resolveAuthUrls({ VERCEL_ENV: "production", VERCEL_PROJECT_PRODUCTION_URL: "finanzen.example.org" }).baseURL).toBe("https://finanzen.example.org");
+    expect(resolveAuthUrls({ BETTER_AUTH_URL: "https://finanzen.example.org/" }).baseURL).toBe("https://finanzen.example.org");
+  });
+
   it("Preview ohne Vercel-Adressen faellt auf BETTER_AUTH_URL zurueck", () => {
     expect(resolveAuthUrls({ BETTER_AUTH_URL: "https://finanzen.example.org", VERCEL_ENV: "preview" })).toEqual({
       baseURL: "https://finanzen.example.org",
