@@ -3,6 +3,7 @@ import { APIError } from "better-auth/api";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import { twoFactor } from "better-auth/plugins/two-factor";
 import { ACCESS_DENIED, isAllowedEmail, sessionRejection } from "./access";
+import { resolveAuthUrls } from "./auth-urls";
 import { db, toObjectId } from "./db";
 import { ensureUserSetup } from "./user-data";
 
@@ -11,10 +12,13 @@ const discordSecret = process.env.DISCORD_CLIENT_SECRET;
 
 const DAY = 60 * 60 * 24;
 
+const urls = resolveAuthUrls();
+
 export const auth = betterAuth({
   appName: "Jannikjbi Finanzen",
   database: mongodbAdapter(db),
-  baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
+  baseURL: urls.baseURL,
+  trustedOrigins: urls.trustedOrigins,
   secret: process.env.BETTER_AUTH_SECRET,
   emailAndPassword: {
     enabled: true,

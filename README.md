@@ -110,5 +110,9 @@ docs/DESIGNSYSTEM.md Farben, Typografie, Abstände, Komponenten, Diagramme
 
 **Empfehlung für Vercel**
 - `ALLOWED_EMAILS` in Production **und** Preview setzen – sonst ist die jeweilige Umgebung gesperrt.
+- `BETTER_AUTH_URL` = Live-Domain. Auf Previews nutzt die App automatisch die Preview-Adresse
+  (Branch- und Deployment-URL), Anmeldungen von fremden Adressen werden weiter abgelehnt.
+  Die Discord-Anmeldung funktioniert auf Previews nicht, da Discord nur die Live-Adresse kennt.
+- `NEXT_PUBLIC_APP_URL` wird nicht mehr benötigt; der Browser spricht immer mit der eigenen Adresse.
 - Preview-Deployments zusätzlich unter Settings → Deployment Protection schützen
   (Vercel Authentication), da sie dieselbe Datenbank nutzen.
