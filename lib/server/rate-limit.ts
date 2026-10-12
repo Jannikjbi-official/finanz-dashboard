@@ -1,5 +1,5 @@
 import "server-only";
-import { db } from "../mongo";
+import { db } from "./db";
 
 type Bucket = { _id: string; count: number; resetAt: Date };
 

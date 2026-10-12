@@ -34,3 +34,17 @@ describe("Formatierung", () => {
     expect(formatPercent(-0.05)).toBe("−5 %");
   });
 });
+
+describe("formatMoney Sonderfaelle", () => {
+  it("zeigt -0 nicht mit Minus", async () => {
+    const { formatMoney } = await import("./format");
+    expect(formatMoney(-0)).toBe(formatMoney(0));
+    expect(formatMoney(-150)).toContain("−");
+  });
+
+  it("Eingabeformat ohne Tausenderpunkt", async () => {
+    const { formatAmountInput } = await import("./format");
+    expect(formatAmountInput(123456)).toBe("1234,56");
+    expect(formatAmountInput(-5)).toBe("-0,05");
+  });
+});

@@ -4,16 +4,17 @@ import { getSessionCookie } from "better-auth/cookies";
 /**
  * Schneller Vorfilter: ohne Session-Cookie direkt zur Anmeldung. Die echte
  * Pruefung (gueltige Session, Nutzerbindung) passiert serverseitig in jeder
- * Seite und Action ueber requireUser().
+ * Seite und jeder Server Action.
  */
 export function middleware(request: NextRequest) {
   if (getSessionCookie(request)) return NextResponse.next();
 
   const url = new URL("/anmelden", request.url);
-  url.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
+  if (request.nextUrl.pathname !== "/") url.searchParams.set("next", request.nextUrl.pathname);
   return NextResponse.redirect(url);
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/willkommen"],
+  // Alles ausser Anmeldung, Auth-API und statischen Dateien
+  matcher: ["/((?!anmelden|registrieren|api/auth|_next/static|_next/image|icon.svg|favicon.ico).*)"],
 };

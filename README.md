@@ -1,26 +1,19 @@
-# Spielraum
+# Jannikjbi Finanzen
 
-Kostenlose Finanzplattform: Konten, Fixkosten, Budgets und Ziele – mit einer
-Prognose für die nächsten 90 Tage, einer nachvollziehbaren Sicherheitszone,
-„Kann ich mir das leisten?“ und einer Sandbox für Was-wäre-wenn.
+Private Finanzverwaltung. Beantwortet auf einen Blick: Wie viel Geld habe ich,
+wie viel davon ist wirklich verfügbar, was steht als Nächstes an, was kosten
+Abos und feste Kosten – und was bleibt am Monatsende übrig.
 
-Next.js 15 (App Router) · React 19 · Tailwind 4 · Radix · Better Auth · MongoDB · Vitest
-
-> Der Produktname steht an genau einer Stelle: [lib/brand.ts](lib/brand.ts).
+Next.js 15 (App Router) · React 19 · HeroUI v3 · Tailwind 4 · Better Auth · MongoDB · Vitest
 
 ## Schnellstart (lokal)
 
 ```bash
 npm install
-cp .env.example .env          # BETTER_AUTH_SECRET setzen
+cp .env.example .env          # BETTER_AUTH_SECRET und ALLOWED_EMAILS setzen
 npm run dev:db                # lokale MongoDB ohne Installation (eigenes Terminal)
-npm run beta:invite -- du@example.org
-npm run dev                   # http://localhost:3000
+npm run dev                   # http://localhost:3000 → „Zugang einrichten“
 ```
-
-Registrieren geht dann über `http://localhost:3000/registrieren?einladung`.
-Zum Ausprobieren mit Beispieldaten: `npm run dev:seed -- du@example.org`
-(nur gegen eine lokale Datenbank).
 
 ## Befehle
 
@@ -28,64 +21,71 @@ Zum Ausprobieren mit Beispieldaten: `npm run dev:seed -- du@example.org`
 | --- | --- |
 | `npm run dev` / `build` / `start` | Entwicklung, Produktions-Build, Start |
 | `npm run typecheck` | TypeScript prüfen |
-| `npm test` | Alle Tests (Fachlogik, Import, Isolation gegen MongoDB im Speicher) |
+| `npm test` | Finanzlogik, Import, Migrationen und Server Actions (gegen MongoDB im Speicher) |
+| `npm run check` | Typen, Tests und Build in einem Schritt |
 | `npm run dev:db` | Lokale MongoDB auf Port 27017, Daten in `.devdb/` |
-| `npm run dev:seed -- <mail>` | Beispieldaten in ein lokales Testkonto |
 | `npm run db:backup` | Alle Collections als Extended JSON nach `backups/` |
 | `npm run db:restore -- <ordner> [--replace]` | Sicherung zurückspielen (mit `--replace` wird vorher gesichert) |
 | `npm run db:migrate [-- --dry-run]` | Ausstehende Migrationen (sichert vorher automatisch) |
-| `npm run beta:invite -- <mail>` | Adresse für die Closed Beta freischalten (`--list`, `--remove`) |
-| `npm run waitlist` | Warteliste ansehen (`--invite <mail>`, `--remove <mail>`) |
 
-## Konfiguration
+## Umstieg von der Vorversion („Spielraum“)
 
-Siehe [.env.example](.env.example). Wichtig für den Betrieb:
+Die bestehenden Daten bleiben vollständig erhalten. Die neue Version liest alte
+Datensätze direkt (fehlende Felder bekommen beim Lesen Standardwerte), es muss
+also nichts umgeschrieben werden, damit die App funktioniert.
 
-- `ALLOWED_EMAILS` – wer sich immer anmelden/registrieren darf (Betreiber).
-- `BETA_OPEN=true` – öffnet die Registrierung für alle.
-- `LEGAL_*` – Anbieterangaben für Impressum und Datenschutz. Ohne sie zeigen
-  beide Seiten einen Hinweis. `LEGAL_REVIEWED=true` erst nach rechtlicher Prüfung.
+Empfohlen vor bzw. nach dem ersten Deploy:
 
-## Umstieg von der früheren Version
+1. Sicherung ziehen: Atlas-Snapshot **und** `npm run db:backup` mit der Produktions-`MONGODB_URI`.
+2. `npm run db:migrate -- --dry-run` – zeigt, was passieren würde.
+3. `npm run db:migrate` – nur ergänzend, es wird nichts gelöscht:
+   - **005** übernimmt offene „geplante/erwartete“ Posten als offene Buchungen
+     (Posten ohne Termin werden nicht eingeplant, das Original bleibt).
+   - **006** speichert Status und Kostenart der regelmäßigen Zahlungen
+     (das alte Feld `active` bleibt).
 
-Die bestehenden Daten bleiben erhalten und gehören weiter deinem Konto. Vor dem
-ersten Deploy der neuen Version:
+Nicht mehr genutzte Collections (`goals`, `scenarios`, `refunds`, `planned`,
+`beta_invites`, `waitlist`) werden nicht angefasst und sind weiter im
+JSON-Export enthalten. Der Code der Vorversion steht in der Git-Historie
+(Commit `413ec52`).
 
-1. Sicherung ziehen: Atlas-Snapshot **und** `npm run db:backup` mit der
-   Produktions-`MONGODB_URI`.
-2. `npm run db:migrate -- --dry-run` – zeigt, was passiert.
-3. `npm run db:migrate` – ergänzt Einstellungen, markiert alte Umbuchungen,
-   übernimmt Erstattungen nach „Geplant & erwartet“, korrigiert verrutschte
-   Abo-Termine. Es wird nichts gelöscht.
-
-Alte Adressen (`/transaktionen`, `/abos`, …) leiten auf die neuen Seiten weiter.
+Alte Adressen funktionieren weiter. Achtung: Die Vorversion hat u. a.
+`/transaktionen` und `/konten` **permanent** auf `/app/...` umgeleitet; Browser
+merken sich das. Diese `/app/...`-Pfade werden deshalb intern umgeschrieben
+statt umgeleitet (`next.config.mjs`), sonst entstünde eine Schleife.
 
 ## Aufbau
 
 ```
-app/(site)/        Öffentliche Website: Start, Funktionen, Sicherheit, FAQ,
-                   Warteliste, Impressum, Datenschutz
-app/(auth)/        Anmelden, Registrieren (nur mit Einladung)
-app/willkommen/    Onboarding
-app/app/           Eingeloggter Bereich: Lage, Geld, Planung, Entscheiden,
-                   Rückblick, Einstellungen
-lib/domain/        Reine, getestete Fachlogik: Kalender, Intervalle, Prognose,
-                   Sicherheitszone, Kaufcheck, Ziele, Budgets, Auffälligkeiten
-lib/server/        Datenzugriff (immer an userId gebunden), Eigentumsprüfung,
-                   Rate Limit, Migrationen, Server Actions
-lib/actions.ts     Server Actions für Buchungen, Konten, Kategorien, Fixkosten, Ziele
-ui/                Designsystem
-features/          Oberflächen der einzelnen Bereiche
-scripts/           Kommandozeile: Backup, Restore, Migration, Beta, Warteliste
-docs/              Bestandsaufnahme und Umbauplan
+app/(app)/           Übersicht, Transaktionen, Abonnements, Feste Kosten, Konten, Einstellungen
+app/(auth)/          Anmelden, Zugang einrichten
+app/api/             Better Auth, CSV-/JSON-Export
+components/          Oberfläche (HeroUI v3), Diagramme (eigenes SVG), Dialoge
+lib/domain/          Reine, getestete Finanzlogik – keine Datenbank, keine UI
+lib/server/          Datenbank, Auth, Server Actions (Zod-Validierung, Rate Limit), Migrationen
+docs/DESIGNSYSTEM.md Farben, Typografie, Abstände, Komponenten, Diagramme
 ```
 
-## Grundsätze
+## Rechenregeln
 
-- **Isolation auf dem Server:** jede Abfrage enthält die `userId`, referenzierte
-  Konten/Kategorien werden auf Eigentum geprüft. Tests prüfen das gegen eine
-  echte MongoDB.
-- **Beträge in Cent** als Ganzzahl.
-- **Umbuchungen** (`transferGroupId`) zählen nie als Einnahme oder Ausgabe.
-- **Prognose vorsichtig:** Ausgaben früh, erwartete Einnahmen spät, ohne Termin gar nicht.
-- **Keine Telemetrie**, keine Drittanbieter-Skripte, strenge Sicherheits-Header.
+- **Beträge** sind ganzzahlige Cent. „Heute“ richtet sich nach der Zeitzone in den Einstellungen.
+- **Kontostand** = Anfangssaldo + gebuchte Bewegungen. Geplante Ausgaben und erwartete Einnahmen ändern ihn nicht.
+- **Aktuell verfügbar** = Kontostand der Konten, die zum verfügbaren Geld zählen
+  − fällige, unbezahlte Zahlungen − bis Monatsende geplante Ausgaben.
+  Erwartete Einnahmen zählen nicht; sie fließen nur in die Prognose für den Monatsletzten.
+- **Regelmäßige Zahlungen**: Jeder Termin vor `nextDue` ist erledigt (bezahlt oder
+  übersprungen), ab `nextDue` offen. „Bezahlt“ erzeugt genau eine Buchung und rückt
+  den Termin weiter – die Aktualisierung ist an den erwarteten Termin gebunden, ein
+  doppelter Klick bucht nicht doppelt. Monatsenden und Schaltjahre bleiben am Ankertag (31. → 28./29. → 31.).
+- **Monats-/Jahreswerte** sind Vergleichswerte (120 €/Jahr = 10 €/Monat).
+  Tatsächliche Abbuchungen kommen nur aus den Terminen.
+- **Pausiert / gekündigt** planen nichts mehr ein – außer bei gekündigten Verträgen mit Vertragsende.
+- **Transfers** sind zwei verknüpfte Buchungen, ändern beide Kontostände und zählen nie als Einnahme oder Ausgabe.
+
+## Sicherheit
+
+- Registrierung nur für Adressen aus `ALLOWED_EMAILS`.
+- Jede Abfrage und jede Server Action ist an die `userId` der Sitzung gebunden;
+  referenzierte Konten/Kategorien werden auf Eigentum geprüft (getestet).
+- Serverseitige Validierung mit Zod, Rate Limits in MongoDB, CSP und weitere Sicherheits-Header,
+  CSV-Export gegen Formel-Injection entschärft, keine Telemetrie, keine Secrets im Client.
