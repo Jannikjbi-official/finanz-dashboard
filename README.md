@@ -84,8 +84,42 @@ docs/DESIGNSYSTEM.md Farben, Typografie, Abstände, Komponenten, Diagramme
 
 ## Sicherheit
 
-- Registrierung nur für Adressen aus `ALLOWED_EMAILS`.
-- Jede Abfrage und jede Server Action ist an die `userId` der Sitzung gebunden;
-  referenzierte Konten/Kategorien werden auf Eigentum geprüft (getestet).
-- Serverseitige Validierung mit Zod, Rate Limits in MongoDB, CSP und weitere Sicherheits-Header,
-  CSV-Export gegen Formel-Injection entschärft, keine Telemetrie, keine Secrets im Client.
+**Wer hineinkommt**
+- Nur Adressen aus `ALLOWED_EMAILS`. Geprüft bei Registrierung, bei jeder neuen
+  Sitzung (Passwort, Zwei-Faktor, Discord) und bei jeder einzelnen Anfrage.
+  Wird eine Adresse entfernt, ist der Zugriff sofort weg – auch mit offener Sitzung.
+  Ist die Liste leer, ist alles gesperrt.
+- Die Registrierung schließt sich automatisch, sobald alle freigegebenen Adressen ein Konto haben.
+- Alte Konten aus der Beta-Zeit kommen nicht mehr hinein, solange sie nicht freigegeben sind.
+
+**Anmeldung**
+- Zwei-Faktor-Anmeldung (Authenticator-App, TOTP) mit 10 Backup-Codes und optional
+  „diesem Gerät 30 Tage vertrauen“ – einrichten unter Einstellungen → Sicherheit.
+- Mit aktiver Zwei-Faktor-Anmeldung ist die Discord-Anmeldung gesperrt, weil sie den Code umgehen würde.
+- Rate Limits (in MongoDB): 10 Anmeldeversuche pro 15 Minuten, Codeprüfung 3 pro 10 Sekunden,
+  Passwortänderung 5 pro Stunde.
+- Sitzungen laufen nach 7 Tagen ohne Nutzung ab; beendete Sitzungen gelten spätestens nach einer Minute
+  nicht mehr. Unter Einstellungen → Sicherheit: angemeldete Geräte sehen, einzeln oder alle anderen abmelden,
+  Passwort ändern (meldet alle anderen Geräte ab).
+
+**Daten**
+- Jede Abfrage und jede Server Action ist an die `userId` der Sitzung gebunden; referenzierte
+  Konten/Kategorien werden auf Eigentum geprüft (getestet). Sitzungs-Tokens gehen nie an den Browser.
+- Serverseitige Validierung mit Zod, CSP und weitere Sicherheits-Header, `noindex`,
+  CSV-Export gegen Formel-Injection entschärft, keine Secrets im Client.
+
+**Better-Auth-Dashboard (optional)**
+- Ist `BETTER_AUTH_API_KEY` gesetzt, ist das Plugin `dash()` aktiv: dash.better-auth.com kann Nutzer
+  und Sitzungen anzeigen und verwalten, Anmelde-Ereignisse gehen an Better Auth.
+- Die Endpunkte unter `/api/auth/dash/*` sind nur mit einem von Better Auth signierten Token nutzbar
+  (ohne: 401). Freigabeliste und Sitzungsprüfung gelten auch für alles, was über das Dashboard passiert.
+- Ohne API-Key ist das Plugin aus und es gehen keine Daten an Dritte.
+
+**Empfehlung für Vercel**
+- `ALLOWED_EMAILS` in Production **und** Preview setzen – sonst ist die jeweilige Umgebung gesperrt.
+- `BETTER_AUTH_URL` = Live-Domain. Auf Previews nutzt die App automatisch die Preview-Adresse
+  (Branch- und Deployment-URL), Anmeldungen von fremden Adressen werden weiter abgelehnt.
+  Die Discord-Anmeldung funktioniert auf Previews nicht, da Discord nur die Live-Adresse kennt.
+- `NEXT_PUBLIC_APP_URL` wird nicht mehr benötigt; der Browser spricht immer mit der eigenen Adresse.
+- Preview-Deployments zusätzlich unter Settings → Deployment Protection schützen
+  (Vercel Authentication), da sie dieselbe Datenbank nutzen.

@@ -7,6 +7,7 @@ import { ConfirmDialog } from "@/components/forms/confirm-dialog";
 import { SelectInput, TextInput } from "@/components/forms/fields";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { ImportDialog } from "@/components/forms/import-dialog";
+import { SecurityPanel } from "@/components/settings/security-panel";
 import { SignOutButton } from "@/components/shell/app-shell";
 import { PageHeader, Panel } from "@/components/ui/panel";
 import { useAction } from "@/lib/client/use-action";
@@ -21,12 +22,14 @@ const TIME_ZONES = ["Europe/Berlin", "Europe/Vienna", "Europe/Zurich", "Europe/L
 
 export function SettingsView({
   user,
+  security,
   timeZone,
   categories,
   accounts,
   counts,
 }: {
   user: { name: string; email: string };
+  security: Parameters<typeof SecurityPanel>[0]["overview"];
   timeZone: string;
   categories: CategoryRow[];
   accounts: Account[];
@@ -43,6 +46,8 @@ export function SettingsView({
     <div>
       <PageHeader title="Einstellungen" />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <SecurityPanel overview={security} />
+
         <Panel title="Darstellung und Zeit">
           <div className="flex flex-col gap-5">
             <div className="flex flex-col gap-1.5">

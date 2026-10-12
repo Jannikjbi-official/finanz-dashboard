@@ -1,37 +1,41 @@
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
-import { db } from "./db";
+import { twoFactor } from "better-auth/plugins/two-factor";
+import { dash } from "@better-auth/infra";
+import { ACCESS_DENIED, isAllowedEmail, sessionRejection } from "./access";
+import { resolveAuthUrls } from "./auth-urls";
+import { db, toObjectId } from "./db";
 import { ensureUserSetup } from "./user-data";
 
 const discordId = process.env.DISCORD_CLIENT_ID;
 const discordSecret = process.env.DISCORD_CLIENT_SECRET;
 
-/**
- * Private Anwendung: Registrieren und Anmelden duerfen nur die Adressen aus
- * ALLOWED_EMAILS. Ist die Liste leer, kann sich niemand neu registrieren.
- */
-export function allowedEmails() {
-  return (process.env.ALLOWED_EMAILS ?? "")
-    .split(",")
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean);
-}
+const DAY = 60 * 60 * 24;
 
-export function isAllowedEmail(email: string) {
-  return allowedEmails().includes(email.trim().toLowerCase());
-}
+const urls = resolveAuthUrls();
+
+/**
+ * Better-Auth-Dashboard (dash.better-auth.com): nur aktiv, wenn
+ * BETTER_AUTH_API_KEY gesetzt ist. Anfragen des Dashboards sind ueber
+ * signierte Tokens von Better Auth abgesichert; Freigabeliste und
+ * Sitzungspruefung unten gelten auch fuer alles, was darueber angelegt wird.
+ */
+const dashboard = process.env.BETTER_AUTH_API_KEY?.trim() ? [dash()] : [];
 
 export const auth = betterAuth({
   appName: "Jannikjbi Finanzen",
   database: mongodbAdapter(db),
-  baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
+  baseURL: urls.baseURL,
+  trustedOrigins: urls.trustedOrigins,
   secret: process.env.BETTER_AUTH_SECRET,
   emailAndPassword: {
     enabled: true,
     autoSignIn: true,
     minPasswordLength: 10,
     maxPasswordLength: 128,
+    // Nach einer Passwortaenderung per Reset alle Sitzungen beenden
+    revokeSessionsOnPasswordReset: true,
   },
   socialProviders: discordId && discordSecret ? { discord: { clientId: discordId, clientSecret: discordSecret } } : {},
   account: {
@@ -42,33 +46,60 @@ export const auth = betterAuth({
       requireLocalEmailVerified: true,
     },
   },
+  plugins: [
+    twoFactor({
+      issuer: "Jannikjbi Finanzen",
+      // "Diesem Geraet vertrauen" gilt 30 Tage
+      trustDeviceMaxAge: 30 * DAY,
+      backupCodeOptions: { amount: 10, length: 10 },
+    }),
+    ...dashboard,
+  ],
   session: {
-    expiresIn: 60 * 60 * 24 * 30,
-    updateAge: 60 * 60 * 24,
-    cookieCache: { enabled: true, maxAge: 5 * 60 },
+    // Kuerzer als frueher: nach 7 Tagen ohne Nutzung neu anmelden
+    expiresIn: 7 * DAY,
+    updateAge: DAY,
+    // Beendete Sitzungen gelten spaetestens nach einer Minute nicht mehr
+    cookieCache: { enabled: true, maxAge: 60 },
   },
-  // In MongoDB, damit das Limit auch ueber Serverless-Instanzen gilt
+  // In MongoDB gespeichert, damit das Limit auch ueber Serverless-Instanzen gilt
   rateLimit: {
     enabled: true,
     storage: "database",
     window: 60,
     max: 100,
     customRules: {
-      "/sign-in/email": { window: 60, max: 5 },
+      "/sign-in/email": { window: 15 * 60, max: 10 },
       "/sign-up/email": { window: 60 * 60, max: 5 },
+      "/change-password": { window: 60 * 60, max: 5 },
     },
   },
   databaseHooks: {
     user: {
       create: {
         before: async (user) => {
-          if (!isAllowedEmail(user.email)) {
-            throw new APIError("FORBIDDEN", { message: "Diese Adresse ist für diese Anwendung nicht freigeschaltet." });
-          }
+          if (!isAllowedEmail(user.email)) throw new APIError("FORBIDDEN", { message: ACCESS_DENIED });
           return { data: user };
         },
         after: async (user) => {
           await ensureUserSetup(user.id);
+        },
+      },
+    },
+    session: {
+      create: {
+        // Jede neue Sitzung wird geprueft - egal ueber welchen Weg sie entsteht
+        before: async (session, context) => {
+          const user = context
+            ? await context.context.internalAdapter.findUserById(session.userId)
+            : await db.collection("user").findOne({ _id: toObjectId(session.userId) ?? undefined });
+          const reason = sessionRejection({
+            email: user?.email,
+            twoFactorEnabled: (user as { twoFactorEnabled?: boolean } | null)?.twoFactorEnabled,
+            path: context?.path,
+          });
+          if (reason) throw new APIError("FORBIDDEN", { message: reason });
+          return { data: session };
         },
       },
     },

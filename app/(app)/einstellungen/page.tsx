@@ -1,17 +1,19 @@
 import { SettingsView } from "@/components/views/settings-view";
 import { getFinanceData } from "@/lib/server/data";
+import { getSecurityOverview } from "@/lib/server/security";
 import { requireUser } from "@/lib/server/session";
 
 export const metadata = { title: "Einstellungen" };
 
 export default async function SettingsPage() {
   const user = await requireUser();
-  const data = await getFinanceData(user.id);
+  const [data, security] = await Promise.all([getFinanceData(user.id), getSecurityOverview()]);
   const usage = new Map<string, number>();
   for (const tx of data.transactions) if (tx.categoryId) usage.set(tx.categoryId, (usage.get(tx.categoryId) ?? 0) + 1);
   return (
     <SettingsView
       user={{ name: user.name, email: user.email }}
+      security={security}
       timeZone={data.timeZone}
       categories={data.categories.map((c) => ({ ...c, usage: usage.get(c.id) ?? 0 }))}
       accounts={data.accounts}
