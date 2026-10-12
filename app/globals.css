@@ -1,196 +1,207 @@
 @import "tailwindcss";
+@import "@heroui/styles";
+
+@custom-variant dark (&:where(.dark, .dark *));
 
 /* -------------------------------------------------------------------------
-   Designsystem "Dark Fintech"
-   Fast schwarzer Grund, abgerundete Karten, Limette als Akzent,
-   kraeftige Statusfarben. Dunkel ist Standard, hell gibt es auf Wunsch.
+   Jannikjbi Finanzen - Designsystem (siehe docs/DESIGNSYSTEM.md)
+   Ueberschreibt die HeroUI-Variablen. Dunkel ist Standard.
    ------------------------------------------------------------------------- */
 
-:root {
-  --paper: #0b0d10;
-  --surface: #14171c;
-  --surface-2: #1b1f25;
-  --sunken: #1f242b;
-  --ink: #f3f5f6;
-  --ink-2: #aab1ba;
-  --ink-3: #6f7781;
-  --line: rgb(255 255 255 / 0.07);
-  --line-strong: rgb(255 255 255 / 0.14);
-  --accent: #c6f24e;
-  --accent-hover: #d6ff66;
-  --accent-ink: #0b0d10;
-  --accent-soft: rgb(198 242 78 / 0.12);
-  --pos: #8be36b;
-  --pos-soft: rgb(139 227 107 / 0.13);
-  --warn: #f5c451;
-  --warn-soft: rgb(245 196 81 / 0.13);
-  --caution: #ff9a52;
-  --caution-soft: rgb(255 154 82 / 0.14);
-  --neg: #ff6b6b;
-  --neg-soft: rgb(255 107 107 / 0.14);
-  --focus: #c6f24e;
-  --chart-1: #c6f24e;
-  --chart-2: #6ee7d8;
-  --chart-3: #8b9cff;
-  --chart-4: #ff9a52;
-  --chart-5: #f472b6;
-  --chart-6: #f5c451;
-  --shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 20px 40px -20px rgb(0 0 0 / 0.8);
-  color-scheme: dark;
-}
+@layer base {
+  :root,
+  .light,
+  [data-theme="light"] {
+    color-scheme: light;
+    --background: oklch(0.975 0.003 100);
+    --foreground: oklch(0.23 0.012 160);
+    --surface: oklch(0.995 0.002 100);
+    --surface-foreground: var(--foreground);
+    --surface-secondary: oklch(0.958 0.004 110);
+    --surface-tertiary: oklch(0.935 0.005 110);
+    --overlay: oklch(0.995 0.002 100);
+    --overlay-foreground: var(--foreground);
+    --muted: oklch(0.51 0.012 160);
+    --default: oklch(0.94 0.005 120);
+    --default-foreground: var(--foreground);
+    --border: oklch(0.9 0.005 120);
+    --separator: oklch(0.925 0.005 120);
+    --field-background: oklch(0.995 0.002 100);
+    --field-foreground: var(--foreground);
+    --field-border: oklch(0.87 0.006 120);
+    --accent: oklch(0.47 0.075 175);
+    --accent-foreground: oklch(0.985 0.005 175);
+    --success: oklch(0.52 0.11 155);
+    --success-foreground: oklch(0.985 0 0);
+    --warning: oklch(0.62 0.12 70);
+    --warning-foreground: oklch(0.2 0.02 70);
+    --danger: oklch(0.55 0.17 25);
+    --danger-foreground: oklch(0.985 0 0);
+    --segment: oklch(0.995 0.002 100);
+    --focus: oklch(0.47 0.075 175);
+    --backdrop: oklch(0.2 0.01 160 / 0.35);
+    --chart-income: oklch(0.53 0.11 225);
+    --chart-expense: oklch(0.6 0.125 55);
+    --surface-shadow: none;
+    --overlay-shadow: 0 1px 2px oklch(0.2 0.01 160 / 0.08), 0 12px 32px oklch(0.2 0.01 160 / 0.12);
+    --field-shadow: none;
+  }
 
-:root[data-theme="light"] {
-  --paper: #f2f4f7;
-  --surface: #ffffff;
-  --surface-2: #f7f8fa;
-  --sunken: #eceff3;
-  --ink: #0b0d10;
-  --ink-2: #4a525c;
-  --ink-3: #8a929c;
-  --line: rgb(11 13 16 / 0.07);
-  --line-strong: rgb(11 13 16 / 0.14);
-  --accent: #0b0d10;
-  --accent-hover: #262b33;
-  --accent-ink: #c6f24e;
-  --accent-soft: rgb(132 184 0 / 0.14);
-  --pos: #2f9e44;
-  --pos-soft: rgb(47 158 68 / 0.12);
-  --warn: #c78a00;
-  --warn-soft: rgb(199 138 0 / 0.13);
-  --caution: #e8590c;
-  --caution-soft: rgb(232 89 12 / 0.12);
-  --neg: #e03131;
-  --neg-soft: rgb(224 49 49 / 0.11);
-  --focus: #0b0d10;
-  --chart-1: #84b800;
-  --chart-2: #12b5a5;
-  --chart-3: #5c6fff;
-  --chart-4: #f76707;
-  --chart-5: #e64980;
-  --chart-6: #f2a900;
-  --shadow: 0 1px 2px rgb(11 13 16 / 0.05), 0 12px 32px -16px rgb(11 13 16 / 0.18);
-  color-scheme: light;
-}
+  .dark,
+  [data-theme="dark"] {
+    color-scheme: dark;
+    --background: oklch(0.165 0.004 160);
+    --foreground: oklch(0.95 0.006 100);
+    --surface: oklch(0.198 0.005 160);
+    --surface-foreground: var(--foreground);
+    --surface-secondary: oklch(0.228 0.005 160);
+    --surface-tertiary: oklch(0.255 0.006 160);
+    --overlay: oklch(0.215 0.005 160);
+    --overlay-foreground: var(--foreground);
+    --muted: oklch(0.69 0.008 150);
+    --default: oklch(0.255 0.006 160);
+    --default-foreground: var(--foreground);
+    --border: oklch(0.285 0.006 160);
+    --separator: oklch(0.25 0.005 160);
+    --field-background: oklch(0.182 0.005 160);
+    --field-foreground: var(--foreground);
+    --field-border: oklch(0.3 0.006 160);
+    --accent: oklch(0.8 0.07 172);
+    --accent-foreground: oklch(0.2 0.025 172);
+    --success: oklch(0.75 0.1 155);
+    --success-foreground: oklch(0.2 0.02 155);
+    --warning: oklch(0.81 0.1 80);
+    --warning-foreground: oklch(0.2 0.02 80);
+    --danger: oklch(0.69 0.14 25);
+    --danger-foreground: oklch(0.15 0.02 25);
+    --segment: oklch(0.29 0.006 160);
+    --focus: oklch(0.8 0.07 172);
+    --backdrop: oklch(0.08 0.004 160 / 0.6);
+    --chart-income: oklch(0.65 0.11 215);
+    --chart-expense: oklch(0.665 0.125 58);
+    --surface-shadow: none;
+    --overlay-shadow: 0 0 0 1px oklch(1 0 0 / 0.06), 0 16px 40px oklch(0 0 0 / 0.45);
+    --field-shadow: none;
+  }
 
-@theme inline {
-  --color-paper: var(--paper);
-  --color-surface: var(--surface);
-  --color-surface-2: var(--surface-2);
-  --color-sunken: var(--sunken);
-  --color-ink: var(--ink);
-  --color-ink-2: var(--ink-2);
-  --color-ink-3: var(--ink-3);
-  --color-line: var(--line);
-  --color-line-strong: var(--line-strong);
-  --color-accent: var(--accent);
-  --color-accent-hover: var(--accent-hover);
-  --color-accent-ink: var(--accent-ink);
-  --color-accent-soft: var(--accent-soft);
-  --color-pos: var(--pos);
-  --color-pos-soft: var(--pos-soft);
-  --color-warn: var(--warn);
-  --color-warn-soft: var(--warn-soft);
-  --color-caution: var(--caution);
-  --color-caution-soft: var(--caution-soft);
-  --color-neg: var(--neg);
-  --color-neg-soft: var(--neg-soft);
+  :root {
+    --radius: 0.375rem;
+    --field-radius: 0.375rem;
+    --field-border-width: 1px;
+    --panel-radius: 0.625rem;
+    --tooltip-delay: 400ms;
+    --skeleton-animation: pulse;
+  }
 
-  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
-  /* Frueher Serife - jetzt ueberall die gleiche moderne Groteske */
-  --font-serif: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
 
-  --radius-xs: 6px;
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 22px;
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 20px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-  --shadow-float: var(--shadow);
-}
+  ::selection {
+    background: color-mix(in oklab, var(--accent) 30%, transparent);
+  }
 
-/* Karte: die Grundflaeche fuer fast alle Inhalte */
-@utility card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  padding: 1.25rem;
-  @media (width >= 40rem) {
-    padding: 1.5rem;
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
-html,
-body {
-  min-height: 100%;
+@theme inline {
+  --font-sans: var(--font-schibsted), ui-sans-serif, system-ui, sans-serif;
+  --color-chart-income: var(--chart-income);
+  --color-chart-expense: var(--chart-expense);
+  --radius-panel: var(--panel-radius);
 }
 
-body {
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
+@layer components {
+  /* Zahlen immer mit Tabellenziffern */
+  .num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+  /* Punkt und Komma proportional - sonst wirken Betraege wie Schreibmaschine */
+  .num .sep,
+  .kpi .sep {
+    font-variant-numeric: normal;
+    font-feature-settings: "tnum" 0;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--panel-radius);
+  }
+
+  .kpi {
+    font-size: 40px;
+    line-height: 44px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .label {
+    font-size: 12.5px;
+    line-height: 18px;
+    font-weight: 500;
+    color: var(--muted);
+  }
+
+  /* Datenliste: Zeilen mit Haarlinie dazwischen */
+  .rows > * + * {
+    border-top: 1px solid var(--separator);
+  }
 }
 
-/* Ehemalige Serifen-Ueberschriften kraeftig statt duenn */
-.font-serif {
-  font-weight: 700;
-  letter-spacing: -0.035em;
-}
-
-/* Betraege: Tabellenziffern, damit Spalten exakt fluchten */
-.num {
-  font-variant-numeric: tabular-nums lining-nums;
-  font-feature-settings: "tnum" 1, "lnum" 1;
-}
-
-:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-  border-radius: 6px;
-}
-
-::selection {
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-
-/* Schraffur fuer Hochrechnungen */
-.hatch {
-  background-image: repeating-linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--ink) 30%, transparent) 0 1.5px,
-    transparent 1.5px 6px
-  );
-}
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes sheet-up {
-  from { transform: translateY(24px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-@keyframes sheet-left {
-  from { transform: translateX(24px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
-@keyframes toast-in {
-  from { transform: translateY(8px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-@keyframes rise {
-  from { transform: translateY(6px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+/* -------------------------------------------------------------------------
+   Anpassungen an HeroUI: sachlichere Radien statt Pillenform
+   ------------------------------------------------------------------------- */
+@layer components {
+  .button,
+  .toggle-button,
+  .tabs__tab,
+  .tabs__indicator {
+    border-radius: var(--radius);
+  }
+  .toggle-button-group .toggle-button {
+    border-radius: 0;
+  }
+  .toggle-button-group--horizontal .toggle-button:first-child {
+    border-start-start-radius: var(--radius);
+    border-end-start-radius: var(--radius);
+  }
+  .toggle-button-group--horizontal .toggle-button:last-child {
+    border-start-end-radius: var(--radius);
+    border-end-end-radius: var(--radius);
+  }
+  .chip {
+    border-radius: 4px;
+  }
+  .list-box-item,
+  .menu-item {
+    border-radius: calc(var(--radius) - 1px);
+  }
+  .calendar__cell {
+    border-radius: var(--radius);
+  }
+  .modal__dialog,
+  .alert-dialog__dialog {
+    border-radius: var(--panel-radius);
   }
 }

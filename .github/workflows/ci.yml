@@ -17,5 +17,9 @@ jobs:
       - run: npm ci
       - name: Typen pruefen
         run: npm run typecheck
-      - name: Tests (inkl. Isolation gegen MongoDB im Speicher)
+      - name: Tests (Finanzlogik, Migrationen, Server Actions gegen MongoDB im Speicher)
         run: npm test
+      - name: Build
+        run: npm run build
+        env:
+          BETTER_AUTH_SECRET: ci-build-only-not-a-secret

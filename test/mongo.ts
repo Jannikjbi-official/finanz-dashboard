@@ -12,7 +12,7 @@ export async function startTestMongo(dbName = "test") {
   return {
     server,
     async stop() {
-      const { client } = await import("@/lib/mongo");
+      const { client } = await import("@/lib/server/db");
       await client.close();
       await server.stop();
     },

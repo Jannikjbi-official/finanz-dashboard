@@ -1,7 +1,6 @@
 /**
- * Formatierung fuer die Oberflaeche. Alle Betraege kommen als Cent.
- * Locale und Waehrung sind vorerst fest (de-DE, EUR) - die Nutzereinstellung
- * existiert bereits und wird hier spaeter durchgereicht.
+ * Formatierung fuer die Oberflaeche. Alle Betraege kommen als Cent,
+ * dargestellt wird in Euro mit deutschem Zahlenformat.
  */
 
 const LOCALE = "de-DE";
@@ -19,7 +18,8 @@ const percent = new Intl.NumberFormat(LOCALE, { style: "percent", maximumFractio
 /** "1.234,56 €" - mit `signed` immer mit Vorzeichen, mit `whole` ohne Cent. */
 export function formatMoney(cents: number, options: { signed?: boolean; whole?: boolean } = {}) {
   const format = options.whole ? moneyWhole : money;
-  const text = format.format(cents / 100);
+  // -0 nicht als "−0,00 €" anzeigen
+  const text = format.format(cents === 0 ? 0 : cents / 100);
   if (options.signed && cents > 0) return `+${text}`;
   // Typografisches Minus statt Bindestrich
   return text.replace("-", "−");
@@ -105,4 +105,11 @@ export function formatWindow(from: string | null, to: string | null) {
   if (from && !to) return `ab ${formatDayShort(from)}`;
   if (!from && to) return `bis ${formatDayShort(to)}`;
   return formatDayShort((from ?? to)!);
+}
+
+/** Betrag fuer ein Eingabefeld: 1299 -> "12,99" (ohne Tausenderpunkte). */
+export function formatAmountInput(cents: number) {
+  const sign = cents < 0 ? "-" : "";
+  const abs = Math.abs(cents);
+  return `${sign}${Math.floor(abs / 100)},${String(abs % 100).padStart(2, "0")}`;
 }

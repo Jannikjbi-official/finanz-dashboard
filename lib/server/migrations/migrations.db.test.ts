@@ -13,7 +13,8 @@ afterAll(async () => {
 
 describe("Migrationen gegen echte Daten", () => {
   it("verknuepft alte Umbuchungspaare und kopiert Erstattungen", async () => {
-    const { db, transactions, refunds, planned, settings } = await import("@/lib/mongo");
+    const { db, transactions, planned, settings, recurring } = await import("@/lib/server/db");
+    const refunds = db.collection("refunds");
     const { migrations } = await import("./index");
     const { runMigrations } = await import("./runner");
 
@@ -34,6 +35,16 @@ describe("Migrationen gegen echte Daten", () => {
       accountId: null, note: null, createdAt,
     });
     await db.collection("user").insertOne({ name: "Bestand", email: "b@example.org" });
+    await recurring.insertMany([
+      {
+        userId: "u1", type: "expense", amountCents: 12_99, title: "Netflix", interval: "monthly",
+        categoryId: null, startDate: "2026-01-05", nextDue: "2026-11-05", active: true, note: null, createdAt,
+      },
+      {
+        userId: "u1", type: "expense", amountCents: 800_00, title: "Miete", interval: "monthly",
+        categoryId: null, startDate: "2026-01-01", nextDue: "2026-11-01", active: false, note: null, createdAt,
+      },
+    ]);
 
     const results = await runMigrations(db, migrations, { dryRun: false });
     expect(results.map((r) => r.id)).toEqual([
@@ -41,6 +52,8 @@ describe("Migrationen gegen echte Daten", () => {
       "002-transfer-groups",
       "003-refunds-to-planned",
       "004-recurring-drift",
+      "005-planned-to-transactions",
+      "006-recurring-status-cost-type",
     ]);
 
     const pair = await transactions.find({ title: /^Umbuchung/ }).toArray();
@@ -51,6 +64,14 @@ describe("Migrationen gegen echte Daten", () => {
     expect(await planned.countDocuments({ userId: "u1", status: "open", kind: "income" })).toBe(1);
     expect(await refunds.countDocuments()).toBe(1); // Original bleibt
     expect((await settings.findOne({}))?.onboardingCompletedAt).toBeInstanceOf(Date);
+
+    // 005: die offene Erstattung (ohne Termin) wird nicht eingeplant - nichts erfinden
+    expect(await transactions.countDocuments({ status: "pending" })).toBe(0);
+
+    // 006: Status und Kostenart ergaenzt, altes Feld bleibt
+    const netflix = await recurring.findOne({ title: "Netflix" });
+    expect(netflix).toMatchObject({ status: "active", costType: "subscription", active: true });
+    expect(await recurring.findOne({ title: "Miete" })).toMatchObject({ status: "paused", costType: "rent" });
 
     // Zweiter Lauf: nichts mehr zu tun
     expect(await runMigrations(db, migrations, { dryRun: false })).toEqual([]);

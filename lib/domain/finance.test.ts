@@ -1,295 +1,348 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildForecast,
-  firstDayBelow,
-  flowSummary,
-  horizonBalances,
-  lowestPoint,
-  type ForecastInput,
-} from "./forecast";
-import { evaluateSafety, resolveReserve } from "./safety";
-import { checkAffordability, purchaseEvents } from "./affordability";
-import { goalState } from "./goals";
-import { projectBudget } from "./budgets";
-import { findAnomalies, savingsRate } from "./insights";
-import { expandScenario } from "./scenario";
+import { chargesByMonth, fixedCostSummary, nextCharge, subscriptionSummary } from "./commitments";
+import { accountBalance, accountBalances, accountHistory, monthSummary, monthlyHistory, spendingBaseline } from "./ledger";
+import { availability, openItems, savingsEstimate } from "./overview";
+import { cancellationDeadline, monthlyEquivalent, openDues, reopenDue, settleDue, yearlyTotal } from "./recurring";
+import type { Account, Recurring, Transaction } from "./types";
 
-const eur = (cents: number) => `${(cents / 100).toFixed(2)} €`;
-const day = (date: string) => date;
+const TODAY = "2026-10-12";
 
-/** Typischer Fall: Gehalt am 1., Miete am 3., Netflix am 15. */
-function baseInput(overrides: Partial<ForecastInput> = {}): ForecastInput {
+function account(overrides: Partial<Account> = {}): Account {
+  return { id: "giro", name: "Girokonto", kind: "giro", startBalanceCents: 0, liquid: true, archived: false, ...overrides };
+}
+
+let txCounter = 0;
+function tx(overrides: Partial<Transaction> = {}): Transaction {
+  txCounter += 1;
   return {
-    today: "2026-10-07",
-    horizonDays: 90,
-    openingBalanceCents: 1500_00,
-    recurring: [
-      { id: "gehalt", title: "Gehalt", kind: "income", amountCents: 2500_00, interval: "monthly", startDate: "2026-01-01", nextDue: "2026-11-01", active: true },
-      { id: "miete", title: "Miete", kind: "expense", amountCents: 900_00, interval: "monthly", startDate: "2026-01-03", nextDue: "2026-11-03", active: true },
-      { id: "netflix", title: "Netflix", kind: "expense", amountCents: 13_99, interval: "monthly", startDate: "2026-01-15", nextDue: "2026-10-15", active: true },
-      { id: "pausiert", title: "Gym", kind: "expense", amountCents: 30_00, interval: "monthly", startDate: "2026-01-10", nextDue: "2026-10-10", active: false },
-    ],
-    planned: [],
-    goals: [],
-    variableMonthlyCents: 0,
-    variableSpentThisMonthCents: 0,
+    id: `tx${String(txCounter).padStart(4, "0")}`,
+    type: "expense",
+    status: "booked",
+    amountCents: 1000,
+    date: TODAY,
+    title: "Buchung",
+    note: null,
+    categoryId: null,
+    accountId: "giro",
+    transferGroupId: null,
+    recurringId: null,
+    recurringDue: null,
     ...overrides,
   };
 }
 
-describe("Prognose", () => {
-  it("bucht wiederkehrende Zahlungen an den richtigen Tagen", () => {
-    const forecast = buildForecast(baseInput());
-    const labels = forecast.events.slice(0, 4).map((e) => `${e.date} ${e.label}`);
-    expect(labels).toEqual([
-      "2026-10-15 Netflix",
-      "2026-11-01 Gehalt",
-      "2026-11-03 Miete",
-      "2026-11-15 Netflix",
-    ]);
-    // Pausierte Abos zaehlen nicht
-    expect(forecast.events.some((e) => e.refId === "pausiert")).toBe(false);
-    expect(forecast.days[8].balanceCents).toBe(1500_00 - 13_99);
+function rec(overrides: Partial<Recurring> = {}): Recurring {
+  return {
+    id: "r1",
+    type: "expense",
+    title: "Abo",
+    provider: null,
+    amountCents: 1000,
+    interval: "monthly",
+    startDate: "2026-01-20",
+    nextDue: "2026-10-20",
+    status: "active",
+    costType: "subscription",
+    categoryId: null,
+    accountId: "giro",
+    endDate: null,
+    cancelledOn: null,
+    noticePeriod: null,
+    note: null,
+    ...overrides,
+  };
+}
+
+describe("Abonnementkosten", () => {
+  it("rechnet Intervalle korrekt auf Monat und Jahr", () => {
+    expect(monthlyEquivalent({ amountCents: 120_00, interval: "yearly" })).toBe(10_00);
+    expect(yearlyTotal({ amountCents: 120_00, interval: "yearly" })).toBe(120_00);
+    expect(monthlyEquivalent({ amountCents: 30_00, interval: "quarterly" })).toBe(10_00);
+    expect(yearlyTotal({ amountCents: 30_00, interval: "quarterly" })).toBe(120_00);
+    expect(monthlyEquivalent({ amountCents: 12_99, interval: "monthly" })).toBe(12_99);
+    expect(yearlyTotal({ amountCents: 12_99, interval: "monthly" })).toBe(155_88);
+    // 52 Wochen / 12 Monate
+    expect(monthlyEquivalent({ amountCents: 3_00, interval: "weekly" })).toBe(13_00);
+    expect(yearlyTotal({ amountCents: 3_00, interval: "weekly" })).toBe(156_00);
   });
 
-  it("liefert Staende fuer die Prognose-Horizonte", () => {
-    const forecast = buildForecast(baseInput());
-    const horizons = horizonBalances(forecast);
-    expect(horizons.map((h) => h.days)).toEqual([7, 14, 30, 60, 90]);
-    // +30 Tage = 06.11.: Gehalt und Miete sind durch
-    expect(horizons[2]).toEqual({ days: 30, date: "2026-11-06", balanceCents: 1500_00 - 13_99 + 2500_00 - 900_00 });
-  });
-
-  it("verteilt variable Ausgaben, im laufenden Monat nur den Rest", () => {
-    const forecast = buildForecast(
-      baseInput({ recurring: [], variableMonthlyCents: 500_00, variableSpentThisMonthCents: 250_00 }),
-    );
-    // Oktober: 250 € Rest auf 25 Tage (7.-31.) = 10 €/Tag
-    expect(forecast.days[0].variableCents).toBe(-10_00);
-    const october = forecast.days.filter((d) => d.date.startsWith("2026-10"));
-    expect(october.reduce((s, d) => s + d.variableCents, 0)).toBe(-250_00);
-    // November: 500 € auf 30 Tage
-    expect(forecast.days.find((d) => d.date === "2026-11-10")?.variableCents).toBe(-16_67);
-  });
-
-  it("plant vorsichtig: Ausgaben frueh, Einnahmen spaet, ohne Termin gar nicht", () => {
-    const forecast = buildForecast(
-      baseInput({
-        recurring: [],
-        planned: [
-          { id: "p1", title: "Reparatur", kind: "expense", amountCents: 300_00, dateFrom: "2026-10-20", dateTo: "2026-10-31", certainty: "fixed" },
-          { id: "p2", title: "Erstattung", kind: "income", amountCents: 80_00, dateFrom: "2026-10-10", dateTo: "2026-11-30", certainty: "expected" },
-          { id: "p3", title: "Steuer", kind: "income", amountCents: 400_00, dateFrom: null, dateTo: null, certainty: "expected" },
-          { id: "p4", title: "Ueberfaellig", kind: "expense", amountCents: 50_00, dateFrom: "2026-10-01", dateTo: null, certainty: "fixed" },
-        ],
-      }),
-    );
-    expect(forecast.events.map((e) => `${e.date} ${e.label}`)).toEqual([
-      "2026-10-07 Ueberfaellig",
-      "2026-10-20 Reparatur",
-      "2026-11-30 Erstattung",
-    ]);
-    expect(forecast.events[0].overdue).toBe(true);
-    expect(forecast.undated.map((p) => p.id)).toEqual(["p3"]);
-  });
-
-  it("zaehlt offene Abos aus dem laufenden Monat, nie gepflegte erst ab heute", () => {
-    const forecast = buildForecast(
-      baseInput({
-        recurring: [
-          { id: "a", title: "Strom", kind: "expense", amountCents: 80_00, interval: "monthly", startDate: "2026-01-05", nextDue: "2026-10-05", active: true },
-          { id: "b", title: "Alt", kind: "expense", amountCents: 10_00, interval: "monthly", startDate: "2025-01-02", nextDue: "2025-03-02", active: true },
-        ],
-      }),
-    );
-    const today = forecast.events.filter((e) => e.date === "2026-10-07");
-    expect(today.map((e) => e.label)).toEqual(["Strom"]);
-    expect(forecast.events.find((e) => e.label === "Alt")?.date).toBe("2026-11-02");
-  });
-
-  it("plant Sparraten ab naechstem Monat bis zum Ziel", () => {
-    const forecast = buildForecast(
-      baseInput({
-        recurring: [],
-        goals: [{ id: "g", title: "Urlaub", monthlyContributionCents: 200_00, targetCents: 1000_00, savedCents: 700_00 }],
-      }),
-    );
-    const goal = forecast.events.filter((e) => e.source === "goal");
-    expect(goal.map((e) => [e.date, e.amountCents])).toEqual([
-      ["2026-11-01", -200_00],
-      ["2026-12-01", -100_00],
-    ]);
-  });
-
-  it("findet Tiefpunkt und Unterschreitung", () => {
-    const forecast = buildForecast(baseInput({ openingBalanceCents: 100_00, recurring: [baseInput().recurring[2]] }));
-    expect(lowestPoint(forecast, 30)).toEqual({ date: "2026-10-15", balanceCents: 100_00 - 13_99 });
-    expect(lowestPoint(forecast, 60)).toEqual({ date: "2026-11-15", balanceCents: 100_00 - 2 * 13_99 });
-    expect(firstDayBelow(forecast, 90_00)?.date).toBe("2026-10-15");
-    expect(flowSummary(forecast, 30).fixedCents).toBe(-13_99);
-  });
-});
-
-describe("Sicherheitszone", () => {
-  it("nimmt ohne eigene Reserve einen Monat Fixkosten", () => {
-    expect(resolveReserve(null, 913_99)).toEqual({ reserveCents: 913_99, reserveSource: "fixed-costs" });
-    expect(resolveReserve(500_00, 913_99)).toEqual({ reserveCents: 500_00, reserveSource: "custom" });
-    expect(resolveReserve(null, 0)).toEqual({ reserveCents: 0, reserveSource: "none" });
-  });
-
-  it("stuft nachvollziehbar ein", () => {
-    const stable = evaluateSafety(buildForecast(baseInput()), resolveReserve(500_00, 0), eur, day);
-    expect(stable.level).toBe("stable");
-    expect(stable.reasons[0]).toContain("bleibt dein Stand über");
-
-    const below = evaluateSafety(buildForecast(baseInput({ openingBalanceCents: 300_00 })), resolveReserve(500_00, 0), eur, day);
-    expect(below.level).toBe("below");
-
-    // Miete am 03.11. vor dem Gehalt? Nein - Gehalt kommt am 01. Also: Reserve knapp unter Stand
-    const critical = evaluateSafety(
-      buildForecast(baseInput({ openingBalanceCents: 510_00 })),
-      resolveReserve(500_00, 0),
-      eur,
-      day,
-    );
-    expect(critical.level).toBe("critical");
-    expect(critical.breach?.date).toBe("2026-10-15");
-
-    const tight = evaluateSafety(
-      buildForecast(baseInput({ openingBalanceCents: 560_00 })),
-      resolveReserve(500_00, 0),
-      eur,
-      day,
-    );
-    expect(tight.level).toBe("tight");
-  });
-
-  it("berechnet den Spielraum ueber der Reserve", () => {
-    const report = evaluateSafety(buildForecast(baseInput()), resolveReserve(500_00, 0), eur, day);
-    // Tiefster Stand in 90 Tagen: 1500 - 13,99 = 1486,01 am 15.10.
-    expect(report.low90.balanceCents).toBe(1486_01);
-    expect(report.headroomCents).toBe(986_01);
-  });
-});
-
-describe("Kann ich mir das leisten?", () => {
-  const input = baseInput();
-  const goals = [{ id: "g", title: "Urlaub", monthlyContributionCents: 200_00, targetCents: 2000_00, savedCents: 0 }];
-
-  it("bewertet einen gedeckten Kauf", () => {
-    const result = checkAffordability(input, { label: "Laptop", amountCents: 300_00, date: "2026-10-07" }, 500_00, goals);
-    expect(result.verdict).toBe("comfortable");
-    expect(result.after.onDateCents).toBe(1200_00);
-    expect(result.gapCents).toBe(0);
-    expect(result.goalImpacts[0].delayMonths).toBe(0);
-    expect(result.recovery?.months).toBe(1);
-  });
-
-  it("zeigt Reserve-Unterschreitung und Zielkonflikt", () => {
-    const result = checkAffordability(input, { label: "Laptop", amountCents: 1200_00, date: "2026-10-07" }, 500_00, goals);
-    expect(result.verdict).toBe("tight");
-    expect(result.reserveBreach?.date).toBe("2026-10-07");
-    expect(result.overdraft).toBeNull();
-    // Spielraum 986,01 € -> es fehlen 213,99 €, bei 200 €/Monat Sparrate 2 Monate
-    expect(result.gapCents).toBe(213_99);
-    expect(result.goalImpacts[0].delayMonths).toBe(2);
-  });
-
-  it("erkennt nicht gedeckte Kaeufe", () => {
-    // 1.499 € von 1.500 € - danach reicht es nicht einmal fuer Netflix am 15.
-    const result = checkAffordability(input, { label: "Laptop", amountCents: 1499_00, date: "2026-10-07" }, 500_00, []);
-    expect(result.verdict).toBe("not-affordable");
-    expect(result.overdraft?.date).toBe("2026-10-15");
-  });
-
-  it("verteilt Raten mit Rundungsrest auf die erste", () => {
-    const events = purchaseEvents({ label: "Sofa", amountCents: 1000_00, date: "2026-10-31", installments: 3 });
-    expect(events.map((e) => [e.date, e.amountCents])).toEqual([
-      ["2026-10-31", -333_34],
-      ["2026-11-30", -333_33],
-      ["2026-12-31", -333_33],
-    ]);
-  });
-});
-
-describe("Sparziele", () => {
-  it("berechnet Rate, Termin und Status", () => {
-    const state = goalState(
-      { targetCents: 1200_00, savedCents: 200_00, deadline: "2027-04-30", monthlyContributionCents: 100_00 },
-      "2026-10-07",
-    );
-    expect(state.monthsLeft).toBe(6);
-    expect(state.requiredMonthlyCents).toBe(166_67);
-    expect(state.expectedMonth).toBe("2027-08");
-    expect(state.status).toBe("behind");
-
-    expect(goalState({ targetCents: 100_00, savedCents: 100_00, deadline: null, monthlyContributionCents: null }, "2026-10-07").status).toBe("reached");
-    expect(goalState({ targetCents: 100_00, savedCents: 0, deadline: null, monthlyContributionCents: null }, "2026-10-07").status).toBe("no-plan");
-  });
-});
-
-describe("Budgets", () => {
-  it("rechnet bis Monatsende hoch", () => {
-    // 10 von 31 Tagen, 150 € ausgegeben, Durchschnitt 300 €
-    const projection = projectBudget({ budgetCents: 300_00, spentCents: 150_00, averageCents: 300_00 }, "2026-10", "2026-10-10");
-    expect(projection.projectedCents).toBeGreaterThan(300_00);
-    expect(projection.status).toBe("projected-over");
-    expect(projection.remainingCents).toBe(150_00);
-
-    const closed = projectBudget({ budgetCents: 300_00, spentCents: 240_00, averageCents: 0 }, "2026-09", "2026-10-10");
-    expect(closed).toMatchObject({ projectedCents: 240_00, method: "closed", status: "watch" });
-  });
-});
-
-describe("Auffaelligkeiten", () => {
-  it("vergleicht mit dem eigenen Durchschnitt, anteilig im laufenden Monat", () => {
-    const anomalies = findAnomalies(
+  it("summiert nur aktive Abos; gekuendigte und pausierte zaehlen nicht", () => {
+    const summary = subscriptionSummary(
       [
-        { categoryId: "f", name: "Freizeit", currentCents: 131_00, previousCents: [100_00, 100_00, 100_00] },
-        { categoryId: "l", name: "Lebensmittel", currentCents: 105_00, previousCents: [300_00, 300_00] },
-        { categoryId: "n", name: "Neu", currentCents: 80_00, previousCents: [0, 0] },
+        rec({ id: "netflix", amountCents: 13_99 }),
+        rec({ id: "jahr", amountCents: 120_00, interval: "yearly", startDate: "2026-03-01", nextDue: "2027-03-01" }),
+        rec({ id: "pause", status: "paused" }),
+        rec({ id: "weg", status: "cancelled" }),
+        rec({ id: "miete", costType: "rent", amountCents: 800_00 }),
       ],
-      "2026-09",
-      "2026-10-07",
+      TODAY,
     );
-    expect(anomalies.map((a) => [a.name, a.direction])).toEqual([
-      ["Lebensmittel", "lower"],
-      ["Neu", "new"],
-      ["Freizeit", "higher"],
-    ]);
-    expect(anomalies.find((a) => a.name === "Freizeit")?.changeRatio).toBeCloseTo(0.31);
+    expect(summary.activeCount).toBe(2);
+    expect(summary.monthlyTotal).toBe(13_99 + 10_00);
+    expect(summary.yearlyTotal).toBe(13_99 * 12 + 120_00);
+    expect(summary.mostExpensive.map((entry) => entry.id)).toEqual(["netflix", "jahr"]);
   });
 
-  it("sparquote", () => {
-    expect(savingsRate(2000_00, 1500_00)).toBe(0.25);
-    expect(savingsRate(0, 100)).toBeNull();
+  it("zeigt beim Jahresabo die echte Abbuchung im Faelligkeitsmonat, nicht 10 € pro Monat", () => {
+    const yearly = rec({ amountCents: 120_00, interval: "yearly", startDate: "2026-03-01", nextDue: "2027-03-01" });
+    const months = chargesByMonth([yearly], TODAY, 12);
+    expect(months).toHaveLength(12);
+    expect(months.find((month) => month.month === "2027-03")?.total).toBe(120_00);
+    expect(months.filter((month) => month.total > 0)).toHaveLength(1);
+  });
+
+  it("findet die naechste Abbuchung", () => {
+    const charge = nextCharge(
+      [rec({ id: "a", nextDue: "2026-10-25" }), rec({ id: "b", nextDue: "2026-10-14" }), rec({ id: "c", status: "paused", nextDue: "2026-10-13" })],
+      TODAY,
+    );
+    expect(charge).toMatchObject({ date: "2026-10-14", entry: { id: "b" } });
+  });
+
+  it("gekuendigtes Abo bucht nur bis zum hinterlegten Vertragsende ab", () => {
+    const cancelled = rec({ status: "cancelled", nextDue: "2026-10-20", endDate: "2026-12-31" });
+    expect(openDues(cancelled, "2027-06-30")).toEqual(["2026-10-20", "2026-11-20", "2026-12-20"]);
+
+    const withoutEnd = rec({ status: "cancelled", nextDue: "2026-10-20", endDate: null });
+    expect(openDues(withoutEnd, "2027-06-30")).toEqual([]);
+
+    const summary = subscriptionSummary([cancelled, withoutEnd], TODAY);
+    expect(summary.runningOut).toHaveLength(1);
+    expect(summary.runningOut[0].remaining).toBe(30_00);
+  });
+
+  it("pausierte und archivierte Eintraege erzeugen keine Termine", () => {
+    expect(openDues(rec({ status: "paused" }), "2027-12-31")).toEqual([]);
+    expect(openDues(rec({ status: "archived" }), "2027-12-31")).toEqual([]);
+  });
+
+  it("berechnet die Kuendigungsfrist nur aus hinterlegten Angaben", () => {
+    expect(cancellationDeadline({ endDate: "2026-12-31", noticePeriod: { value: 3, unit: "months" } })).toBe("2026-09-30");
+    expect(cancellationDeadline({ endDate: "2026-12-31", noticePeriod: { value: 2, unit: "weeks" } })).toBe("2026-12-17");
+    expect(cancellationDeadline({ endDate: "2026-12-31", noticePeriod: null })).toBeNull();
+    expect(cancellationDeadline({ endDate: null, noticePeriod: { value: 1, unit: "months" } })).toBeNull();
   });
 });
 
-describe("Sandbox", () => {
-  it("loest monatliche Ereignisse bis zum Ende auf", () => {
-    const events = expandScenario(
-      [
-        { id: "a", label: "Fitnessstudio", amountCents: -40_00, repeat: "monthly", date: "2026-10-31", until: "2027-01-31" },
-        { id: "b", label: "Bonus", amountCents: 500_00, repeat: "once", date: "2026-12-15", until: null },
-      ],
-      "2027-06-30",
-    );
-    expect(events.map((e) => `${e.date} ${e.amountCents}`)).toEqual([
-      "2026-10-31 -4000",
-      "2026-11-30 -4000",
-      "2026-12-31 -4000",
-      "2027-01-31 -4000",
-      "2026-12-15 50000",
-    ]);
+describe("Termine, Monatsenden und Schaltjahre", () => {
+  it("haelt den Ankertag am Monatsende", () => {
+    const entry = rec({ startDate: "2026-01-31", nextDue: "2026-01-31" });
+    expect(openDues(entry, "2026-05-31")).toEqual(["2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30", "2026-05-31"]);
   });
 
-  it("veraendert nur die Prognose, nicht die Eingabe", () => {
-    const input = baseInput();
-    const before = JSON.stringify(input);
-    const extra = expandScenario([{ id: "x", label: "Kauf", amountCents: -100_00, repeat: "once", date: "2026-10-08", until: null }], "2027-01-05");
-    const forecast = buildForecast({ ...input, extraEvents: extra });
-    expect(forecast.days[1].balanceCents).toBe(1500_00 - 100_00);
-    expect(JSON.stringify(input)).toBe(before);
+  it("Jahresabo am 29. Februar", () => {
+    const entry = rec({ interval: "yearly", startDate: "2024-02-29", nextDue: "2025-02-28" });
+    expect(openDues(entry, "2028-12-31")).toEqual(["2025-02-28", "2026-02-28", "2027-02-28", "2028-02-29"]);
+  });
+
+  it("erledigt nur den naechsten offenen Termin und kann ihn wieder oeffnen", () => {
+    const entry = rec({ startDate: "2026-01-31", nextDue: "2026-02-28" });
+    expect(settleDue(entry, "2026-02-28")).toBe("2026-03-31");
+    // Doppelklick / veraltete Ansicht: falscher Termin wird abgelehnt
+    expect(settleDue(entry, "2026-01-31")).toBeNull();
+
+    const after = { ...entry, nextDue: "2026-03-31" };
+    expect(reopenDue(after, "2026-02-28")).toBe("2026-02-28");
+    // aelterer Termin: nicht zuruecksetzen, sonst wuerde Spaeteres wieder offen
+    expect(reopenDue(after, "2026-01-31")).toBeNull();
+  });
+});
+
+describe("Kontostaende und Transfers", () => {
+  it("zaehlt nur gebuchte Buchungen", () => {
+    const giro = account({ startBalanceCents: 500_00 });
+    const list = [
+      tx({ type: "income", amountCents: 2000_00 }),
+      tx({ amountCents: 300_00 }),
+      tx({ amountCents: 99_00, status: "pending" }),
+      tx({ type: "income", amountCents: 50_00, status: "pending" }),
+    ];
+    expect(accountBalance(giro, list)).toBe(500_00 + 2000_00 - 300_00);
+  });
+
+  it("Transfer verschiebt Geld zwischen Konten, ist aber weder Einnahme noch Ausgabe", () => {
+    const giro = account({ startBalanceCents: 1000_00 });
+    const savings = account({ id: "spar", kind: "savings", liquid: false, startBalanceCents: 0 });
+    const list = [
+      tx({ amountCents: 200_00, transferGroupId: "t1", accountId: "giro", date: "2026-10-05" }),
+      tx({ type: "income", amountCents: 200_00, transferGroupId: "t1", accountId: "spar", date: "2026-10-05" }),
+      tx({ amountCents: 50_00, date: "2026-10-06" }),
+    ];
+    const balances = accountBalances([giro, savings], list);
+    expect(balances.get("giro")).toBe(750_00);
+    expect(balances.get("spar")).toBe(200_00);
+
+    const month = monthSummary(list, "2026-10");
+    expect(month.income).toBe(0);
+    expect(month.expense).toBe(50_00);
+
+    const result = availability({ accounts: [giro, savings], transactions: list, recurring: [], today: TODAY });
+    expect(result.totalBalance).toBe(950_00);
+    expect(result.liquidBalance).toBe(750_00);
+  });
+
+  it("Kontoverlauf zeigt den Saldo nach jeder Buchung", () => {
+    const giro = account({ startBalanceCents: 100_00 });
+    const list = [
+      tx({ id: "a", type: "income", amountCents: 50_00, date: "2026-10-01" }),
+      tx({ id: "b", amountCents: 30_00, date: "2026-10-02" }),
+      tx({ id: "c", amountCents: 999_00, date: "2026-10-03", status: "pending" }),
+    ];
+    expect(accountHistory(giro, list).map((entry) => [entry.tx.id, entry.balanceAfter])).toEqual([
+      ["b", 120_00],
+      ["a", 150_00],
+    ]);
+  });
+});
+
+describe("Aktuell verfuegbar", () => {
+  const giro = account({ startBalanceCents: 1000_00 });
+
+  it("zieht Faelliges und bis Monatsende Geplantes ab, aber zaehlt erwartete Einnahmen nicht dazu", () => {
+    const list = [
+      tx({ amountCents: 100_00, date: "2026-10-01" }), // bezahlt
+      tx({ amountCents: 40_00, date: "2026-10-10", status: "pending", title: "Rechnung offen" }), // faellig, unbezahlt
+      tx({ amountCents: 25_00, date: "2026-10-28", status: "pending" }), // geplant
+      tx({ amountCents: 70_00, date: "2026-11-03", status: "pending" }), // naechster Monat: zaehlt nicht
+      tx({ type: "income", amountCents: 300_00, date: "2026-10-30", status: "pending" }), // erwartet
+    ];
+    const recurring = [
+      rec({ id: "miete", costType: "rent", amountCents: 500_00, startDate: "2026-01-01", nextDue: "2026-11-01" }),
+      rec({ id: "abo", amountCents: 10_00, nextDue: "2026-10-20" }),
+      rec({ id: "gehalt", type: "income", costType: "other", amountCents: 2000_00, startDate: "2026-01-30", nextDue: "2026-10-30" }),
+    ];
+
+    const result = availability({ accounts: [giro], transactions: list, recurring, today: TODAY });
+    expect(result.liquidBalance).toBe(900_00);
+    expect(result.dueUnpaid.total).toBe(40_00);
+    expect(result.plannedExpenses.total).toBe(25_00 + 10_00);
+    expect(result.expectedIncome.total).toBe(2300_00);
+    expect(result.available).toBe(900_00 - 40_00 - 35_00);
+    expect(result.projectedMonthEnd).toBe(result.available + 2300_00);
+  });
+
+  it("zieht eine bereits bezahlte wiederkehrende Zahlung nicht erneut ab", () => {
+    const entry = rec({ id: "abo", amountCents: 10_00, startDate: "2026-01-05", nextDue: "2026-10-05" });
+
+    const before = availability({ accounts: [giro], transactions: [], recurring: [entry], today: TODAY });
+    expect(before.dueUnpaid.total).toBe(10_00);
+    expect(before.available).toBe(990_00);
+
+    // Als bezahlt markieren: Buchung entsteht, nextDue rueckt weiter
+    const paid = tx({ amountCents: 10_00, date: "2026-10-05", recurringId: "abo", recurringDue: "2026-10-05" });
+    const advanced = { ...entry, nextDue: settleDue(entry, "2026-10-05")! };
+    const after = availability({ accounts: [giro], transactions: [paid], recurring: [advanced], today: TODAY });
+
+    expect(after.liquidBalance).toBe(990_00);
+    expect(after.dueUnpaid.total).toBe(0);
+    // November-Termin liegt nach Monatsende
+    expect(after.plannedExpenses.total).toBe(0);
+    expect(after.available).toBe(990_00);
+  });
+
+  it("zaehlt einen Termin auch bei woechentlichem Intervall nur einmal", () => {
+    const weekly = rec({ interval: "weekly", amountCents: 5_00, startDate: "2026-10-01", nextDue: "2026-10-15" });
+    const items = openItems([], [weekly], "2026-10-31");
+    expect(items.map((item) => item.date)).toEqual(["2026-10-15", "2026-10-22", "2026-10-29"]);
+    expect(new Set(items.map((item) => item.key)).size).toBe(items.length);
+  });
+
+  it("ignoriert Posten auf nicht liquiden Konten", () => {
+    const savings = account({ id: "spar", kind: "savings", liquid: false, startBalanceCents: 5000_00 });
+    const result = availability({
+      accounts: [giro, savings],
+      transactions: [tx({ accountId: "spar", status: "pending", amountCents: 100_00, date: "2026-10-20" })],
+      recurring: [rec({ accountId: "spar", nextDue: "2026-10-25" })],
+      today: TODAY,
+    });
+    expect(result.available).toBe(1000_00);
+    expect(result.totalBalance).toBe(6000_00);
+  });
+
+  it("archivierte Konten zaehlen nicht", () => {
+    const old = account({ id: "alt", archived: true, startBalanceCents: 300_00 });
+    const result = availability({ accounts: [giro, old], transactions: [], recurring: [], today: TODAY });
+    expect(result.totalBalance).toBe(1000_00);
+    expect(result.liquidBalance).toBe(1000_00);
+  });
+
+  it("Prognose: Ueberfaelliges heute, gleiche Tage Ausgaben vor Einnahmen, Tiefpunkt", () => {
+    const result = availability({
+      accounts: [account({ startBalanceCents: 100_00 })],
+      transactions: [
+        tx({ status: "pending", amountCents: 20_00, date: "2026-10-01" }),
+        tx({ status: "pending", type: "income", amountCents: 500_00, date: "2026-10-20" }),
+        tx({ status: "pending", amountCents: 150_00, date: "2026-10-20" }),
+      ],
+      recurring: [],
+      today: TODAY,
+    });
+    expect(result.forecast.map((point) => [point.date, point.balanceAfter])).toEqual([
+      [TODAY, 80_00],
+      ["2026-10-20", -70_00],
+      ["2026-10-20", 430_00],
+    ]);
+    expect(result.lowestPoint).toEqual({ date: "2026-10-20", balance: -70_00 });
+  });
+
+  it("funktioniert ohne jegliche Daten", () => {
+    const result = availability({ accounts: [], transactions: [], recurring: [], today: TODAY });
+    expect(result).toMatchObject({
+      totalBalance: 0,
+      liquidBalance: 0,
+      available: 0,
+      projectedMonthEnd: 0,
+      forecast: [],
+    });
+    expect(subscriptionSummary([], TODAY)).toMatchObject({ activeCount: 0, monthlyTotal: 0, nextCharge: null });
+    expect(fixedCostSummary([])).toMatchObject({ monthlyExpenses: 0, byType: [] });
+    expect(monthlyHistory([], "2026-10")).toEqual([]);
+    expect(spendingBaseline([], TODAY)).toBeNull();
+    const current = monthSummary([], "2026-10");
+    expect(savingsEstimate({ current, availability: result, baseline: null })).toBeNull();
+  });
+});
+
+describe("Monate, Historie und Sparpotenzial", () => {
+  const list = [
+    tx({ type: "income", amountCents: 2000_00, date: "2026-08-01" }),
+    tx({ amountCents: 800_00, date: "2026-08-03", recurringId: "miete" }),
+    tx({ amountCents: 310_00, date: "2026-08-15" }),
+    tx({ type: "income", amountCents: 2000_00, date: "2026-09-01" }),
+    tx({ amountCents: 800_00, date: "2026-09-03", recurringId: "miete" }),
+    tx({ amountCents: 300_00, date: "2026-09-20" }),
+    tx({ type: "income", amountCents: 2000_00, date: "2026-10-01" }),
+    tx({ amountCents: 800_00, date: "2026-10-03", recurringId: "miete" }),
+    tx({ amountCents: 120_00, date: "2026-10-08" }),
+  ];
+
+  it("trennt feste und variable Ausgaben", () => {
+    expect(monthSummary(list, "2026-09")).toMatchObject({ income: 2000_00, expense: 1100_00, fixed: 800_00, variable: 300_00, net: 900_00 });
+  });
+
+  it("Historie beginnt beim ersten Monat mit Daten", () => {
+    const history = monthlyHistory(list, "2026-10", 12);
+    expect(history.map((month) => month.month)).toEqual(["2026-08", "2026-09", "2026-10"]);
+  });
+
+  it("Durchschnitt nur aus abgeschlossenen Monaten", () => {
+    const baseline = spendingBaseline(list, TODAY)!;
+    expect(baseline.months).toEqual(["2026-08", "2026-09"]);
+    expect(baseline.averageExpense).toBe(1105_00);
+    expect(baseline.variablePerDay).toBeCloseTo((310_00 + 300_00) / 61);
+  });
+
+  it("realistisches Sparpotenzial beruecksichtigt Verpflichtungen und variable Ausgaben", () => {
+    const giro = account({ startBalanceCents: 0 });
+    const recurring = [rec({ id: "abo", amountCents: 15_00, nextDue: "2026-10-20" })];
+    const a = availability({ accounts: [giro], transactions: list, recurring, today: TODAY });
+    const baseline = spendingBaseline(list, TODAY);
+    const estimate = savingsEstimate({ current: monthSummary(list, "2026-10"), availability: a, baseline })!;
+
+    expect(estimate.income).toBe(2000_00);
+    expect(estimate.committed).toBe(920_00 + 15_00);
+    expect(estimate.remainingDays).toBe(19);
+    expect(estimate.variableReserve).toBe(Math.round(((310_00 + 300_00) / 61) * 19));
+    expect(estimate.amount).toBe(2000_00 - 935_00 - estimate.variableReserve!);
   });
 });

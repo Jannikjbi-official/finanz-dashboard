@@ -1,7 +1,24 @@
 import { randomUUID } from "node:crypto";
 import type { Db } from "mongodb";
 import type { Migration } from "./runner";
-import type { PlannedDoc, RecurringDoc, RefundDoc, TransactionDoc, UserSettingsDoc } from "../../mongo";
+import type { LegacyPlannedDoc, RecurringDoc, SettingsDoc, TransactionDoc } from "../db";
+import { inferCostType } from "../../domain/labels";
+
+type PlannedDoc = LegacyPlannedDoc & { certainty?: string; transactionId?: string | null; legacyRefundId?: string | null };
+type UserSettingsDoc = SettingsDoc;
+type RefundDoc = {
+  userId: string;
+  title: string;
+  amountCents: number;
+  expectedFrom: string | null;
+  expectedTo: string | null;
+  status: "open" | "received";
+  receivedDate: string | null;
+  categoryId: string | null;
+  accountId: string | null;
+  note: string | null;
+  createdAt: Date;
+};
 import { addDays, daysBetween } from "../../domain/calendar";
 import { firstOccurrenceFrom, occurrencesBetween } from "../../domain/schedule";
 
@@ -31,7 +48,6 @@ export const migrations: Migration[] = [
           locale: "de-DE",
           timeZone: "Europe/Berlin",
           reserveCents: null,
-          // Bestandsnutzer haben schon Daten - kein Onboarding mehr noetig
           onboardingCompletedAt: now,
           createdAt: now,
           updatedAt: now,
@@ -103,7 +119,68 @@ export const migrations: Migration[] = [
         : `${changes.length} korrigiert: ${changes.join("; ")}`;
     },
   },
+  {
+    id: "005-planned-to-transactions",
+    description: "Offene geplante/erwartete Posten als offene Buchungen uebernehmen (Original bleibt)",
+    up: async (db, { dryRun }) => {
+      const open = await db.collection<PlannedDoc>("planned").find({ status: "open" }).toArray();
+      const target = db.collection<TransactionDoc>("transactions");
+      let copied = 0;
+      let undated = 0;
+
+      for (const item of open) {
+        const legacyPlannedId = item._id.toString();
+        if (await target.countDocuments({ legacyPlannedId }, { limit: 1 })) continue;
+        const date = item.dateFrom ?? item.dateTo;
+        // Ohne Termin laesst sich der Posten nicht einplanen - nichts erfinden
+        if (!date) {
+          undated += 1;
+          continue;
+        }
+        copied += 1;
+        if (dryRun) continue;
+
+        await target.insertOne({
+          userId: item.userId,
+          type: item.kind,
+          status: "pending",
+          amountCents: item.amountCents,
+          title: item.title,
+          note: item.note ?? null,
+          date,
+          categoryId: item.categoryId ?? null,
+          accountId: item.accountId ?? null,
+          transferGroupId: null,
+          recurringId: null,
+          recurringDue: null,
+          legacyPlannedId,
+          createdAt: item.createdAt ?? new Date(),
+        });
+      }
+
+      return `${copied} von ${open.length} offenen Posten uebernommen, ${undated} ohne Termin uebersprungen`;
+    },
+  },
+  {
+    id: "006-recurring-status-cost-type",
+    description: "Regelmaessige Zahlungen: Status und Kostenart ergaenzen (Feld 'active' bleibt)",
+    up: async (db, { dryRun }) => {
+      const collection = db.collection<RecurringDoc>("recurring");
+      const entries = await collection.find({ $or: [{ status: { $exists: false } }, { costType: { $exists: false } }] }).toArray();
+
+      for (const entry of entries) {
+        if (dryRun) continue;
+        const set: Partial<RecurringDoc> = {};
+        if (!entry.status) set.status = entry.active === false ? "paused" : "active";
+        if (!entry.costType) set.costType = entry.type === "expense" ? inferCostType(entry.title) : "other";
+        await collection.updateOne({ _id: entry._id }, { $set: set });
+      }
+
+      return `${entries.length} Eintraege ergaenzt`;
+    },
+  },
 ];
+
 
 /**
  * Faelligkeit wieder auf den Plan des Abos legen. Der alte Fehler hat

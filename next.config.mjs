@@ -28,17 +28,39 @@ const securityHeaders = [
   ...(isProduction ? [{ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" }] : []),
 ];
 
-/** Alte Adressen der frueheren Oberflaeche - Lesezeichen funktionieren weiter. */
-const legacyRoutes = [
+/**
+ * Adressen frueherer Versionen.
+ *
+ * Achtung: Die Vorversion hat /transaktionen, /konten, /einstellungen und
+ * /abos PERMANENT (308) auf /app/... umgeleitet. Browser speichern solche
+ * Umleitungen. Wuerden wir diese /app-Ziele jetzt zurueckleiten, entstuende
+ * eine Endlosschleife. Deshalb werden sie intern umgeschrieben (rewrite),
+ * nicht umgeleitet.
+ */
+const legacyRewrites = [
+  ["/app/geld/buchungen", "/transaktionen"],
+  ["/app/geld", "/konten"],
+  ["/app/einstellungen", "/einstellungen"],
+  ["/app/einstellungen/:path*", "/einstellungen"],
+  ["/app/planung/fixkosten", "/feste-kosten"],
+];
+
+const legacyRedirects = [
   ["/login", "/anmelden"],
-  ["/transaktionen", "/app/geld/buchungen"],
-  ["/konten", "/app/geld"],
-  ["/abos", "/app/planung/fixkosten"],
-  ["/budgets", "/app/planung/budgets"],
-  ["/erstattungen", "/app/planung/geplant"],
-  ["/auswertung", "/app/rueckblick/analysen"],
-  ["/daten", "/app/einstellungen/daten"],
-  ["/einstellungen", "/app/einstellungen"],
+  ["/app", "/"],
+  ["/app/geld/import", "/transaktionen"],
+  ["/app/planung", "/feste-kosten"],
+  ["/app/planung/geplant", "/transaktionen"],
+  ["/app/planung/budgets", "/"],
+  ["/app/planung/ziele", "/"],
+  ["/app/entscheiden/:path*", "/"],
+  ["/app/rueckblick/:path*", "/"],
+  ["/abos", "/abonnements"],
+  ["/budgets", "/"],
+  ["/erstattungen", "/transaktionen"],
+  ["/auswertung", "/"],
+  ["/daten", "/einstellungen"],
+  ["/willkommen", "/"],
 ];
 
 /** @type {import('next').NextConfig} */
@@ -49,7 +71,10 @@ const nextConfig = {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
   async redirects() {
-    return legacyRoutes.map(([source, destination]) => ({ source, destination, permanent: true }));
+    return legacyRedirects.map(([source, destination]) => ({ source, destination, permanent: false }));
+  },
+  async rewrites() {
+    return legacyRewrites.map(([source, destination]) => ({ source, destination }));
   },
 };
 

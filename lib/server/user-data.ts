@@ -1,68 +1,49 @@
 import "server-only";
-import { db, settings, USER_DATA_COLLECTIONS, type UserSettingsDoc } from "../mongo";
+import { categories, db, ensureIndexes, settings, USER_DATA_COLLECTIONS, type SettingsDoc } from "./db";
 
-/** Standard fuer neue Nutzer und Bestandsnutzer ohne Eintrag. */
-export function defaultSettings(userId: string): UserSettingsDoc {
+export const DEFAULT_TIME_ZONE = "Europe/Berlin";
+
+/** Grundkategorien - nur Struktur, keine Finanzwerte. */
+const DEFAULT_CATEGORIES: Array<{ name: string; kind: "income" | "expense"; color: string }> = [
+  { name: "Gehalt", kind: "income", color: "#5f9e8f" },
+  { name: "Sonstige Einnahmen", kind: "income", color: "#7c9c74" },
+  { name: "Wohnen", kind: "expense", color: "#b08a5a" },
+  { name: "Lebensmittel", kind: "expense", color: "#a39462" },
+  { name: "Mobilität", kind: "expense", color: "#6f8fa8" },
+  { name: "Verträge & Abos", kind: "expense", color: "#8a84a8" },
+  { name: "Versicherungen", kind: "expense", color: "#6d9a9a" },
+  { name: "Freizeit", kind: "expense", color: "#a87a86" },
+  { name: "Gesundheit", kind: "expense", color: "#8f9f78" },
+  { name: "Sonstiges", kind: "expense", color: "#8b8f94" },
+];
+
+export async function getSettings(userId: string): Promise<{ timeZone: string }> {
+  const doc = await settings.findOne({ _id: userId }, { projection: { timeZone: 1 } });
+  return { timeZone: typeof doc?.timeZone === "string" ? doc.timeZone : DEFAULT_TIME_ZONE };
+}
+
+/** Einstellungen und Grundkategorien fuer neue Nutzer. Idempotent. */
+export async function ensureUserSetup(userId: string) {
+  await ensureIndexes();
   const now = new Date();
-  return {
-    _id: userId,
-    currency: "EUR",
-    locale: "de-DE",
-    timeZone: "Europe/Berlin",
-    reserveCents: null,
-    variableEstimateCents: null,
-    onboardingCompletedAt: null,
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-export async function getSettings(userId: string): Promise<UserSettingsDoc> {
-  const existing = await settings.findOne({ _id: userId });
-  return existing ?? defaultSettings(userId);
-}
-
-export async function ensureSettings(userId: string) {
   await settings.updateOne(
     { _id: userId },
-    { $setOnInsert: defaultSettings(userId) },
+    { $setOnInsert: { _id: userId, currency: "EUR", locale: "de-DE", timeZone: DEFAULT_TIME_ZONE, createdAt: now, updatedAt: now } as SettingsDoc },
     { upsert: true },
   );
+
+  if ((await categories.countDocuments({ userId }, { limit: 1 })) > 0) return;
+  await categories.insertMany(DEFAULT_CATEGORIES.map((entry) => ({ ...entry, userId, createdAt: now })));
 }
 
-/**
- * Vollstaendiger Export aller Daten eines Nutzers (DSGVO Art. 20).
- * Interne Felder wie userId werden weggelassen.
- */
+/** Vollstaendiger Export aller Daten eines Nutzers als JSON-faehiges Objekt. */
 export async function exportUserData(userId: string) {
   const result: Record<string, unknown[]> = {};
-
   for (const name of USER_DATA_COLLECTIONS) {
-    const docs = await db
-      .collection(name)
-      .find({ userId }, { projection: { userId: 0 } })
-      .toArray();
+    const docs = await db.collection(name).find({ userId }, { projection: { userId: 0 } }).toArray();
     result[name] = docs.map(({ _id, ...rest }) => ({ id: String(_id), ...rest }));
   }
-
-  const ownSettings = await settings.findOne({ _id: userId }, { projection: { _id: 0 } });
-  result.settings = ownSettings ? [ownSettings] : [];
-
+  const own = await settings.findOne({ _id: userId }, { projection: { _id: 0 } });
+  result.settings = own ? [own] : [];
   return result;
-}
-
-/**
- * Loescht saemtliche Finanzdaten eines Nutzers. Wird aufgerufen, bevor Better
- * Auth den Nutzer selbst samt Sessions und verknuepften Logins entfernt.
- */
-export async function deleteUserData(userId: string) {
-  const counts: Record<string, number> = {};
-
-  for (const name of USER_DATA_COLLECTIONS) {
-    const { deletedCount } = await db.collection(name).deleteMany({ userId });
-    counts[name] = deletedCount;
-  }
-
-  await settings.deleteOne({ _id: userId });
-  return counts;
 }
