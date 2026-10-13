@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { isISODate } from "../../domain/calendar";
 import { duplicateKey, MAX_IMPORT_ROWS } from "../../import";
+import { LEGACY_PREFIX, legacyFilter, parseLegacyId } from "../import-undo";
 import { categories, ensureIndexes, imports, transactions, wishes, type TransactionDoc } from "../db";
 import { authorize, fail, fileNameSchema, firstIssue, ok, optionalId, ownsAccount, refresh, type ActionResult } from "./shared";
 
@@ -225,6 +226,7 @@ export async function undoImport(importId: string): Promise<ActionResult> {
   const auth = await authorize();
   if ("error" in auth) return auth.error;
   if (typeof importId !== "string" || !importId) return fail("Import nicht gefunden");
+  if (importId.startsWith(LEGACY_PREFIX)) return undoLegacyImport(auth.userId, importId);
 
   const doc = await imports.findOne({ _id: importId, userId: auth.userId });
   if (!doc) return fail("Import nicht gefunden");
@@ -245,4 +247,37 @@ export async function undoImport(importId: string): Promise<ActionResult> {
   await imports.updateOne({ _id: importId, userId: auth.userId }, { $set: { undoneAt: new Date(), undoneCount: deleted } });
   refresh();
   return ok(`Import rückgängig gemacht: ${deleted} ${doc.kind === "wishes" ? "Wünsche" : "Buchungen"} gelöscht`);
+}
+
+/**
+ * Alter Import ohne Import-ID: geloescht werden genau die Buchungen mit
+ * diesem Anlagezeitpunkt und einem importHash. Der Vorgang wird als
+ * rueckgaengig gemachter Import protokolliert.
+ */
+async function undoLegacyImport(userId: string, id: string): Promise<ActionResult> {
+  const createdAt = parseLegacyId(id);
+  if (!createdAt) return fail("Import nicht gefunden");
+
+  const filter = legacyFilter(userId, createdAt);
+  const docs = await transactions.find(filter, { projection: { date: 1 } }).toArray();
+  if (docs.length === 0) return fail("Dieser Import wurde bereits gelöscht.");
+
+  const deleted = (await transactions.deleteMany(filter)).deletedCount;
+  const dates = docs.map((doc) => doc.date).sort();
+  const now = new Date();
+  await imports.insertOne({
+    _id: randomUUID(),
+    userId,
+    kind: "transactions",
+    fileName: null,
+    accountId: null,
+    rowCount: docs.length,
+    dateFrom: dates[0],
+    dateTo: dates[dates.length - 1],
+    createdAt,
+    undoneAt: now,
+    undoneCount: deleted,
+  });
+  refresh();
+  return ok(`Import rückgängig gemacht: ${deleted} Buchungen gelöscht`);
 }

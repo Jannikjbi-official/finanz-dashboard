@@ -143,4 +143,6 @@ export type ImportInfo = {
   createdAt: string;
   undoneAt: string | null;
   undoneCount: number | null;
+  /** Import aus der Zeit vor der Import-ID, erkannt am gemeinsamen Anlagezeitpunkt. */
+  legacy?: boolean;
 };

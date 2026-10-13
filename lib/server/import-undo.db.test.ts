@@ -36,12 +36,14 @@ function rowsOf(csv: string): ImportRow[] {
 
 let env: Awaited<ReturnType<typeof startTestMongo>>;
 let db: typeof import("@/lib/server/db");
+let data: typeof import("@/lib/server/data");
 let actions: typeof import("./actions/import");
 let undo: typeof import("./import-undo");
 
 beforeAll(async () => {
   env = await startTestMongo("import-undo");
   db = await import("@/lib/server/db");
+  data = await import("@/lib/server/data");
   actions = await import("./actions/import");
   undo = await import("./import-undo");
 });
@@ -206,5 +208,45 @@ describe("Neue Importe mit Import-ID", () => {
     session.userId = "user-b";
     expect(await actions.undoImport(record!._id)).toMatchObject({ ok: false });
     expect(await db.transactions.countDocuments({ importId: record!._id })).toBe(2);
+  });
+});
+
+describe("Alte Importe in der Oberflaeche", () => {
+  it("zeigt einen Import ohne ID in der Liste und loescht per Knopf nur ihn", async () => {
+    const accountId = await giro();
+    await ownData("user-a", accountId);
+    const rows = rowsOf(CSV);
+    const createdAt = new Date("2026-10-13T20:15:00.000Z");
+    await legacyImport("user-a", accountId, rows, createdAt);
+    await legacyImport("user-a", accountId, rows.slice(0, 2), new Date("2026-10-01T08:00:00.000Z"));
+
+    const list = await data.loadImports("user-a", "transactions");
+    expect(list.map((entry) => [entry.id, entry.rowCount, entry.dateFrom, entry.dateTo, entry.legacy])).toEqual([
+      ["legacy:2026-10-13T20:15:00.000Z", 8, "2026-09-30", "2026-11-27", true],
+      ["legacy:2026-10-01T08:00:00.000Z", 2, "2026-09-30", "2026-10-01", true],
+    ]);
+
+    // Andere Nutzer finden ihn nicht
+    session.userId = "user-b";
+    expect(await actions.undoImport(list[0].id)).toMatchObject({ ok: false });
+    session.userId = "user-a";
+
+    expect(await actions.undoImport(list[0].id)).toMatchObject({ ok: true, message: "Import rückgängig gemacht: 8 Buchungen gelöscht" });
+    expect(await db.transactions.countDocuments({ createdAt })).toBe(0);
+    // Eigene Daten und der andere Import bleiben
+    expect(await db.transactions.countDocuments()).toBe(3 + 2);
+    expect(await db.recurring.countDocuments()).toBe(1);
+    expect(await actions.undoImport(list[0].id)).toMatchObject({ ok: false });
+
+    const after = await data.loadImports("user-a", "transactions");
+    expect(after[0]).toMatchObject({ rowCount: 8, undoneCount: 8 });
+    expect(after[0].legacy).toBeUndefined();
+    expect(after[0].undoneAt).not.toBeNull();
+    expect(after[1]).toMatchObject({ id: "legacy:2026-10-01T08:00:00.000Z", legacy: true });
+  });
+
+  it("lehnt ungueltige Kennungen ab", async () => {
+    expect(await actions.undoImport("legacy:kein-datum")).toMatchObject({ ok: false });
+    expect(await actions.undoImport("legacy:2026-10-13")).toMatchObject({ ok: false });
   });
 });

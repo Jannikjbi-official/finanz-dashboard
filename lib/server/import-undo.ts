@@ -116,3 +116,36 @@ export async function deleteImportBatch(db: Db, batch: ImportBatch) {
     .deleteMany({ _id: { $in: ids }, userId: batch.userId, createdAt: batch.createdAt });
   return { expected: ids.length, deleted: result.deletedCount };
 }
+
+/**
+ * Alte Importe (vor der Import-ID) als Liste: Alle Zeilen eines Imports
+ * wurden mit einem insertMany angelegt und tragen dasselbe createdAt und
+ * einen importHash. Von Hand erfasste Buchungen und Transfers haben keinen
+ * importHash und gehoeren nie dazu.
+ */
+export const LEGACY_PREFIX = "legacy:";
+
+export function legacyFilter(userId: string, createdAt: Date) {
+  return { userId, createdAt, importHash: { $type: "string" as const }, importId: { $in: [null] } };
+}
+
+export async function listLegacyImports(db: Db, userId: string, limit = 10) {
+  const groups = await db
+    .collection<TransactionDoc>("transactions")
+    .aggregate<{ _id: Date; count: number; dateFrom: string; dateTo: string }>([
+      { $match: { userId, importHash: { $type: "string" }, importId: { $in: [null] }, createdAt: { $type: "date" } } },
+      { $group: { _id: "$createdAt", count: { $sum: 1 }, dateFrom: { $min: "$date" }, dateTo: { $max: "$date" } } },
+      { $sort: { _id: -1 } },
+      { $limit: limit },
+    ])
+    .toArray();
+  return groups.map((group) => ({ createdAt: group._id, count: group.count, dateFrom: group.dateFrom, dateTo: group.dateTo }));
+}
+
+/** "legacy:2026-10-13T20:15:00.000Z" -> Datum, sonst null. */
+export function parseLegacyId(id: string): Date | null {
+  if (!id.startsWith(LEGACY_PREFIX)) return null;
+  const value = id.slice(LEGACY_PREFIX.length);
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) || date.toISOString() !== value ? null : date;
+}

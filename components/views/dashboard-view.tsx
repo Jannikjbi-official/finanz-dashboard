@@ -4,6 +4,7 @@ import { ArrowRight, Info, Warning } from "@phosphor-icons/react";
 import { Button, Disclosure, Tooltip } from "@heroui/react";
 import Link from "next/link";
 import { CashflowChart } from "@/components/charts/cashflow-chart";
+import { LastImportNotice } from "@/components/finance/import-list";
 import { ItemStatus } from "@/components/finance/item-status";
 import { SettleMenu } from "@/components/finance/settle-menu";
 import { useQuickAdd } from "@/components/shell/quick-add";
@@ -12,10 +13,20 @@ import { Panel } from "@/components/ui/panel";
 import { COST_TYPE_LABEL, INTERVAL_UNIT } from "@/lib/domain/labels";
 import { monthlyEquivalent } from "@/lib/domain/recurring";
 import type { Dashboard } from "@/lib/domain/dashboard";
-import type { Recurring, Transaction } from "@/lib/domain/types";
+import type { ImportInfo, Recurring, Transaction } from "@/lib/domain/types";
 import { formatDate, formatDayShort, formatMoney, formatMonth, formatPercent, monthName } from "@/lib/format";
 
-export function DashboardView({ dashboard, recurring, pending }: { dashboard: Dashboard; recurring: Recurring[]; pending: Transaction[] }) {
+export function DashboardView({
+  dashboard,
+  recurring,
+  pending,
+  lastImport = null,
+}: {
+  dashboard: Dashboard;
+  recurring: Recurring[];
+  pending: Transaction[];
+  lastImport?: ImportInfo | null;
+}) {
   const { openAccount, openTransaction } = useQuickAdd();
 
   if (!dashboard.hasAccounts) {
@@ -48,6 +59,7 @@ export function DashboardView({ dashboard, recurring, pending }: { dashboard: Da
   return (
     <div className="flex flex-col gap-4">
       <h1 className="sr-only">Übersicht</h1>
+      {lastImport && <LastImportNotice entry={lastImport} />}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <AvailabilityPanel dashboard={dashboard} className="lg:col-span-7" />
         <MonthPanel dashboard={dashboard} className="lg:col-span-5" />

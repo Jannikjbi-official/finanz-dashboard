@@ -4,7 +4,8 @@ import type { WithId } from "mongodb";
 import { todayIn } from "../domain/calendar";
 import type { Account, Category, ImportInfo, Recurring, Transaction, Wish } from "../domain/types";
 import { toAccount, toCategory, toImportInfo, toRecurring, toTransaction, toWish } from "./convert";
-import { accounts, categories, ensureIndexes, imports, recurring, transactions, wishes, type TransactionDoc } from "./db";
+import { accounts, categories, db, ensureIndexes, imports, recurring, transactions, wishes, type TransactionDoc } from "./db";
+import { LEGACY_PREFIX, listLegacyImports } from "./import-undo";
 import { getSettings } from "./user-data";
 
 export { toAccount, toCategory, toRecurring, toTransaction, toWish };
@@ -64,5 +65,24 @@ export async function loadWishes(userId: string): Promise<Wish[]> {
 /** Die letzten Importe, neueste zuerst. */
 export async function loadImports(userId: string, kind: ImportInfo["kind"], limit = 10): Promise<ImportInfo[]> {
   const docs = await imports.find({ userId, kind }).sort({ createdAt: -1 }).limit(limit).toArray();
-  return docs.map(toImportInfo);
+  const list = docs.map(toImportInfo);
+  if (kind !== "transactions") return list;
+
+  // Kontoimporte aus der Zeit vor der Import-ID ebenfalls anzeigen
+  const legacy = await listLegacyImports(db, userId, limit);
+  for (const batch of legacy) {
+    list.push({
+      id: `${LEGACY_PREFIX}${batch.createdAt.toISOString()}`,
+      kind: "transactions",
+      fileName: null,
+      rowCount: batch.count,
+      dateFrom: batch.dateFrom,
+      dateTo: batch.dateTo,
+      createdAt: batch.createdAt.toISOString(),
+      undoneAt: null,
+      undoneCount: null,
+      legacy: true,
+    });
+  }
+  return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
 }
