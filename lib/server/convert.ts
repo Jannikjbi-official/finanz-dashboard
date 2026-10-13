@@ -40,6 +40,7 @@ export function toTransaction(doc: WithId<TransactionDoc>): Transaction {
     recurringId: doc.recurringId ?? null,
     recurringDue: doc.recurringDue ?? null,
     bankPending: Boolean(doc.bankPending),
+    dismissedRecurring: doc.dismissedRecurring ?? [],
   };
 }
 

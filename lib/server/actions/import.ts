@@ -5,6 +5,7 @@ import { z } from "zod";
 import { isISODate } from "../../domain/calendar";
 import { duplicateKey, MAX_IMPORT_ROWS } from "../../import";
 import { LEGACY_PREFIX, legacyFilter, parseLegacyId } from "../import-undo";
+import { linkSureMatches, reopenLinkedDues } from "../recurring-link";
 import { accounts, categories, ensureIndexes, imports, toObjectId, transactions, wishes, type TransactionDoc } from "../db";
 import {
   anchorFor,
@@ -233,10 +234,13 @@ export async function importTransactions(input: ImportInput): Promise<ImportResu
     await imports.deleteOne({ _id: importId, userId: auth.userId });
     throw error;
   }
+  // Regelmaessige Zahlungen, die jetzt als Buchung da sind, nicht mehr als offen zaehlen
+  const linked = await linkSureMatches(auth.userId);
   refresh();
 
   const parts = [`${rows.length} Buchungen importiert`];
   if (skipped) parts.push(`${skipped} schon vorhanden`);
+  if (linked) parts.push(`${linked} regelmäßige Zahlungen zugeordnet`);
   if (replaced) parts.push(`${replaced} alte Vormerkungen ersetzt`);
   if (anchor?.ok) parts.push("Kontostand übernommen");
   return { ok: true, imported: rows.length, skipped, message: parts.join(", ") };
@@ -271,6 +275,10 @@ export async function undoImport(importId: string): Promise<ActionResult> {
     if (wishIds.length > 0) await transactions.deleteMany({ userId: auth.userId, wishId: { $in: wishIds }, status: "pending" });
     deleted = (await wishes.deleteMany({ userId: auth.userId, importId })).deletedCount;
   } else {
+    const linked = await transactions
+      .find({ userId: auth.userId, importId, recurringId: { $type: "string" } }, { projection: { recurringId: 1, recurringDue: 1 } })
+      .toArray();
+    await reopenLinkedDues(auth.userId, linked);
     deleted = (await transactions.deleteMany({ userId: auth.userId, importId })).deletedCount;
   }
 
@@ -289,8 +297,9 @@ async function undoLegacyImport(userId: string, id: string): Promise<ActionResul
   if (!createdAt) return fail("Import nicht gefunden");
 
   const filter = legacyFilter(userId, createdAt);
-  const docs = await transactions.find(filter, { projection: { date: 1 } }).toArray();
+  const docs = await transactions.find(filter, { projection: { date: 1, recurringId: 1, recurringDue: 1 } }).toArray();
   if (docs.length === 0) return fail("Dieser Import wurde bereits gelöscht.");
+  await reopenLinkedDues(userId, docs);
 
   const deleted = (await transactions.deleteMany(filter)).deletedCount;
   const dates = docs.map((doc) => doc.date).sort();

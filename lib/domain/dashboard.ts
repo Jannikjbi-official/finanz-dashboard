@@ -1,6 +1,7 @@
 import { addDays, monthOf, shiftMonth, type ISODate } from "./calendar";
 import { fixedCostSummary, subscriptionSummary } from "./commitments";
 import { monthSummary, monthlyHistory, spendingBaseline } from "./ledger";
+import { findRecurringMatches } from "./matching";
 import { availability, openItems, savingsEstimate, type OpenItem } from "./overview";
 import type { Account, Recurring, Transaction } from "./types";
 
@@ -32,6 +33,8 @@ export function buildDashboard(input: { accounts: Account[]; transactions: Trans
     (item) => item.type === "expense" && item.date > avail.monthEnd,
   );
   const upcoming: UpcomingRow[] = [
+    // Ueberfaellige Einnahmen zuerst, ohne Kontostand danach: sie zaehlen nicht in die Prognose
+    ...avail.overdueIncome.items.map((item) => ({ item, overdue: true, balanceAfter: null })),
     ...avail.forecast.map((point) => ({ item: point.item, overdue: point.item.date < today, balanceAfter: point.balanceAfter })),
     ...later.map((item) => ({ item, overdue: false, balanceAfter: null })),
   ];
@@ -62,6 +65,8 @@ export function buildDashboard(input: { accounts: Account[]; transactions: Trans
     })),
     upcoming,
     upcomingTotalUntilMonthEnd: avail.bankPending.total + avail.dueUnpaid.total + avail.plannedExpenses.total,
+    /** Buchungen, die offenen Terminen zugeordnet werden koennen (#17). */
+    matches: findRecurringMatches(recurring, transactions, today),
     paidThisMonth,
   };
 }

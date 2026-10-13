@@ -2,9 +2,10 @@
 
 import { Button, Label, ToggleButton, ToggleButtonGroup, type Key } from "@heroui/react";
 import { useState } from "react";
-import { formatAmountInput } from "@/lib/format";
+import { formatAmountInput, formatDate } from "@/lib/format";
 import { useAction } from "@/lib/client/use-action";
 import type { Account, Category, Transaction, TxStatus, TxType } from "@/lib/domain/types";
+import { unlinkRecurringPayment } from "@/lib/server/actions/matching";
 import { deleteTransaction, saveTransaction, saveTransfer } from "@/lib/server/actions/transactions";
 import { ConfirmDialog } from "./confirm-dialog";
 import { DateInput, MoneyInput, NoteInput, SelectInput, TextInput } from "./fields";
@@ -197,7 +198,21 @@ export function TransactionDialog({
         )}
         <NoteInput value={note} onChange={setNote} />
         {transaction?.recurringId && (
-          <p className="label font-normal">Diese Buchung stammt aus einer regelmäßigen Zahlung.</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="label font-normal">
+              Diese Buchung gehört zu einer regelmäßigen Zahlung{transaction.recurringDue ? ` (Termin ${formatDate(transaction.recurringDue)})` : ""}.
+            </p>
+            <Button
+              size="sm"
+              variant="ghost"
+              isPending={pending}
+              onPress={async () => {
+                if (await run(() => unlinkRecurringPayment(transaction.id))) onOpenChange(false);
+              }}
+            >
+              Zuordnung lösen
+            </Button>
+          </div>
         )}
       </FormDialog>
 

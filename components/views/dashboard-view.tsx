@@ -5,6 +5,7 @@ import { Button, Disclosure, Tooltip } from "@heroui/react";
 import Link from "next/link";
 import { CashflowChart } from "@/components/charts/cashflow-chart";
 import { LastImportNotice } from "@/components/finance/import-list";
+import { MatchPanel } from "@/components/finance/match-panel";
 import { ItemStatus } from "@/components/finance/item-status";
 import { SettleMenu } from "@/components/finance/settle-menu";
 import { useQuickAdd } from "@/components/shell/quick-add";
@@ -64,6 +65,8 @@ export function DashboardView({
         <AvailabilityPanel dashboard={dashboard} className="lg:col-span-7" />
         <MonthPanel dashboard={dashboard} className="lg:col-span-5" />
       </div>
+
+      {dashboard.matches.length > 0 && <MatchPanel matches={dashboard.matches} />}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <Panel
@@ -176,6 +179,14 @@ function AvailabilityPanel({ dashboard, className }: { dashboard: Dashboard; cla
           <Line label="Aktuell verfügbar" value={a.available} sign="=" strong />
           <Line label="Erwartete Einnahmen" hint="noch nicht eingegangen" value={a.expectedIncome.total} sign="+" muted={a.expectedIncome.total === 0} />
           <Line label={`Voraussichtlich am ${endLabel}`} hint="Prognose" value={a.projectedMonthEnd} sign="=" strong />
+          {a.overdueIncome.total > 0 && (
+            <Line
+              label="Überfällige Einnahmen"
+              hint={`nicht eingerechnet – ${count(a.overdueIncome.items.length)} prüfen`}
+              value={a.overdueIncome.total}
+              muted
+            />
+          )}
         </div>
       </div>
 

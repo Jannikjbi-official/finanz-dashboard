@@ -43,6 +43,7 @@ beforeEach(async () => {
     db.transactions.deleteMany({}),
     db.recurring.deleteMany({}),
     db.categories.deleteMany({}),
+    db.imports.deleteMany({}),
     db.db.collection("rate_limits").deleteMany({}),
   ]);
 });
@@ -215,5 +216,68 @@ describe("Kontostand mit Datum (#16)", () => {
     expect(availability.liquidBalance).toBe(883_85);
     expect(availability.bankPending.total).toBe(244_21);
     expect(availability.available).toBe(883_85 - 244_21);
+  });
+});
+
+describe("Regelmaessige Zahlungen mit Buchungen abgleichen (#17)", () => {
+  async function setup() {
+    const giro = await createAccount("Giro", "giro", "0");
+    await rec.saveRecurring({ type: "income", title: "Waisenrente", amount: "276,48", interval: "monthly", nextDue: "2026-09-30", costType: "other", accountId: giro });
+    await rec.saveRecurring({ type: "income", title: "Grundsicherung", amount: "563", interval: "monthly", nextDue: "2026-09-30", costType: "other", accountId: giro });
+    const waisen = (await db.recurring.findOne({ title: "Waisenrente" }))!._id.toString();
+    const grund = (await db.recurring.findOne({ title: "Grundsicherung" }))!._id.toString();
+    return { giro, waisen, grund };
+  }
+  const row = (date: string, title: string, amountCents: number) => ({ date, title, amountCents, type: "income" as const, status: "booked" as const, category: null, note: null });
+
+  it("ordnet beim Import passende Zahlungen zu, Rueckgaengig oeffnet den Termin wieder", async () => {
+    const { giro, waisen } = await setup();
+    const { importTransactions, undoImport } = await import("./import");
+    const result = await importTransactions({
+      accountId: giro,
+      rows: [row("2026-09-30", "Renten Service", 278_48), row("2026-10-07", "Stadt Oldenburg, Abrechnung 10/2026", 1035_54)],
+    });
+    expect(result).toMatchObject({ ok: true, message: expect.stringContaining("1 regelmäßige Zahlungen zugeordnet") });
+    expect((await db.recurring.findOne({ title: "Waisenrente" }))!.nextDue).toBe("2026-10-30");
+    expect(await db.transactions.findOne({ title: "Renten Service" })).toMatchObject({ recurringId: waisen, recurringDue: "2026-09-30" });
+    // Grundsicherung: anderer Name, ganz anderer Betrag - bleibt offen
+    expect((await db.recurring.findOne({ title: "Grundsicherung" }))!.nextDue).toBe("2026-09-30");
+    const { availability } = await load();
+    expect(availability.overdueIncome.items.map((item) => item.title)).toEqual(["Grundsicherung"]);
+
+    const record = await db.imports.findOne({});
+    expect(await undoImport(record!._id)).toMatchObject({ ok: true });
+    expect((await db.recurring.findOne({ title: "Waisenrente" }))!.nextDue).toBe("2026-09-30");
+  });
+
+  it("verknuepft von Hand, lehnt ab und loest wieder", async () => {
+    const { giro, grund } = await setup();
+    await tx.saveTransaction({ type: "income", status: "booked", amount: "1.035,54", date: "2026-10-07", title: "Stadt Oldenburg", accountId: giro });
+    const stadt = (await db.transactions.findOne({ title: "Stadt Oldenburg" }))!._id.toString();
+    const match = await import("./matching");
+
+    const candidates = await match.findLinkCandidates(grund, "2026-09-30");
+    expect(candidates.map((c) => c.id)).toContain(stadt);
+    expect(await match.linkRecurringPayment({ recurringId: grund, due: "2026-09-30", transactionId: stadt })).toMatchObject({ ok: true });
+    expect((await db.recurring.findOne({ title: "Grundsicherung" }))!.nextDue).toBe("2026-10-30");
+    // Zweimal geht nicht
+    expect(await match.linkRecurringPayment({ recurringId: grund, due: "2026-09-30", transactionId: stadt })).toMatchObject({ ok: false });
+
+    expect(await match.unlinkRecurringPayment(stadt)).toMatchObject({ ok: true });
+    expect((await db.recurring.findOne({ title: "Grundsicherung" }))!.nextDue).toBe("2026-09-30");
+    expect(await db.transactions.findOne({ title: "Stadt Oldenburg" })).toMatchObject({ recurringId: null, dismissedRecurring: [grund] });
+
+    expect(await match.dismissRecurringMatch({ recurringId: grund, transactionId: stadt })).toMatchObject({ ok: true });
+  });
+
+  it("fremde Nutzer koennen nichts zuordnen", async () => {
+    const { giro, waisen } = await setup();
+    await tx.saveTransaction({ type: "income", status: "booked", amount: "276,48", date: "2026-09-30", title: "Waisenrente", accountId: giro });
+    const id = (await db.transactions.findOne({}))!._id.toString();
+    session.userId = "user-b";
+    const match = await import("./matching");
+    expect(await match.linkRecurringPayment({ recurringId: waisen, due: "2026-09-30", transactionId: id })).toMatchObject({ ok: false });
+    expect(await match.findLinkCandidates(waisen, "2026-09-30")).toEqual([]);
+    expect((await db.recurring.findOne({ title: "Waisenrente" }))!.nextDue).toBe("2026-09-30");
   });
 });

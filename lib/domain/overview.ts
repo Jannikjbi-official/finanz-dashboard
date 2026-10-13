@@ -91,8 +91,14 @@ export type Availability = {
   dueUnpaid: { total: Cents; items: OpenItem[] };
   /** Bekannte Ausgaben nach heute bis Monatsende. */
   plannedExpenses: { total: Cents; items: OpenItem[] };
-  /** Noch nicht eingegangene Einnahmen bis Monatsende (auch ueberfaellige). */
+  /** Noch nicht eingegangene Einnahmen von heute bis Monatsende. */
   expectedIncome: { total: Cents; items: OpenItem[] };
+  /**
+   * Einnahmen, deren Termin schon vorbei ist. Sie zaehlen NICHT in die
+   * Prognose: entweder sind sie laengst da (dann zuordnen) oder sie bleiben
+   * aus - beides muss man pruefen.
+   */
+  overdueIncome: { total: Cents; items: OpenItem[] };
   /** liquidBalance - bankPending - dueUnpaid - plannedExpenses. Erwartete Einnahmen zaehlen NICHT. */
   available: Cents;
   /** available + expectedIncome: Prognose fuer den Monatsletzten. */
@@ -139,14 +145,15 @@ export function availability(input: {
   const bankPending = items.filter((item) => item.type === "expense" && item.bankPending);
   const dueUnpaid = items.filter((item) => item.type === "expense" && !item.bankPending && item.date <= today);
   const plannedExpenses = items.filter((item) => item.type === "expense" && !item.bankPending && item.date > today);
-  const expectedIncome = items.filter((item) => item.type === "income");
+  const expectedIncome = items.filter((item) => item.type === "income" && item.date >= today);
+  const overdueIncome = items.filter((item) => item.type === "income" && item.date < today);
 
   const sum = (list: OpenItem[]) => list.reduce((total, item) => total + item.amountCents, 0);
   const available = liquidBalance - sum(bankPending) - sum(dueUnpaid) - sum(plannedExpenses);
 
   let running = liquidBalance;
   let lowestPoint = { date: today, balance: liquidBalance };
-  const forecast = items.map((item) => {
+  const forecast = items.filter((item) => !overdueIncome.includes(item)).map((item) => {
     const date = item.date < today ? today : item.date;
     running += item.type === "income" ? item.amountCents : -item.amountCents;
     if (running < lowestPoint.balance) lowestPoint = { date, balance: running };
@@ -162,6 +169,7 @@ export function availability(input: {
     dueUnpaid: { total: sum(dueUnpaid), items: dueUnpaid },
     plannedExpenses: { total: sum(plannedExpenses), items: plannedExpenses },
     expectedIncome: { total: sum(expectedIncome), items: expectedIncome },
+    overdueIncome: { total: sum(overdueIncome), items: overdueIncome },
     available,
     projectedMonthEnd: available + sum(expectedIncome),
     forecast,

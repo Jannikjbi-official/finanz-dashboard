@@ -81,6 +81,8 @@ export type TransactionDoc = {
   importHash?: string | null;
   /** Von der Bank vorgemerkt, siehe Transaction.bankPending. */
   bankPending?: boolean;
+  /** Abgelehnte Zuordnungsvorschlaege (recurring-IDs). */
+  dismissedRecurring?: string[];
   /** CSV-Import, aus dem die Buchung stammt (Collection "imports"). */
   importId?: string | null;
   /** Aus einem Wunsch eingeplant (Collection "wishes"). */
