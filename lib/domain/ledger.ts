@@ -130,15 +130,38 @@ export type SpendingBaseline = {
 };
 
 /**
- * Durchschnitt der letzten bis zu `count` abgeschlossenen Monate, in denen
- * ueberhaupt gebucht wurde. Null, wenn es noch keinen solchen Monat gibt.
+ * Ab wann Buchungen erfasst sind: das Datum der ersten gebuchten Buchung.
+ * Ein Monat, der danach beginnt, ist vollstaendig erfasst; der Monat, in dem
+ * die Daten beginnen, nur teilweise (z. B. Import ab dem 30.).
  */
-export function spendingBaseline(transactions: Transaction[], today: ISODate, count = 3): SpendingBaseline | null {
+export function dataStart(transactions: Transaction[]): ISODate | null {
+  let first: ISODate | null = null;
+  for (const tx of transactions) {
+    if (tx.status === "booked" && (!first || tx.date < first)) first = tx.date;
+  }
+  return first;
+}
+
+/** Ist der Monat nur teilweise erfasst? Liefert dann den ersten erfassten Tag. */
+export function partialFrom(month: MonthKey, start: ISODate | null): ISODate | null {
+  if (!start || monthOf(start) !== month || start === monthStart(month)) return null;
+  return start;
+}
+
+/**
+ * Durchschnitt der letzten bis zu `count` abgeschlossenen Monate, in denen
+ * ueberhaupt gebucht wurde. Mit `start` (siehe dataStart) zaehlen nur
+ * vollstaendig erfasste Monate - ein Monat mit Daten erst ab dem 30. wuerde
+ * den Durchschnitt sonst winzig machen. Null, wenn es keinen solchen Monat gibt.
+ */
+export function spendingBaseline(transactions: Transaction[], today: ISODate, count = 3, start: ISODate | null = null): SpendingBaseline | null {
   const current = monthOf(today);
   const used: MonthSummary[] = [];
 
   for (let offset = 1; offset <= 24 && used.length < count; offset += 1) {
-    const summary = monthSummary(transactions, shiftMonth(current, -offset));
+    const month = shiftMonth(current, -offset);
+    if (start && monthStart(month) < start) break;
+    const summary = monthSummary(transactions, month);
     if (summary.count > 0) used.push(summary);
   }
   if (used.length === 0) return null;

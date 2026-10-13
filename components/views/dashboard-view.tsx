@@ -144,7 +144,7 @@ function Line({
 function AvailabilityPanel({ dashboard, className }: { dashboard: Dashboard; className?: string }) {
   const a = dashboard.availability;
   const endLabel = formatDayShort(a.monthEnd);
-  const lowBeforeIncome = a.lowestPoint.balance < 0;
+  const dip = a.dip;
   const count = (n: number) => (n === 1 ? "1 Posten" : `${n} Posten`);
 
   return (
@@ -190,12 +190,21 @@ function AvailabilityPanel({ dashboard, className }: { dashboard: Dashboard; cla
         </div>
       </div>
 
-      {lowBeforeIncome && (
+      {(a.startsNegative || dip) && (
         <div className="mx-4 mt-2 flex items-start gap-2 rounded-[var(--radius)] bg-danger-soft px-3 py-2 text-[13px] text-danger-soft-foreground sm:mx-5">
           <Warning className="mt-0.5 size-4 shrink-0" />
           <span>
-            Der Kontostand fällt voraussichtlich am {formatDate(a.lowestPoint.date)} auf <Figures text={formatMoney(a.lowestPoint.balance)} />, bevor erwartete
-            Einnahmen eingehen.
+            {a.startsNegative && (
+              <>
+                Der Kontostand ist bereits negativ (<Figures text={formatMoney(a.liquidBalance)} />).{" "}
+              </>
+            )}
+            {dip && (
+              <>
+                {a.startsNegative ? "Er fällt" : "Der Kontostand fällt"} voraussichtlich am {formatDate(dip.date)} auf <Figures text={formatMoney(dip.balance)} />
+                , bevor erwartete Einnahmen eingehen.
+              </>
+            )}
           </span>
         </div>
       )}
@@ -224,7 +233,8 @@ function AvailabilityPanel({ dashboard, className }: { dashboard: Dashboard; cla
       </div>
       {dashboard.unassignedCount > 0 && (
         <p className="border-t border-separator px-4 py-2.5 text-[12.5px] text-muted sm:px-5">
-          {dashboard.unassignedCount} ältere Buchungen haben kein Konto und fließen nicht in den Kontostand ein.{" "}
+          {dashboard.unassignedCount} {dashboard.unassignedCount === 1 ? "Buchung hat" : "Buchungen haben"} kein Konto: Sie zählen in Einnahmen und
+          Ausgaben, aber nicht im Kontostand.{" "}
           <Link href="/transaktionen?konto=ohne" className="text-foreground underline decoration-border underline-offset-4">
             Zuordnen
           </Link>
@@ -237,7 +247,7 @@ function AvailabilityPanel({ dashboard, className }: { dashboard: Dashboard; cla
 /* --------------------------------- Monat --------------------------------- */
 
 function MonthPanel({ dashboard, className }: { dashboard: Dashboard; className?: string }) {
-  const { current, previous, savings, baseline } = dashboard;
+  const { current, previous, savings, baseline, previousPartialFrom, previousEmpty } = dashboard;
   const rows: Array<{ label: string; now: number; before: number; strong?: boolean; indent?: boolean; net?: boolean }> = [
     { label: "Einnahmen", now: current.income, before: previous.income },
     { label: "Ausgaben", now: current.expense, before: previous.expense },
@@ -255,7 +265,15 @@ function MonthPanel({ dashboard, className }: { dashboard: Dashboard; className?
               <span className="sr-only">Posten</span>
             </th>
             <th className="py-2 text-right font-medium">bisher</th>
-            <th className="py-2 pl-4 text-right font-medium">{monthName(previous.month)}</th>
+            <th className="py-2 pl-4 text-right font-medium">
+              {monthName(previous.month)}
+              {previousPartialFrom && (
+                <span className="block font-normal" title="Unvollständig erfasst – Daten erst ab diesem Tag">
+                  nur ab {formatDayShort(previousPartialFrom)}
+                </span>
+              )}
+              {previousEmpty && <span className="block font-normal">keine Daten</span>}
+            </th>
           </tr>
         </thead>
         <tbody className="num">
@@ -284,7 +302,8 @@ function MonthPanel({ dashboard, className }: { dashboard: Dashboard; className?
               <Figures text={formatMoney(savings.income)} /> Einnahmen (inkl. erwarteter) − <Figures text={formatMoney(savings.committed)} /> Ausgaben und Verpflichtungen
               {savings.variableReserve !== null && baseline
                 ? ` − ${formatMoney(savings.variableReserve)} geschätzte variable Ausgaben für ${savings.remainingDays} Tage (Ø ${baseline.months.length} ${baseline.months.length === 1 ? "Monat" : "Monate"})`
-                : ". Variable Ausgaben für den Rest des Monats sind noch nicht geschätzt – dafür fehlt ein abgeschlossener Monat."}
+                : ". Variable Ausgaben für den Rest des Monats sind noch nicht geschätzt – dafür fehlt ein vollständig erfasster Monat."}
+              {savings.cappedByBalance && ` Begrenzt auf den voraussichtlichen Kontostand am ${formatDayShort(dashboard.availability.monthEnd)}.`}
             </>
           ) : (
             "Erfasse Einnahmen oder regelmäßige Einnahmen, um das Sparpotenzial zu berechnen."
@@ -469,8 +488,10 @@ function SubscriptionsPanel({ dashboard, className }: { dashboard: Dashboard; cl
                 </div>
                 <p className="label mt-1 font-normal">
                   {shareBase === "average" && baseline
-                    ? `Bezogen auf Ø ${formatMoney(baseline.averageExpense)} Ausgaben der letzten ${baseline.months.length === 1 ? "Monats" : `${baseline.months.length} Monate`}`
-                    : `Bezogen auf ${formatMoney(dashboard.fixed.monthlyExpenses)} feste Kosten pro Monat`}
+                    ? `Bezogen auf Ø ${formatMoney(baseline.averageExpense)} Ausgaben ${baseline.months.length === 1 ? "des letzten vollständigen Monats" : `der letzten ${baseline.months.length} vollständigen Monate`}`
+                    : `Bezogen auf ${formatMoney(dashboard.fixed.monthlyExpenses)} feste Kosten pro Monat${
+                        baseline ? "" : " – für Ausgaben fehlt noch ein vollständig erfasster Monat"
+                      }`}
                 </p>
               </div>
             )}

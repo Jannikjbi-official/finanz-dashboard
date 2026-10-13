@@ -106,6 +106,10 @@ export type Availability = {
   /** Verlauf bis Monatsende, Ueberfaelliges wird auf heute gelegt. */
   forecast: ForecastPoint[];
   lowestPoint: { date: ISODate; balance: Cents };
+  /** Der heutige Kontostand ist schon negativ. */
+  startsNegative: boolean;
+  /** Tiefster Punkt der Prognose, wenn er unter 0 und unter dem heutigen Stand liegt. */
+  dip: { date: ISODate; balance: Cents } | null;
 };
 
 /**
@@ -151,14 +155,21 @@ export function availability(input: {
   const sum = (list: OpenItem[]) => list.reduce((total, item) => total + item.amountCents, 0);
   const available = liquidBalance - sum(bankPending) - sum(dueUnpaid) - sum(plannedExpenses);
 
+  // Ueberfaelliges liegt auf heute; erst danach sortieren, damit am selben Tag
+  // Ausgaben vor Einnahmen kommen (vorsichtige Reihenfolge)
+  const scheduled = items
+    .filter((item) => !overdueIncome.includes(item))
+    .map((item) => ({ item, date: item.date < today ? today : item.date }))
+    .sort((a, b) => (a.date !== b.date ? a.date.localeCompare(b.date) : compareItems(a.item, b.item)));
+
   let running = liquidBalance;
   let lowestPoint = { date: today, balance: liquidBalance };
-  const forecast = items.filter((item) => !overdueIncome.includes(item)).map((item) => {
-    const date = item.date < today ? today : item.date;
+  const forecast = scheduled.map(({ item, date }) => {
     running += item.type === "income" ? item.amountCents : -item.amountCents;
     if (running < lowestPoint.balance) lowestPoint = { date, balance: running };
     return { date, item, balanceAfter: running };
   });
+  const dip = lowestPoint.balance < 0 && lowestPoint.balance < liquidBalance ? lowestPoint : null;
 
   return {
     today,
@@ -174,6 +185,8 @@ export function availability(input: {
     projectedMonthEnd: available + sum(expectedIncome),
     forecast,
     lowestPoint,
+    startsNegative: liquidBalance < 0,
+    dip,
   };
 }
 
@@ -187,6 +200,11 @@ export type SavingsEstimate = {
   remainingDays: number;
   /** Was nach allem voraussichtlich uebrig bleibt (kann negativ sein). */
   amount: Cents;
+  /**
+   * Gekappt auf den voraussichtlichen Kontostand am Monatsende (abzueglich
+   * Reserve): mehr kann man nicht zuruecklegen, als dann da ist.
+   */
+  cappedByBalance: boolean;
 };
 
 /**
@@ -208,12 +226,15 @@ export function savingsEstimate(input: {
   const remainingDays = daysBetween(a.today, a.monthEnd);
   const variableReserve = baseline ? Math.round(baseline.variablePerDay * remainingDays) : null;
 
+  const flow = income - committed - (variableReserve ?? 0);
+  const onAccount = a.projectedMonthEnd - (variableReserve ?? 0);
   return {
     income,
     committed,
     variableReserve,
     remainingDays,
-    amount: income - committed - (variableReserve ?? 0),
+    amount: Math.min(flow, onAccount),
+    cappedByBalance: onAccount < flow,
   };
 }
 

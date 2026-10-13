@@ -1,6 +1,6 @@
-import { addDays, monthOf, shiftMonth, type ISODate } from "./calendar";
+import { addDays, monthEnd, monthOf, shiftMonth, type ISODate } from "./calendar";
 import { fixedCostSummary, subscriptionSummary } from "./commitments";
-import { monthSummary, monthlyHistory, spendingBaseline } from "./ledger";
+import { dataStart, monthSummary, monthlyHistory, partialFrom, spendingBaseline } from "./ledger";
 import { findRecurringMatches } from "./matching";
 import { availability, openItems, savingsEstimate, type OpenItem } from "./overview";
 import type { Account, Recurring, Transaction } from "./types";
@@ -16,13 +16,18 @@ export function buildDashboard(input: { accounts: Account[]; transactions: Trans
   const avail = availability(input);
   const current = monthSummary(transactions, month);
   const previous = monthSummary(transactions, shiftMonth(month, -1));
-  const baseline = spendingBaseline(transactions, today);
+  // Nur vollstaendig erfasste Monate zaehlen fuer Durchschnitte
+  const start = dataStart(transactions);
+  const baseline = spendingBaseline(transactions, today, 3, start);
   const subscriptions = subscriptionSummary(recurring, today);
   const fixed = fixedCostSummary(recurring);
 
   // Anteil der Abos an den monatlichen Ausgaben: Basis ist der eigene
-  // Durchschnitt abgeschlossener Monate; ohne Historie die festen Kosten.
-  const shareBase = baseline && baseline.averageExpense > 0 ? "average" : fixed.monthlyExpenses > 0 ? "fixed" : null;
+  // Durchschnitt vollstaendiger Monate; ohne Historie - oder wenn der
+  // Durchschnitt unplausibel unter den Abos liegt - die festen Kosten.
+  // Die Abos sind Teil der festen Kosten, der Anteil bleibt so <= 100 %.
+  const averageFits = baseline !== null && baseline.averageExpense > 0 && baseline.averageExpense >= subscriptions.monthlyTotal;
+  const shareBase = averageFits ? "average" : fixed.monthlyExpenses > 0 ? "fixed" : null;
   const shareDenominator = shareBase === "average" ? baseline!.averageExpense : shareBase === "fixed" ? fixed.monthlyExpenses : 0;
   const subscriptionShare = shareDenominator > 0 ? subscriptions.monthlyTotal / shareDenominator : null;
 
@@ -51,6 +56,10 @@ export function buildDashboard(input: { accounts: Account[]; transactions: Trans
     availability: avail,
     current,
     previous,
+    /** Vormonat nur teilweise erfasst: erster erfasster Tag. */
+    previousPartialFrom: partialFrom(previous.month, start),
+    /** Vormonat ganz ohne Daten (Erfassung beginnt spaeter). */
+    previousEmpty: start === null || start > monthEnd(previous.month),
     baseline,
     savings: savingsEstimate({ current, availability: avail, baseline }),
     subscriptions,
@@ -61,7 +70,8 @@ export function buildDashboard(input: { accounts: Account[]; transactions: Trans
       month: summary.month,
       income: summary.income,
       expense: summary.expense,
-      partial: summary.month === month,
+      partial: summary.month === month || partialFrom(summary.month, start) !== null,
+      partialFrom: partialFrom(summary.month, start),
     })),
     upcoming,
     upcomingTotalUntilMonthEnd: avail.bankPending.total + avail.dueUnpaid.total + avail.plannedExpenses.total,
