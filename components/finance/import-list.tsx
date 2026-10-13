@@ -59,13 +59,13 @@ export function ImportList({ imports, noun }: { imports: ImportInfo[]; noun: Nou
   return (
     <div className="flex flex-col gap-3">
       {latest && (
-        <div className="flex flex-col gap-2 rounded-[var(--radius)] border border-separator px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col items-start gap-2.5 rounded-[var(--radius)] border border-separator px-3 py-3">
           <div className="min-w-0">
             <div className="label">Letzter Import</div>
-            <div className="truncate font-medium">{importName(latest)}</div>
+            <div className="font-medium">{importName(latest)}</div>
             <div className="label font-normal">{importDetails(latest, noun)}</div>
           </div>
-          <Button size="sm" variant="danger-soft" className="shrink-0" onPress={() => ask(latest)}>
+          <Button size="sm" variant="danger-soft" onPress={() => ask(latest)}>
             <ArrowCounterClockwise className="size-4" /> Letzten Import rückgängig machen
           </Button>
         </div>

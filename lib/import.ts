@@ -308,3 +308,52 @@ export function mappingProblems(mapping: ImportMapping): string[] {
   }
   return problems;
 }
+
+/** Kontoname aus der Datei einem Konto zuordnen: gleicher Name, sonst Teiltreffer. */
+export function matchAccount(name: string | null, accounts: Array<{ id: string; name: string; archived?: boolean }>): string | null {
+  if (!name) return null;
+  const wanted = name.toLowerCase().trim();
+  const open = accounts.filter((account) => !account.archived);
+  const exact = open.find((account) => account.name.toLowerCase().trim() === wanted);
+  if (exact) return exact.id;
+  const partial = open.filter((account) => {
+    const own = account.name.toLowerCase().trim();
+    return own.length >= 3 && (wanted.includes(own) || own.includes(wanted));
+  });
+  return partial.length === 1 ? partial[0].id : null;
+}
+
+/**
+ * Vorauswahl: lesbare Zeilen ausser geplanten und solchen, die es schon
+ * gibt. `existing` enthaelt einen Schluessel je vorhandener Buchung - zwei
+ * gleiche Buchungen decken zwei gleiche Zeilen ab, nicht mehr.
+ */
+export function defaultSelection(rows: ImportRow[], existing: string[]) {
+  const left = new Map<string, number>();
+  for (const key of existing) left.set(key, (left.get(key) ?? 0) + 1);
+  const duplicates = new Set<number>();
+  const excluded = new Set<number>();
+  for (const row of rows) {
+    if (row.error) continue;
+    const count = left.get(row.key) ?? 0;
+    if (count > 0) {
+      left.set(row.key, count - 1);
+      duplicates.add(row.line);
+      excluded.add(row.line);
+    } else if (row.status === "planned") {
+      excluded.add(row.line);
+    }
+  }
+  return { duplicates, excluded };
+}
+
+/** Kategorienamen aus der Datei, die es (fuer diese Art) noch nicht gibt. */
+export function missingCategories(rows: ImportRow[], categories: Array<{ name: string; kind: "income" | "expense" }>) {
+  const missing = new Map<string, string>();
+  for (const row of rows) {
+    if (!row.category || row.transfer || row.error) continue;
+    const known = categories.some((category) => category.kind === row.type && category.name.toLowerCase() === row.category!.toLowerCase());
+    if (!known) missing.set(`${row.type}|${row.category.toLowerCase()}`, row.category);
+  }
+  return [...new Set(missing.values())];
+}

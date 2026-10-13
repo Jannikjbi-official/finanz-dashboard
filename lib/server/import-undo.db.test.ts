@@ -59,6 +59,7 @@ beforeEach(async () => {
     db.transactions.deleteMany({}),
     db.recurring.deleteMany({}),
     db.imports.deleteMany({}),
+    db.categories.deleteMany({}),
     db.db.collection("rate_limits").deleteMany({}),
   ]);
 });
@@ -248,5 +249,60 @@ describe("Alte Importe in der Oberflaeche", () => {
   it("lehnt ungueltige Kennungen ab", async () => {
     expect(await actions.undoImport("legacy:kein-datum")).toMatchObject({ ok: false });
     expect(await actions.undoImport("legacy:2026-10-13")).toMatchObject({ ok: false });
+  });
+});
+
+describe("Kontoimport mit Status und Umbuchungen (#15)", () => {
+  async function importCsv(csv: string, accountId: string, options: { counterAccountId?: string | null; today?: string } = {}) {
+    const table = parseTable(csv);
+    const rows = mapRows(table, guessMapping(table.header), options.today ?? "2026-10-13");
+    return actions.importTransactions({
+      accountId,
+      fileName: "export.csv",
+      counterAccountId: options.counterAccountId ?? null,
+      createCategories: true,
+      rows: rows
+        .filter((row) => row.status !== "planned")
+        .map((row) => ({
+          date: row.date!, title: row.title, amountCents: row.amountCents, type: row.type,
+          status: row.status, transfer: row.transfer, accountId: null, category: row.category, note: row.note,
+        })),
+    });
+  }
+
+  it("bucht nur Gebuchtes, Vormerkungen sind offen, Umbuchungen sind Transfers", async () => {
+    const giroId = await giro();
+    const { insertedId } = await db.accounts.insertOne({ userId: "user-a", name: "Revolut", kind: "other", startBalanceCents: 0, archived: false, createdAt: new Date() });
+    const revolut = insertedId.toString();
+
+    expect(await importCsv(CSV, giroId, { counterAccountId: revolut })).toMatchObject({ ok: true, imported: 7 });
+    const { loadFinanceData } = data;
+    const loaded = await loadFinanceData("user-a");
+    const { availability } = await import("@/lib/domain/overview");
+    const { monthSummary } = await import("@/lib/domain/ledger");
+    const a = availability({ ...loaded, today: "2026-10-13" });
+
+    // Giro: 765,44 + 250 - 12,40 - 3,50 - 3,50 - 20 (Umbuchung) + 1.035,54
+    expect(a.totalBalance).toBe(765_44 + 250_00 - 12_40 - 3_50 - 3_50 - 20_00 + 1035_54 + 20_00);
+    expect(a.bankPending.total).toBe(44_21);
+    // Oktober: Umbuchung zaehlt weder als Einnahme noch als Ausgabe
+    expect(monthSummary(loaded.transactions, "2026-10")).toMatchObject({ income: 1035_54, expense: 12_40 + 3_50 + 3_50 });
+    expect(await db.transactions.countDocuments({ accountId: revolut, type: "income", transferGroupId: { $type: "string" } })).toBe(1);
+    // Kategorien aus der Datei wurden angelegt
+    expect(await db.categories.countDocuments({ userId: "user-a", name: "Lebensmittel", kind: "expense" })).toBe(1);
+  });
+
+  it("ueberspringt schon importierte Zeilen auch auf dem Server und ersetzt alte Vormerkungen", async () => {
+    const giroId = await giro();
+    expect(await importCsv(CSV, giroId)).toMatchObject({ ok: true, imported: 7, skipped: 0 });
+
+    // Neuer Export: Vormerkung ist inzwischen gebucht, eine neue ist dazugekommen
+    const next = CSV.replace("13.10.2026;Vorgemerkt;Ausgabe;Sonstiges;Vorgemerkte Umsätze;-44,21", "13.10.2026;Gebucht;Ausgabe;Sonstiges;Kartenzahlung;-44,21")
+      + "\r\n14.10.2026;Vorgemerkt;Ausgabe;Sonstiges;Neue Vormerkung;-5,00;Giro;";
+    const result = await importCsv(next, giroId, { today: "2026-10-14" });
+    expect(result).toMatchObject({ ok: true, imported: 2, skipped: 6 });
+    expect(await db.transactions.countDocuments({ bankPending: true })).toBe(1);
+    expect(await db.transactions.countDocuments({ title: "Vorgemerkte Umsätze" })).toBe(0);
+    expect(await db.transactions.countDocuments({ title: "Kartenzahlung", status: "booked" })).toBe(1);
   });
 });
