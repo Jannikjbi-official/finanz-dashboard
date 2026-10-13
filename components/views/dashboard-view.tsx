@@ -144,8 +144,8 @@ function AvailabilityPanel({ dashboard, className }: { dashboard: Dashboard; cla
               <Info className="size-3.5" />
             </Button>
             <Tooltip.Content placement="top" className="max-w-72 text-[12.5px]">
-              Guthaben auf allen Konten, die zum verfügbaren Geld zählen, abzüglich fälliger und bis Monatsende geplanter Zahlungen. Noch nicht
-              eingegangene Einnahmen zählen nicht.
+              Guthaben auf allen Konten, die zum verfügbaren Geld zählen, abzüglich vorgemerkter, fälliger und bis Monatsende geplanter Zahlungen.
+              Noch nicht eingegangene Einnahmen zählen nicht.
             </Tooltip.Content>
           </Tooltip>
         </div>
@@ -156,6 +156,9 @@ function AvailabilityPanel({ dashboard, className }: { dashboard: Dashboard; cla
       <div className="mx-4 mt-2 border-t border-separator sm:mx-5">
         <div className="rows">
           <Line label="Kontostand" hint="tatsächlich" value={a.liquidBalance} />
+          {a.bankPending.total > 0 && (
+            <Line label="Vorgemerkt" hint={`von der Bank, ${count(a.bankPending.items.length)}`} value={a.bankPending.total} sign="−" />
+          )}
           <Line label="Fällig, noch nicht bezahlt" hint={count(a.dueUnpaid.items.length)} value={a.dueUnpaid.total} sign="−" muted={a.dueUnpaid.total === 0} />
           <Line label={`Geplant bis ${endLabel}`} hint={count(a.plannedExpenses.items.length)} value={a.plannedExpenses.total} sign="−" muted={a.plannedExpenses.total === 0} />
           <Line label="Aktuell verfügbar" value={a.available} sign="=" strong />
@@ -316,7 +319,7 @@ function UpcomingTable({
                 <td className="py-2.5 pr-3 align-top">
                   <div className="font-medium">{item.title}</div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2">
-                    <ItemStatus date={item.date} type={item.type} today={dashboard.today} />
+                    <ItemStatus date={item.date} type={item.type} today={dashboard.today} bankPending={item.bankPending} />
                     {item.costType && <span className="label font-normal">{COST_TYPE_LABEL[item.costType]}</span>}
                   </div>
                 </td>

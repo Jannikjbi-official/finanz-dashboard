@@ -46,6 +46,12 @@ export type Transaction = {
   recurringId: string | null;
   /** ... und der Termin, den diese Buchung beglichen hat. */
   recurringDue: ISODate | null;
+  /**
+   * Von der Bank vorgemerkt (status "pending"): Der Umsatz ist schon
+   * unterwegs, aber noch nicht gebucht. Wird beim naechsten Kontoimport
+   * durch den neuen Stand ersetzt.
+   */
+  bankPending?: boolean;
 };
 
 export type RecurringStatus = "active" | "paused" | "cancelled" | "archived";

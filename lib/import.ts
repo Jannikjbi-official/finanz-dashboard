@@ -8,7 +8,7 @@ import { parseAmountToCents } from "./money";
 export const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 export const MAX_IMPORT_ROWS = 5000;
 
-export type ImportField = "date" | "title" | "amount" | "debit" | "credit" | "type" | "category" | "note";
+export type ImportField = "date" | "title" | "amount" | "debit" | "credit" | "type" | "status" | "account" | "category" | "note";
 
 export type ImportMapping = Partial<Record<ImportField, number>>;
 
@@ -18,7 +18,9 @@ export const FIELD_LABEL: Record<ImportField, string> = {
   amount: "Betrag (mit Vorzeichen)",
   debit: "Soll / Ausgang",
   credit: "Haben / Eingang",
-  type: "Typ (Einnahme/Ausgabe)",
+  type: "Typ (Einnahme/Ausgabe/Umbuchung)",
+  status: "Status (Gebucht/Vorgemerkt/Geplant)",
+  account: "Konto",
   category: "Kategorie",
   note: "Notiz / Verwendungszweck",
 };
@@ -34,6 +36,8 @@ const SYNONYMS: Record<ImportField, string[]> = {
   debit: ["soll", "ausgang", "belastung", "debit"],
   credit: ["haben", "eingang", "gutschrift", "credit"],
   type: ["typ", "type", "art", "umsatzart"],
+  status: ["status", "buchungsstatus", "umsatzstatus"],
+  account: ["konto", "kontoname", "account"],
   category: ["kategorie", "category"],
   note: ["notiz", "note", "kommentar", "verwendungszweck", "buchungstext", "memo"],
 };
@@ -200,19 +204,40 @@ export function parseSignedAmount(input: string): number | null {
   return negative ? -cents : cents;
 }
 
+/**
+ * booked  = von der Bank gebucht
+ * pending = vorgemerkt (Bank zeigt den Umsatz, er ist aber noch nicht gebucht)
+ * planned = geplant, noch gar nicht geflossen
+ */
+export type ImportStatus = "booked" | "pending" | "planned";
+
 export type ImportRow = {
   line: number;
   date: string | null;
   title: string;
   amountCents: number;
   type: "income" | "expense";
+  status: ImportStatus;
+  /** Umbuchung zwischen eigenen Konten - zaehlt nie als Einnahme oder Ausgabe. */
+  transfer: boolean;
+  /** Kontoname aus der Datei, falls zugeordnet. */
+  account: string | null;
   category: string | null;
   note: string | null;
   error: string | null;
   key: string;
 };
 
-export function mapRows(table: Table, mapping: ImportMapping): ImportRow[] {
+const PENDING_STATUS = /vorgemerkt|vormerk|pending|ausstehend|nicht gebucht|in bearbeitung/;
+const PLANNED_STATUS = /geplant|planned|terminiert|vorgesehen/;
+const TRANSFER_TYPE = /umbuchung|übertrag|uebertrag|transfer|eigenes konto|eigene konten/;
+
+/**
+ * Zeilen lesen. Mit `today` werden gebuchte Zeilen mit Datum in der Zukunft
+ * als vorgemerkt behandelt - eine Zukunftsbuchung kann den heutigen
+ * Kontostand noch nicht veraendert haben.
+ */
+export function mapRows(table: Table, mapping: ImportMapping, today?: string): ImportRow[] {
   const cell = (row: string[], field: ImportField) =>
     mapping[field] !== undefined ? (row[mapping[field]!] ?? "").trim() : "";
 
@@ -237,6 +262,13 @@ export function mapRows(table: Table, mapping: ImportMapping): ImportRow[] {
       else if (/ausgabe|expense|lastschrift|belastung|ausgang|soll/.test(typeCell)) type = "expense";
     }
 
+    const statusCell = cell(row, "status").toLowerCase();
+    let status: ImportStatus = "booked";
+    if (PENDING_STATUS.test(statusCell)) status = "pending";
+    else if (PLANNED_STATUS.test(statusCell)) status = "planned";
+    if (status === "booked" && today && date && date > today) status = "pending";
+    const transfer = TRANSFER_TYPE.test(typeCell);
+
     const note = cell(row, "note") || null;
     const title = (cell(row, "title") || note || "Ohne Bezeichnung").replace(/\s+/g, " ").slice(0, 80);
     const amountCents = signed === null ? 0 : Math.abs(signed);
@@ -252,6 +284,9 @@ export function mapRows(table: Table, mapping: ImportMapping): ImportRow[] {
       title,
       amountCents,
       type,
+      status,
+      transfer,
+      account: cell(row, "account") || null,
       category: cell(row, "category") || null,
       note: note && note !== title ? note.slice(0, 300) : null,
       error,
