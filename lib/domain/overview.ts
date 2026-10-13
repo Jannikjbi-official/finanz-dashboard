@@ -120,7 +120,8 @@ export function availability(input: {
   const end = monthEnd(monthOf(today));
   const liquid = liquidAccountIds(accounts);
   const known = new Set(accounts.map((account) => account.id));
-  const balances = accountBalances(accounts, transactions);
+  // Gebuchtes mit Datum nach heute zaehlt noch nicht
+  const balances = accountBalances(accounts, transactions, today);
 
   let totalBalance = 0;
   let liquidBalance = 0;

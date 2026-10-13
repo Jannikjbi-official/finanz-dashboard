@@ -3,7 +3,7 @@ import { buildDashboard } from "./dashboard";
 import type { Account, Recurring, Transaction } from "./types";
 
 const TODAY = "2026-10-28";
-const giro: Account = { id: "giro", name: "Giro", kind: "giro", startBalanceCents: 500_00, liquid: true, archived: false };
+const giro: Account = { id: "giro", name: "Giro", kind: "giro", startBalanceCents: 500_00, balanceAnchor: null, liquid: true, archived: false };
 
 const sub = (overrides: Partial<Recurring>): Recurring => ({
   id: "s",

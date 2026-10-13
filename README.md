@@ -27,6 +27,7 @@ npm run dev                   # http://localhost:3000 → „Zugang einrichten�
 | `npm run db:backup` | Alle Collections als Extended JSON nach `backups/` |
 | `npm run db:restore -- <ordner> [--replace]` | Sicherung zurückspielen (mit `--replace` wird vorher gesichert) |
 | `npm run db:migrate [-- --dry-run]` | Ausstehende Migrationen (sichert vorher automatisch) |
+| `npm run db:undo-import -- <datei.csv> [--apply]` | Alten CSV-Import anhand der Datei finden und löschen (Probelauf ohne `--apply`, sichert vorher) |
 
 ## Umstieg von der Vorversion („Spielraum“)
 
@@ -69,9 +70,11 @@ docs/DESIGNSYSTEM.md Farben, Typografie, Abstände, Komponenten, Diagramme
 ## Rechenregeln
 
 - **Beträge** sind ganzzahlige Cent. „Heute“ richtet sich nach der Zeitzone in den Einstellungen.
-- **Kontostand** = Anfangssaldo + gebuchte Bewegungen. Geplante Ausgaben und erwartete Einnahmen ändern ihn nicht.
+- **Kontostand** = Stand laut Bank an einem Tag (Kontostand-Anker) + gebuchte Bewegungen nach diesem Tag bis heute.
+  Ohne Anker: Anfangssaldo + gebuchte Bewegungen bis heute. Später importierte ältere Umsätze ändern einen
+  abgeglichenen Stand nicht. Vorgemerkte, geplante Ausgaben und erwartete Einnahmen ändern ihn nicht.
 - **Aktuell verfügbar** = Kontostand der Konten, die zum verfügbaren Geld zählen
-  − fällige, unbezahlte Zahlungen − bis Monatsende geplante Ausgaben.
+  − von der Bank vorgemerkte Umsätze − fällige, unbezahlte Zahlungen − bis Monatsende geplante Ausgaben.
   Erwartete Einnahmen zählen nicht; sie fließen nur in die Prognose für den Monatsletzten.
 - **Regelmäßige Zahlungen**: Jeder Termin vor `nextDue` ist erledigt (bezahlt oder
   übersprungen), ab `nextDue` offen. „Bezahlt“ erzeugt genau eine Buchung und rückt
@@ -81,6 +84,10 @@ docs/DESIGNSYSTEM.md Farben, Typografie, Abstände, Komponenten, Diagramme
   Tatsächliche Abbuchungen kommen nur aus den Terminen.
 - **Pausiert / gekündigt** planen nichts mehr ein – außer bei gekündigten Verträgen mit Vertragsende.
 - **Transfers** sind zwei verknüpfte Buchungen, ändern beide Kontostände und zählen nie als Einnahme oder Ausgabe.
+  Beim CSV-Import werden Zeilen mit Typ „Umbuchung“ zu Transfers (Gegenkonto optional).
+- **CSV-Import**: „Gebucht“ ändert den Kontostand, „Vorgemerkt“ wird als vorgemerkt angezeigt und beim nächsten
+  Import ersetzt, „Geplant“ gehört auf die Wunschliste. Jeder Import hat eine ID und lässt sich rückgängig machen.
+- **Wünsche** ändern keine Zahl. Erst „Einplanen“ legt eine geplante Zahlung an, die in „Aktuell verfügbar“ zählt.
 
 ## Sicherheit
 

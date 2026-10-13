@@ -38,6 +38,8 @@ export type AccountDoc = {
   name: string;
   kind: AccountKind;
   startBalanceCents: number;
+  /** Kontostand mit Datum, siehe Account.balanceAnchor. */
+  balanceAnchor?: { date: string; amountCents: number } | null;
   archived: boolean;
   /** Fehlt das Feld, gilt: alles ausser Sparkonten ist verfuegbar. */
   liquid?: boolean;

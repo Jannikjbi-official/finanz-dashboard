@@ -11,12 +11,20 @@ export type { ISODate, Interval };
 
 export type AccountKind = "giro" | "savings" | "cash" | "paypal" | "other";
 
+export type BalanceAnchor = { date: ISODate; amountCents: Cents };
+
 export type Account = {
   id: string;
   name: string;
   kind: AccountKind;
-  /** Saldo vor der ersten erfassten Buchung. */
+  /** Saldo vor der ersten erfassten Buchung (nur ohne Kontostand-Anker). */
   startBalanceCents: Cents;
+  /**
+   * Echter Kontostand an einem Tag, z. B. laut Bank: Stand nach allen
+   * Buchungen dieses Tages. Ist er gesetzt, rechnet alles von hier aus -
+   * spaeter importierte aeltere Buchungen aendern den heutigen Stand nicht.
+   */
+  balanceAnchor: BalanceAnchor | null;
   /** Zaehlt zum verfuegbaren Geld. Sparkonten standardmaessig nicht. */
   liquid: boolean;
   archived: boolean;

@@ -38,7 +38,13 @@ afterAll(async () => {
 
 beforeEach(async () => {
   session.userId = "user-a";
-  await Promise.all([db.accounts.deleteMany({}), db.transactions.deleteMany({}), db.recurring.deleteMany({}), db.categories.deleteMany({})]);
+  await Promise.all([
+    db.accounts.deleteMany({}),
+    db.transactions.deleteMany({}),
+    db.recurring.deleteMany({}),
+    db.categories.deleteMany({}),
+    db.db.collection("rate_limits").deleteMany({}),
+  ]);
 });
 
 async function load(userId = "user-a") {
@@ -162,5 +168,52 @@ describe("Server Actions", () => {
     expect(await tx.saveTransaction({ type: "expense", status: "booked", amount: "1", date: "2026-10-01", title: "B", accountId: giro })).toMatchObject({ ok: false, error: "Konto nicht gefunden" });
 
     expect(await db.transactions.findOne({ title: "A" })).toMatchObject({ amountCents: 10_00 });
+  });
+});
+
+describe("Kontostand mit Datum (#16)", () => {
+  it("neues Konto mit heutigem Stand: spaeter importierte aeltere Buchungen aendern ihn nicht", async () => {
+    const { today } = await load();
+    expect(await acc.saveAccount({ name: "Giro", kind: "giro", balance: "883,85", balanceDate: today, liquid: true })).toMatchObject({ ok: true });
+    const giro = (await db.accounts.findOne({ name: "Giro" }))!;
+    expect(giro.balanceAnchor).toEqual({ date: today, amountCents: 883_85 });
+
+    // Alte Buchung von vor einer Woche nachgetragen: Stand bleibt
+    const { addDays } = await import("@/lib/domain/calendar");
+    await tx.saveTransaction({ type: "expense", status: "booked", amount: "50", date: addDays(today, -7), title: "Alt", accountId: giro._id.toString() });
+    expect((await load()).availability.liquidBalance).toBe(883_85);
+  });
+
+  it("Abgleich setzt den Stand, Zukunftsdaten werden abgelehnt", async () => {
+    const giro = await createAccount("Giro", "giro", "765,44");
+    await tx.saveTransaction({ type: "income", status: "booked", amount: "278,48", date: "2026-09-30", title: "Rente", accountId: giro });
+    expect((await load()).availability.liquidBalance).toBe(765_44 + 278_48);
+
+    expect(await acc.setBalanceAnchor({ accountId: giro, balance: "883,85", date: "2026-10-13" })).toMatchObject({ ok: true });
+    expect((await load()).availability.liquidBalance).toBe(883_85);
+    expect(await acc.setBalanceAnchor({ accountId: giro, balance: "1", date: "2999-01-01" })).toMatchObject({ ok: false });
+
+    session.userId = "user-b";
+    expect(await acc.setBalanceAnchor({ accountId: giro, balance: "0", date: "2026-10-13" })).toMatchObject({ ok: false });
+  });
+
+  it("Import mit Kontostand laut Bank: Stand, Vormerkung und Verfuegbar stimmen", async () => {
+    const giro = await createAccount("Giro", "giro", "765,44");
+    const { importTransactions } = await import("./import");
+    const result = await importTransactions({
+      accountId: giro,
+      balance: "883,85",
+      balanceDate: "2026-10-13",
+      rows: [
+        { date: "2026-09-30", title: "Rente", amountCents: 278_48, type: "income", status: "booked", category: null, note: null },
+        { date: "2026-10-07", title: "Stadtkasse", amountCents: 1035_54, type: "income", status: "booked", category: null, note: null },
+        { date: "2026-10-13", title: "Vorgemerkt", amountCents: 244_21, type: "expense", status: "pending", category: null, note: null },
+      ],
+    });
+    expect(result).toMatchObject({ ok: true, imported: 3 });
+    const { availability } = await load();
+    expect(availability.liquidBalance).toBe(883_85);
+    expect(availability.bankPending.total).toBe(244_21);
+    expect(availability.available).toBe(883_85 - 244_21);
   });
 });

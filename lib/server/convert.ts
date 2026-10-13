@@ -15,6 +15,7 @@ export function toAccount(doc: WithId<AccountDoc>): Account {
     name: doc.name,
     kind: doc.kind,
     startBalanceCents: doc.startBalanceCents ?? 0,
+    balanceAnchor: doc.balanceAnchor ?? null,
     liquid: doc.liquid ?? doc.kind !== "savings",
     archived: Boolean(doc.archived),
   };

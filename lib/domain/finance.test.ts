@@ -8,7 +8,7 @@ import type { Account, Recurring, Transaction } from "./types";
 const TODAY = "2026-10-12";
 
 function account(overrides: Partial<Account> = {}): Account {
-  return { id: "giro", name: "Girokonto", kind: "giro", startBalanceCents: 0, liquid: true, archived: false, ...overrides };
+  return { id: "giro", name: "Girokonto", kind: "giro", startBalanceCents: 0, balanceAnchor: null, liquid: true, archived: false, ...overrides };
 }
 
 let txCounter = 0;
@@ -192,6 +192,31 @@ describe("Kontostaende und Transfers", () => {
       ["b", 120_00],
       ["a", 150_00],
     ]);
+  });
+
+  it("rechnet mit Kontostand-Anker: spaeter importierte aeltere Buchungen aendern den heutigen Stand nicht", () => {
+    // Laut Bank 883,85 € am 13.10. (nach allen Buchungen dieses Tages)
+    const giro = account({ startBalanceCents: 765_44, balanceAnchor: { date: "2026-10-13", amountCents: 883_85 } });
+    const before = [tx({ id: "a", type: "income", amountCents: 278_48, date: "2026-09-30" }), tx({ id: "b", amountCents: 13_09, date: "2026-10-13" })];
+    expect(accountBalance(giro, before, "2026-10-13")).toBe(883_85);
+
+    // Nach dem Anker: zaehlt dazu. Vor dem Anker: steckt schon drin.
+    const after = [...before, tx({ id: "c", amountCents: 20_00, date: "2026-10-14" }), tx({ id: "d", amountCents: 5_00, date: "2026-10-01" })];
+    expect(accountBalance(giro, after, "2026-10-14")).toBe(883_85 - 20_00);
+    // Verlauf rueckwaerts aus dem Anker
+    expect(accountHistory(giro, after).map((entry) => [entry.tx.id, entry.balanceAfter])).toEqual([
+      ["c", 863_85],
+      ["b", 883_85],
+      ["d", 896_94],
+      ["a", 901_94],
+    ]);
+  });
+
+  it("Buchungen mit Datum nach heute aendern den heutigen Kontostand nicht", () => {
+    const giro = account({ startBalanceCents: 100_00 });
+    const list = [tx({ amountCents: 30_00, date: "2026-10-01" }), tx({ amountCents: 398_00, date: "2026-11-27" })];
+    expect(accountBalance(giro, list, TODAY)).toBe(70_00);
+    expect(availability({ accounts: [giro], transactions: list, recurring: [], today: TODAY }).liquidBalance).toBe(70_00);
   });
 });
 

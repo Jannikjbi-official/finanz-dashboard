@@ -144,7 +144,10 @@ export function SettingsView({
 
         <Panel title="So wird gerechnet" className="lg:col-span-2">
           <dl className="grid grid-cols-1 gap-x-8 gap-y-3 text-[13px] md:grid-cols-2">
-            <Explain term="Kontostand">Anfangssaldo plus alle bezahlten Ausgaben und eingegangenen Einnahmen eines Kontos. Geplantes und Erwartetes zählt nicht.</Explain>
+            <Explain term="Kontostand">
+              Abgeglichener Stand laut Bank (Konten → Kontostand abgleichen) plus alle danach gebuchten Bewegungen bis heute. Ältere Buchungen stecken schon im
+              Stand. Ohne Abgleich: Anfangssaldo plus alle Buchungen bis heute. Vorgemerktes, Geplantes und Erwartetes zählt nicht.
+            </Explain>
             <Explain term="Aktuell verfügbar">
               Kontostand der Konten, die zum verfügbaren Geld zählen, minus fälliger und bis Monatsende geplanter Zahlungen. Erwartete Einnahmen zählen erst, wenn sie eingegangen sind.
             </Explain>

@@ -5,8 +5,21 @@ import { z } from "zod";
 import { isISODate } from "../../domain/calendar";
 import { duplicateKey, MAX_IMPORT_ROWS } from "../../import";
 import { LEGACY_PREFIX, legacyFilter, parseLegacyId } from "../import-undo";
-import { categories, ensureIndexes, imports, transactions, wishes, type TransactionDoc } from "../db";
-import { authorize, fail, fileNameSchema, firstIssue, ok, optionalId, ownsAccount, refresh, type ActionResult } from "./shared";
+import { accounts, categories, ensureIndexes, imports, toObjectId, transactions, wishes, type TransactionDoc } from "../db";
+import {
+  anchorFor,
+  authorize,
+  fail,
+  fileNameSchema,
+  firstIssue,
+  ok,
+  optionalId,
+  optionalIsoDate,
+  ownsAccount,
+  refresh,
+  signedAmount,
+  type ActionResult,
+} from "./shared";
 
 /**
  * CSV-Import. Die Datei wird im Browser gelesen und zugeordnet
@@ -36,6 +49,9 @@ const importSchema = z.object({
   counterAccountId: optionalId,
   /** Kategorien aus der Datei anlegen, die es noch nicht gibt. */
   createCategories: z.boolean().default(false),
+  /** Optional: Kontostand laut Bank fuer das Importkonto (Kontostand mit Datum). */
+  balance: signedAmount.optional(),
+  balanceDate: optionalIsoDate,
 });
 
 export type ImportInput = z.input<typeof importSchema>;
@@ -81,6 +97,9 @@ export async function importTransactions(input: ImportInput): Promise<ImportResu
   for (const id of accountIds) {
     if (!(await ownsAccount(auth.userId, id))) return { ok: false, error: "Konto nicht gefunden" };
   }
+  const hasBalance = typeof input.balance === "string" && input.balance.trim() !== "";
+  const anchor = hasBalance ? await anchorFor(auth.userId, parsed.data.balance ?? 0, parsed.data.balanceDate) : null;
+  if (anchor && !anchor.ok) return { ok: false, error: anchor.error };
   await ensureIndexes();
 
   // Dubletten auch auf dem Server: schon importierte Zeilen nicht noch einmal
@@ -101,7 +120,11 @@ export async function importTransactions(input: ImportInput): Promise<ImportResu
     return left === 0;
   });
   const skipped = parsed.data.rows.length - rows.length;
-  if (rows.length === 0) return { ok: true, imported: 0, skipped, message: "Alle Zeilen sind schon importiert" };
+  if (rows.length === 0) {
+    if (anchor?.ok) await setAnchor(auth.userId, accountId, anchor.anchor);
+    if (anchor?.ok) refresh();
+    return { ok: true, imported: 0, skipped, message: anchor?.ok ? "Alle Zeilen sind schon importiert – Kontostand übernommen" : "Alle Zeilen sind schon importiert" };
+  }
 
   // Kategorien per Name zuordnen; fehlende auf Wunsch anlegen
   const known = await categories.find({ userId: auth.userId }).toArray();
@@ -203,6 +226,7 @@ export async function importTransactions(input: ImportInput): Promise<ImportResu
       })
     ).deletedCount;
     await transactions.insertMany(docs);
+    if (anchor?.ok) await setAnchor(auth.userId, accountId, anchor.anchor);
   } catch (error) {
     // Teilweise geschriebene Zeilen wieder entfernen, der Import gilt als nicht erfolgt
     await transactions.deleteMany({ userId: auth.userId, importId });
@@ -214,7 +238,13 @@ export async function importTransactions(input: ImportInput): Promise<ImportResu
   const parts = [`${rows.length} Buchungen importiert`];
   if (skipped) parts.push(`${skipped} schon vorhanden`);
   if (replaced) parts.push(`${replaced} alte Vormerkungen ersetzt`);
+  if (anchor?.ok) parts.push("Kontostand übernommen");
   return { ok: true, imported: rows.length, skipped, message: parts.join(", ") };
+}
+
+async function setAnchor(userId: string, accountId: string, anchor: { date: string; amountCents: number }) {
+  const _id = toObjectId(accountId);
+  if (_id) await accounts.updateOne({ _id, userId }, { $set: { balanceAnchor: anchor, updatedAt: new Date() } });
 }
 
 /**
