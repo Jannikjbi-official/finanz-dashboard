@@ -7,12 +7,13 @@ import { ConfirmDialog } from "@/components/forms/confirm-dialog";
 import { SelectInput, TextInput } from "@/components/forms/fields";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { ImportDialog } from "@/components/forms/import-dialog";
+import { ImportList } from "@/components/finance/import-list";
 import { SecurityPanel } from "@/components/settings/security-panel";
 import { SignOutButton } from "@/components/shell/app-shell";
 import { PageHeader, Panel } from "@/components/ui/panel";
 import { useAction } from "@/lib/client/use-action";
 import { useTheme } from "@/lib/client/theme";
-import type { Account, Category, TxType } from "@/lib/domain/types";
+import type { Account, Category, ImportInfo, TxType } from "@/lib/domain/types";
 import { deleteCategory, saveCategory, saveTimeZone } from "@/lib/server/actions/accounts";
 
 type CategoryRow = Category & { usage: number };
@@ -26,6 +27,7 @@ export function SettingsView({
   timeZone,
   categories,
   accounts,
+  imports,
   counts,
 }: {
   user: { name: string; email: string };
@@ -33,6 +35,7 @@ export function SettingsView({
   timeZone: string;
   categories: CategoryRow[];
   accounts: Account[];
+  imports: ImportInfo[];
   counts: { transactions: number; recurring: number; accounts: number };
 }) {
   const { theme, setTheme } = useTheme();
@@ -91,6 +94,7 @@ export function SettingsView({
                 <UploadSimple className="size-4" /> Importieren
               </Button>
             </DataRow>
+            <ImportList imports={imports} noun={{ one: "Buchung", many: "Buchungen" }} />
             <DataRow title="CSV exportieren" text="Alle Buchungen mit Status, Konto und Kategorie – für Excel oder Numbers.">
               <a href="/api/export" className="inline-flex h-8 items-center gap-2 rounded-[var(--radius)] bg-default px-3 text-sm font-medium hover:bg-default-hover">
                 <DownloadSimple className="size-4" /> CSV

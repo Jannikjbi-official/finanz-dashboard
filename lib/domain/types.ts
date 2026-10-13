@@ -46,6 +46,12 @@ export type Transaction = {
   recurringId: string | null;
   /** ... und der Termin, den diese Buchung beglichen hat. */
   recurringDue: ISODate | null;
+  /**
+   * Von der Bank vorgemerkt (status "pending"): Der Umsatz ist schon
+   * unterwegs, aber noch nicht gebucht. Wird beim naechsten Kontoimport
+   * durch den neuen Stand ersetzt.
+   */
+  bankPending?: boolean;
 };
 
 export type RecurringStatus = "active" | "paused" | "cancelled" | "archived";
@@ -100,4 +106,43 @@ export type Category = {
   name: string;
   kind: TxType;
   color: string;
+};
+
+/**
+ * Wunsch: etwas, das gekauft werden soll. Zaehlt nirgends mit, solange es
+ * nur ein Wunsch ist. Erst "eingeplant" entsteht eine geplante Zahlung
+ * (Buchung mit status "pending"), die in "Aktuell verfuegbar" eingeht.
+ */
+export type WishStatus = "idea" | "planned" | "bought" | "dropped";
+export type WishPriority = "high" | "normal" | "low";
+
+export type Wish = {
+  id: string;
+  title: string;
+  amountCents: Cents;
+  targetDate: ISODate | null;
+  status: WishStatus;
+  priority: WishPriority;
+  group: string | null;
+  link: string | null;
+  note: string | null;
+  categoryId: string | null;
+  transactionId: string | null;
+  importId: string | null;
+};
+
+/** Ein CSV-Import, zur Anzeige und zum Rueckgaengigmachen. */
+export type ImportInfo = {
+  id: string;
+  kind: "transactions" | "wishes";
+  fileName: string | null;
+  rowCount: number;
+  dateFrom: ISODate | null;
+  dateTo: ISODate | null;
+  /** Zeitpunkt als ISO-String (mit Uhrzeit). */
+  createdAt: string;
+  undoneAt: string | null;
+  undoneCount: number | null;
+  /** Import aus der Zeit vor der Import-ID, erkannt am gemeinsamen Anlagezeitpunkt. */
+  legacy?: boolean;
 };

@@ -1,5 +1,15 @@
 import { MongoClient, ObjectId, type Db } from "mongodb";
-import type { AccountKind, CostType, Interval, NoticePeriod, RecurringStatus, TxStatus, TxType } from "../domain/types";
+import type {
+  AccountKind,
+  CostType,
+  Interval,
+  NoticePeriod,
+  RecurringStatus,
+  TxStatus,
+  TxType,
+  WishPriority,
+  WishStatus,
+} from "../domain/types";
 
 /**
  * MongoDB-Anbindung und Dokumenttypen.
@@ -67,6 +77,12 @@ export type TransactionDoc = {
   recurringId: string | null;
   recurringDue?: string | null;
   importHash?: string | null;
+  /** Von der Bank vorgemerkt, siehe Transaction.bankPending. */
+  bankPending?: boolean;
+  /** CSV-Import, aus dem die Buchung stammt (Collection "imports"). */
+  importId?: string | null;
+  /** Aus einem Wunsch eingeplant (Collection "wishes"). */
+  wishId?: string | null;
   /** Herkunft aus der frueheren Collection "planned" (Migration 005). */
   legacyPlannedId?: string | null;
   createdAt: Date;
@@ -107,6 +123,42 @@ export type SettingsDoc = {
   [legacy: string]: unknown;
 };
 
+export type WishDoc = {
+  userId: string;
+  title: string;
+  amountCents: number;
+  /** Wunschtermin bzw. "fruehestens"; null = Zeitpunkt offen. */
+  targetDate: string | null;
+  status: WishStatus;
+  priority: WishPriority;
+  /** Sparziel oder Gruppe, z. B. "Mikrofon-Setup". */
+  group: string | null;
+  link: string | null;
+  note: string | null;
+  categoryId: string | null;
+  /** Geplante Zahlung, die beim Einplanen entstanden ist. */
+  transactionId: string | null;
+  importId?: string | null;
+  importHash?: string | null;
+  createdAt: Date;
+  updatedAt?: Date;
+};
+
+/** Ein CSV-Import. Alle Datensaetze daraus tragen die importId. */
+export type ImportDoc = {
+  _id: string;
+  userId: string;
+  kind: "transactions" | "wishes";
+  fileName: string | null;
+  accountId: string | null;
+  rowCount: number;
+  dateFrom: string | null;
+  dateTo: string | null;
+  createdAt: Date;
+  undoneAt: Date | null;
+  undoneCount?: number;
+};
+
 /** Frueheres Modell fuer geplante/erwartete Einzelposten (nur noch Migration). */
 export type LegacyPlannedDoc = {
   userId: string;
@@ -128,6 +180,8 @@ export const transactions = db.collection<TransactionDoc>("transactions");
 export const recurring = db.collection<RecurringDoc>("recurring");
 export const settings = db.collection<SettingsDoc>("user_settings");
 export const planned = db.collection<LegacyPlannedDoc>("planned");
+export const wishes = db.collection<WishDoc>("wishes");
+export const imports = db.collection<ImportDoc>("imports");
 
 /**
  * Alle Collections mit Finanzdaten eines Nutzers - auch die nicht mehr
@@ -138,6 +192,8 @@ export const USER_DATA_COLLECTIONS = [
   "categories",
   "transactions",
   "recurring",
+  "wishes",
+  "imports",
   "planned",
   "goals",
   "refunds",
@@ -153,6 +209,9 @@ export function ensureIndexes(): Promise<void> {
       transactions.createIndex({ userId: 1, accountId: 1 }),
       transactions.createIndex({ userId: 1, transferGroupId: 1 }, { partialFilterExpression: { transferGroupId: { $type: "string" } } }),
       transactions.createIndex({ userId: 1, importHash: 1 }, { partialFilterExpression: { importHash: { $type: "string" } } }),
+      transactions.createIndex({ userId: 1, importId: 1 }, { partialFilterExpression: { importId: { $type: "string" } } }),
+      wishes.createIndex({ userId: 1, status: 1 }),
+      imports.createIndex({ userId: 1, createdAt: -1 }),
       transactions.createIndex(
         { userId: 1, legacyPlannedId: 1 },
         { unique: true, partialFilterExpression: { legacyPlannedId: { $type: "string" } } },

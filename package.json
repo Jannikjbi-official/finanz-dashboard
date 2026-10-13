@@ -12,6 +12,7 @@
     "db:backup": "tsx --env-file=.env scripts/backup.mts",
     "db:restore": "tsx --env-file=.env scripts/restore.mts",
     "db:migrate": "tsx --env-file=.env scripts/migrate.mts",
+    "db:undo-import": "tsx --env-file=.env scripts/undo-import.mts",
     "dev:db": "tsx scripts/dev-db.mts",
     "check": "npm run typecheck && npm test && npm run build"
   },

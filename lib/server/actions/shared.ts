@@ -69,6 +69,14 @@ export const optionalText = (max: number) =>
     .nullish()
     .transform((value) => (value ? value : null));
 
+/** Dateiname eines Imports, nur zur Anzeige. */
+export const fileNameSchema = z
+  .string()
+  .trim()
+  .max(200)
+  .nullish()
+  .transform((value) => (value ? value : null));
+
 export const optionalId = z
   .string()
   .nullish()

@@ -19,6 +19,8 @@ export type OpenItem = {
   costType: CostType | null;
   accountId: string | null;
   categoryId: string | null;
+  /** Von der Bank vorgemerkt - schon unterwegs, nur noch nicht gebucht. */
+  bankPending: boolean;
 };
 
 /**
@@ -42,6 +44,7 @@ export function openItems(transactions: Transaction[], recurring: Recurring[], u
       costType: null,
       accountId: tx.accountId,
       categoryId: tx.categoryId,
+      bankPending: Boolean(tx.bankPending),
     });
   }
 
@@ -59,6 +62,7 @@ export function openItems(transactions: Transaction[], recurring: Recurring[], u
         costType: entry.costType,
         accountId: entry.accountId,
         categoryId: entry.categoryId,
+        bankPending: false,
       });
     }
   }
@@ -81,13 +85,15 @@ export type Availability = {
   totalBalance: Cents;
   /** Tatsaechliches Guthaben auf liquiden Konten. */
   liquidBalance: Cents;
+  /** Von der Bank vorgemerkte Ausgaben: schon unterwegs, noch nicht gebucht. */
+  bankPending: { total: Cents; items: OpenItem[] };
   /** Faellig (heute oder frueher), aber noch nicht bezahlt. */
   dueUnpaid: { total: Cents; items: OpenItem[] };
   /** Bekannte Ausgaben nach heute bis Monatsende. */
   plannedExpenses: { total: Cents; items: OpenItem[] };
   /** Noch nicht eingegangene Einnahmen bis Monatsende (auch ueberfaellige). */
   expectedIncome: { total: Cents; items: OpenItem[] };
-  /** liquidBalance - dueUnpaid - plannedExpenses. Erwartete Einnahmen zaehlen NICHT. */
+  /** liquidBalance - bankPending - dueUnpaid - plannedExpenses. Erwartete Einnahmen zaehlen NICHT. */
   available: Cents;
   /** available + expectedIncome: Prognose fuer den Monatsletzten. */
   projectedMonthEnd: Cents;
@@ -129,12 +135,13 @@ export function availability(input: {
   const counts = (item: OpenItem) => !item.accountId || !known.has(item.accountId) || liquid.has(item.accountId);
   const items = openItems(transactions, recurring, end).filter(counts);
 
-  const dueUnpaid = items.filter((item) => item.type === "expense" && item.date <= today);
-  const plannedExpenses = items.filter((item) => item.type === "expense" && item.date > today);
+  const bankPending = items.filter((item) => item.type === "expense" && item.bankPending);
+  const dueUnpaid = items.filter((item) => item.type === "expense" && !item.bankPending && item.date <= today);
+  const plannedExpenses = items.filter((item) => item.type === "expense" && !item.bankPending && item.date > today);
   const expectedIncome = items.filter((item) => item.type === "income");
 
   const sum = (list: OpenItem[]) => list.reduce((total, item) => total + item.amountCents, 0);
-  const available = liquidBalance - sum(dueUnpaid) - sum(plannedExpenses);
+  const available = liquidBalance - sum(bankPending) - sum(dueUnpaid) - sum(plannedExpenses);
 
   let running = liquidBalance;
   let lowestPoint = { date: today, balance: liquidBalance };
@@ -150,6 +157,7 @@ export function availability(input: {
     monthEnd: end,
     totalBalance,
     liquidBalance,
+    bankPending: { total: sum(bankPending), items: bankPending },
     dueUnpaid: { total: sum(dueUnpaid), items: dueUnpaid },
     plannedExpenses: { total: sum(plannedExpenses), items: plannedExpenses },
     expectedIncome: { total: sum(expectedIncome), items: expectedIncome },
@@ -187,7 +195,7 @@ export function savingsEstimate(input: {
   const income = current.income + a.expectedIncome.total;
   if (income === 0) return null;
 
-  const committed = current.expense + a.dueUnpaid.total + a.plannedExpenses.total;
+  const committed = current.expense + a.bankPending.total + a.dueUnpaid.total + a.plannedExpenses.total;
   const remainingDays = daysBetween(a.today, a.monthEnd);
   const variableReserve = baseline ? Math.round(baseline.variablePerDay * remainingDays) : null;
 

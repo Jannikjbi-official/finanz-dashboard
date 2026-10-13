@@ -4,6 +4,7 @@ import { ArrowRight, Info, Warning } from "@phosphor-icons/react";
 import { Button, Disclosure, Tooltip } from "@heroui/react";
 import Link from "next/link";
 import { CashflowChart } from "@/components/charts/cashflow-chart";
+import { LastImportNotice } from "@/components/finance/import-list";
 import { ItemStatus } from "@/components/finance/item-status";
 import { SettleMenu } from "@/components/finance/settle-menu";
 import { useQuickAdd } from "@/components/shell/quick-add";
@@ -12,10 +13,20 @@ import { Panel } from "@/components/ui/panel";
 import { COST_TYPE_LABEL, INTERVAL_UNIT } from "@/lib/domain/labels";
 import { monthlyEquivalent } from "@/lib/domain/recurring";
 import type { Dashboard } from "@/lib/domain/dashboard";
-import type { Recurring, Transaction } from "@/lib/domain/types";
+import type { ImportInfo, Recurring, Transaction } from "@/lib/domain/types";
 import { formatDate, formatDayShort, formatMoney, formatMonth, formatPercent, monthName } from "@/lib/format";
 
-export function DashboardView({ dashboard, recurring, pending }: { dashboard: Dashboard; recurring: Recurring[]; pending: Transaction[] }) {
+export function DashboardView({
+  dashboard,
+  recurring,
+  pending,
+  lastImport = null,
+}: {
+  dashboard: Dashboard;
+  recurring: Recurring[];
+  pending: Transaction[];
+  lastImport?: ImportInfo | null;
+}) {
   const { openAccount, openTransaction } = useQuickAdd();
 
   if (!dashboard.hasAccounts) {
@@ -48,6 +59,7 @@ export function DashboardView({ dashboard, recurring, pending }: { dashboard: Da
   return (
     <div className="flex flex-col gap-4">
       <h1 className="sr-only">Übersicht</h1>
+      {lastImport && <LastImportNotice entry={lastImport} />}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <AvailabilityPanel dashboard={dashboard} className="lg:col-span-7" />
         <MonthPanel dashboard={dashboard} className="lg:col-span-5" />
@@ -144,8 +156,8 @@ function AvailabilityPanel({ dashboard, className }: { dashboard: Dashboard; cla
               <Info className="size-3.5" />
             </Button>
             <Tooltip.Content placement="top" className="max-w-72 text-[12.5px]">
-              Guthaben auf allen Konten, die zum verfügbaren Geld zählen, abzüglich fälliger und bis Monatsende geplanter Zahlungen. Noch nicht
-              eingegangene Einnahmen zählen nicht.
+              Guthaben auf allen Konten, die zum verfügbaren Geld zählen, abzüglich vorgemerkter, fälliger und bis Monatsende geplanter Zahlungen.
+              Noch nicht eingegangene Einnahmen zählen nicht.
             </Tooltip.Content>
           </Tooltip>
         </div>
@@ -156,6 +168,9 @@ function AvailabilityPanel({ dashboard, className }: { dashboard: Dashboard; cla
       <div className="mx-4 mt-2 border-t border-separator sm:mx-5">
         <div className="rows">
           <Line label="Kontostand" hint="tatsächlich" value={a.liquidBalance} />
+          {a.bankPending.total > 0 && (
+            <Line label="Vorgemerkt" hint={`von der Bank, ${count(a.bankPending.items.length)}`} value={a.bankPending.total} sign="−" />
+          )}
           <Line label="Fällig, noch nicht bezahlt" hint={count(a.dueUnpaid.items.length)} value={a.dueUnpaid.total} sign="−" muted={a.dueUnpaid.total === 0} />
           <Line label={`Geplant bis ${endLabel}`} hint={count(a.plannedExpenses.items.length)} value={a.plannedExpenses.total} sign="−" muted={a.plannedExpenses.total === 0} />
           <Line label="Aktuell verfügbar" value={a.available} sign="=" strong />
@@ -316,7 +331,7 @@ function UpcomingTable({
                 <td className="py-2.5 pr-3 align-top">
                   <div className="font-medium">{item.title}</div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2">
-                    <ItemStatus date={item.date} type={item.type} today={dashboard.today} />
+                    <ItemStatus date={item.date} type={item.type} today={dashboard.today} bankPending={item.bankPending} />
                     {item.costType && <span className="label font-normal">{COST_TYPE_LABEL[item.costType]}</span>}
                   </div>
                 </td>

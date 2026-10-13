@@ -2,79 +2,18 @@ import "server-only";
 import { cache } from "react";
 import type { WithId } from "mongodb";
 import { todayIn } from "../domain/calendar";
-import { inferCostType } from "../domain/labels";
-import type { Account, Category, Recurring, Transaction } from "../domain/types";
-import {
-  accounts,
-  categories,
-  ensureIndexes,
-  recurring,
-  transactions,
-  type AccountDoc,
-  type CategoryDoc,
-  type RecurringDoc,
-  type TransactionDoc,
-} from "./db";
+import type { Account, Category, ImportInfo, Recurring, Transaction, Wish } from "../domain/types";
+import { toAccount, toCategory, toImportInfo, toRecurring, toTransaction, toWish } from "./convert";
+import { accounts, categories, db, ensureIndexes, imports, recurring, transactions, wishes, type TransactionDoc } from "./db";
+import { LEGACY_PREFIX, listLegacyImports } from "./import-undo";
 import { getSettings } from "./user-data";
 
+export { toAccount, toCategory, toRecurring, toTransaction, toWish };
+
 /**
- * Lesezugriff. Jede Abfrage ist an die userId gebunden; Dokumente werden in
- * die Fachtypen aus lib/domain uebersetzt. Fehlende Felder aus Altdaten
- * bekommen hier ihre Standardwerte.
+ * Lesezugriff. Jede Abfrage ist an die userId gebunden; die Uebersetzung in
+ * die Fachtypen steckt in ./convert (auch von Skripten genutzt).
  */
-
-export function toAccount(doc: WithId<AccountDoc>): Account {
-  return {
-    id: doc._id.toString(),
-    name: doc.name,
-    kind: doc.kind,
-    startBalanceCents: doc.startBalanceCents ?? 0,
-    liquid: doc.liquid ?? doc.kind !== "savings",
-    archived: Boolean(doc.archived),
-  };
-}
-
-export function toCategory(doc: WithId<CategoryDoc>): Category {
-  return { id: doc._id.toString(), name: doc.name, kind: doc.kind, color: doc.color };
-}
-
-export function toTransaction(doc: WithId<TransactionDoc>): Transaction {
-  return {
-    id: doc._id.toString(),
-    type: doc.type,
-    status: doc.status ?? "booked",
-    amountCents: doc.amountCents,
-    date: doc.date,
-    title: doc.title,
-    note: doc.note ?? null,
-    categoryId: doc.categoryId ?? null,
-    accountId: doc.accountId ?? null,
-    transferGroupId: doc.transferGroupId ?? null,
-    recurringId: doc.recurringId ?? null,
-    recurringDue: doc.recurringDue ?? null,
-  };
-}
-
-export function toRecurring(doc: WithId<RecurringDoc>): Recurring {
-  return {
-    id: doc._id.toString(),
-    type: doc.type,
-    title: doc.title,
-    provider: doc.provider ?? null,
-    amountCents: doc.amountCents,
-    interval: doc.interval,
-    startDate: doc.startDate,
-    nextDue: doc.nextDue,
-    status: doc.status ?? (doc.active === false ? "paused" : "active"),
-    costType: doc.costType ?? (doc.type === "expense" ? inferCostType(doc.title) : "other"),
-    categoryId: doc.categoryId ?? null,
-    accountId: doc.accountId ?? null,
-    endDate: doc.endDate ?? null,
-    cancelledOn: doc.cancelledOn ?? null,
-    noticePeriod: doc.noticePeriod ?? null,
-    note: doc.note ?? null,
-  };
-}
 
 export type FinanceData = {
   today: string;
@@ -115,3 +54,35 @@ export async function loadFinanceData(userId: string): Promise<FinanceData> {
 
 /** Pro Anfrage nur einmal laden, auch wenn Layout und Seite die Daten brauchen. */
 export const getFinanceData = cache(loadFinanceData);
+
+/** Wuensche, offene zuerst, darin nach Termin (ohne Termin zuletzt). */
+export async function loadWishes(userId: string): Promise<Wish[]> {
+  await ensureIndexes();
+  const docs = await wishes.find({ userId }).sort({ targetDate: 1, createdAt: 1 }).toArray();
+  return docs.map(toWish);
+}
+
+/** Die letzten Importe, neueste zuerst. */
+export async function loadImports(userId: string, kind: ImportInfo["kind"], limit = 10): Promise<ImportInfo[]> {
+  const docs = await imports.find({ userId, kind }).sort({ createdAt: -1 }).limit(limit).toArray();
+  const list = docs.map(toImportInfo);
+  if (kind !== "transactions") return list;
+
+  // Kontoimporte aus der Zeit vor der Import-ID ebenfalls anzeigen
+  const legacy = await listLegacyImports(db, userId, limit);
+  for (const batch of legacy) {
+    list.push({
+      id: `${LEGACY_PREFIX}${batch.createdAt.toISOString()}`,
+      kind: "transactions",
+      fileName: null,
+      rowCount: batch.count,
+      dateFrom: batch.dateFrom,
+      dateTo: batch.dateTo,
+      createdAt: batch.createdAt.toISOString(),
+      undoneAt: null,
+      undoneCount: null,
+      legacy: true,
+    });
+  }
+  return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+}

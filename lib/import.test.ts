@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { duplicateKey, guessMapping, mapRows, normalizeDate, parseSignedAmount, parseTable } from "./import";
+import {
+  defaultSelection,
+  duplicateKey,
+  guessMapping,
+  mapRows,
+  matchAccount,
+  missingCategories,
+  normalizeDate,
+  parseSignedAmount,
+  parseTable,
+} from "./import";
 
 describe("Import", () => {
   it("liest Betraege in verschiedenen Formaten", () => {
@@ -59,5 +69,58 @@ describe("Import", () => {
     expect(duplicateKey("2026-01-01", "expense", 100, "REWE Markt 123")).toBe(
       duplicateKey("2026-01-01", "expense", 100, "rewe markt  123"),
     );
+  });
+
+  it("liest Status, Umbuchungen und Konto aus einem App-Export", () => {
+    const csv = [
+      "\uFEFFDatum;Status;Typ;Kategorie;Beschreibung;Betrag (EUR);Konto;Notiz",
+      "07.10.2026;Gebucht;Einnahme;Einkommen;Stadtkasse;1.035,54;LzO Giro;",
+      "02.10.2026;Gebucht;Umbuchung;Games;Aufladung Revolut;-50,00;LzO Giro;",
+      "02.10.2026;Gebucht;Umbuchung;Games;Rückbuchung von Revolut;5,44;LzO Giro;",
+      "13.10.2026;Vorgemerkt;Ausgabe;Sonstiges;Vorgemerkte Umsätze;-244,21;LzO Giro;",
+      "15.10.2026;Geplant;Ausgabe;Haushalt;Wäschekorb;-16,03;LzO Giro;",
+      "14.10.2026;Gebucht;Ausgabe;Lebensmittel;Bäcker;-3,50;LzO Giro;",
+    ].join("\r\n");
+    const table = parseTable(csv);
+    const mapping = guessMapping(table.header);
+    expect(mapping).toMatchObject({ date: 0, status: 1, type: 2, category: 3, title: 4, amount: 5, account: 6, note: 7 });
+
+    const rows = mapRows(table, mapping, "2026-10-13");
+    expect(rows.map((r) => [r.title, r.type, r.status, r.transfer, r.amountCents])).toEqual([
+      ["Stadtkasse", "income", "booked", false, 103554],
+      ["Aufladung Revolut", "expense", "booked", true, 5000],
+      ["Rückbuchung von Revolut", "income", "booked", true, 544],
+      ["Vorgemerkte Umsätze", "expense", "pending", false, 24421],
+      ["Wäschekorb", "expense", "planned", false, 1603],
+      // Gebucht, aber in der Zukunft: kann den heutigen Stand noch nicht veraendert haben
+      ["Bäcker", "expense", "pending", false, 350],
+    ]);
+    expect(rows[0].account).toBe("LzO Giro");
+  });
+
+  it("waehlt Geplantes und Vorhandenes ab und zaehlt gleiche Zeilen einzeln", () => {
+    const table = parseTable("Datum;Betrag;Titel;Status\n01.10.2026;-3,50;Bäcker;Gebucht\n01.10.2026;-3,50;Bäcker;Gebucht\n15.10.2026;-9;Plan;Geplant");
+    const rows = mapRows(table, { date: 0, amount: 1, title: 2, status: 3 });
+    const selection = defaultSelection(rows, [rows[0].key]);
+    // Eine vorhandene Buchung deckt nur eine der beiden gleichen Zeilen ab
+    expect([...selection.duplicates]).toEqual([2]);
+    expect([...selection.excluded].sort()).toEqual([2, 4]);
+  });
+
+  it("ordnet Kontonamen zu und findet fehlende Kategorien", () => {
+    const accounts = [
+      { id: "g", name: "LzO Giro" },
+      { id: "r", name: "Revolut" },
+      { id: "a", name: "Alt", archived: true },
+    ];
+    expect(matchAccount("lzo giro", accounts)).toBe("g");
+    expect(matchAccount("Revolut (Games)", accounts)).toBe("r");
+    expect(matchAccount("Alt", accounts)).toBeNull();
+    expect(matchAccount(null, accounts)).toBeNull();
+
+    const rows = mapRows(parseTable("Datum;Betrag;Titel;Kategorie;Typ\n01.10.2026;-5;A;Bargeld;Ausgabe\n01.10.2026;-5;B;Lebensmittel;Ausgabe\n01.10.2026;-5;C;Games;Umbuchung"), {
+      date: 0, amount: 1, title: 2, category: 3, type: 4,
+    });
+    expect(missingCategories(rows, [{ name: "Lebensmittel", kind: "expense" }])).toEqual(["Bargeld"]);
   });
 });

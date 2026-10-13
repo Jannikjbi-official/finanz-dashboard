@@ -61,7 +61,7 @@ export function buildDashboard(input: { accounts: Account[]; transactions: Trans
       partial: summary.month === month,
     })),
     upcoming,
-    upcomingTotalUntilMonthEnd: avail.dueUnpaid.total + avail.plannedExpenses.total,
+    upcomingTotalUntilMonthEnd: avail.bankPending.total + avail.dueUnpaid.total + avail.plannedExpenses.total,
     paidThisMonth,
   };
 }
