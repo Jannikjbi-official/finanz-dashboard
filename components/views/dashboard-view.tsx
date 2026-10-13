@@ -6,6 +6,7 @@ import Link from "next/link";
 import { CashflowChart } from "@/components/charts/cashflow-chart";
 import { LastImportNotice } from "@/components/finance/import-list";
 import { MatchPanel } from "@/components/finance/match-panel";
+import { QuickEntryBar } from "@/components/shell/quick-entry";
 import { ItemStatus } from "@/components/finance/item-status";
 import { SettleMenu } from "@/components/finance/settle-menu";
 import { useQuickAdd } from "@/components/shell/quick-add";
@@ -61,6 +62,9 @@ export function DashboardView({
     <div className="flex flex-col gap-4">
       <h1 className="sr-only">Übersicht</h1>
       {lastImport && <LastImportNotice entry={lastImport} />}
+      <div className="panel px-4 py-3 sm:px-5">
+        <QuickEntryBar />
+      </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <AvailabilityPanel dashboard={dashboard} className="lg:col-span-7" />
         <MonthPanel dashboard={dashboard} className="lg:col-span-5" />

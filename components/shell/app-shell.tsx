@@ -23,6 +23,7 @@ import type { Lookups } from "@/components/forms/transaction-dialog";
 import { authClient } from "@/lib/client/auth-client";
 import { useTheme } from "@/lib/client/theme";
 import { QuickAddProvider, useQuickAdd } from "./quick-add";
+import { QuickEntryHotkey } from "./quick-entry";
 
 type NavItem = { href: string; label: string; short: string; icon: Icon; aliases?: string[] };
 
@@ -231,6 +232,7 @@ export function AppShell({ lookups, userName, children }: { lookups: Lookups; us
         </div>
         <MobileTabs pathname={pathname} />
       </div>
+      <QuickEntryHotkey />
     </QuickAddProvider>
   );
 }
