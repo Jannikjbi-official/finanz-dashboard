@@ -1,5 +1,5 @@
 import { SettingsView } from "@/components/views/settings-view";
-import { getFinanceData } from "@/lib/server/data";
+import { getFinanceData, loadImports } from "@/lib/server/data";
 import { getSecurityOverview } from "@/lib/server/security";
 import { requireUser } from "@/lib/server/session";
 
@@ -7,7 +7,7 @@ export const metadata = { title: "Einstellungen" };
 
 export default async function SettingsPage() {
   const user = await requireUser();
-  const [data, security] = await Promise.all([getFinanceData(user.id), getSecurityOverview()]);
+  const [data, security, imports] = await Promise.all([getFinanceData(user.id), getSecurityOverview(), loadImports(user.id, "transactions")]);
   const usage = new Map<string, number>();
   for (const tx of data.transactions) if (tx.categoryId) usage.set(tx.categoryId, (usage.get(tx.categoryId) ?? 0) + 1);
   return (
@@ -17,6 +17,7 @@ export default async function SettingsPage() {
       timeZone={data.timeZone}
       categories={data.categories.map((c) => ({ ...c, usage: usage.get(c.id) ?? 0 }))}
       accounts={data.accounts}
+      imports={imports}
       counts={{ transactions: data.transactions.length, recurring: data.recurring.length, accounts: data.accounts.length }}
     />
   );

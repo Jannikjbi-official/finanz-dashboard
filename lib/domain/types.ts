@@ -101,3 +101,40 @@ export type Category = {
   kind: TxType;
   color: string;
 };
+
+/**
+ * Wunsch: etwas, das gekauft werden soll. Zaehlt nirgends mit, solange es
+ * nur ein Wunsch ist. Erst "eingeplant" entsteht eine geplante Zahlung
+ * (Buchung mit status "pending"), die in "Aktuell verfuegbar" eingeht.
+ */
+export type WishStatus = "idea" | "planned" | "bought" | "dropped";
+export type WishPriority = "high" | "normal" | "low";
+
+export type Wish = {
+  id: string;
+  title: string;
+  amountCents: Cents;
+  targetDate: ISODate | null;
+  status: WishStatus;
+  priority: WishPriority;
+  group: string | null;
+  link: string | null;
+  note: string | null;
+  categoryId: string | null;
+  transactionId: string | null;
+  importId: string | null;
+};
+
+/** Ein CSV-Import, zur Anzeige und zum Rueckgaengigmachen. */
+export type ImportInfo = {
+  id: string;
+  kind: "transactions" | "wishes";
+  fileName: string | null;
+  rowCount: number;
+  dateFrom: ISODate | null;
+  dateTo: ISODate | null;
+  /** Zeitpunkt als ISO-String (mit Uhrzeit). */
+  createdAt: string;
+  undoneAt: string | null;
+  undoneCount: number | null;
+};

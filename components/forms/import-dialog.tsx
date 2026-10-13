@@ -106,6 +106,7 @@ export function ImportDialog({
     try {
       const result = await importTransactions({
         accountId,
+        fileName,
         rows: selected.map((row) => ({
           date: row.date!,
           title: row.title,
