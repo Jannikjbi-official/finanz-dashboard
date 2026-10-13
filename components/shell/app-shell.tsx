@@ -5,6 +5,7 @@ import {
   CaretDown,
   ChartLineUp,
   GearSix,
+  Gift,
   Moon,
   Plus,
   Receipt,
@@ -25,12 +26,13 @@ import { QuickAddProvider, useQuickAdd } from "./quick-add";
 
 type NavItem = { href: string; label: string; short: string; icon: Icon; aliases?: string[] };
 
-/** Bewusst kompakt: sechs Bereiche. Aliase sind Adressen der Vorversion. */
+/** Bewusst kompakt: sieben Bereiche. Aliase sind Adressen der Vorversion. */
 const NAV: NavItem[] = [
   { href: "/", label: "Übersicht", short: "Übersicht", icon: ChartLineUp, aliases: ["/app"] },
   { href: "/transaktionen", label: "Transaktionen", short: "Umsätze", icon: Receipt, aliases: ["/app/geld/buchungen"] },
   { href: "/abonnements", label: "Abonnements", short: "Abos", icon: ArrowsClockwise },
   { href: "/feste-kosten", label: "Feste Kosten", short: "Fixkosten", icon: Vault, aliases: ["/app/planung/fixkosten"] },
+  { href: "/wuensche", label: "Wünsche", short: "Wünsche", icon: Gift },
   { href: "/konten", label: "Konten", short: "Konten", icon: Wallet, aliases: ["/app/geld"] },
   { href: "/einstellungen", label: "Einstellungen", short: "Mehr", icon: GearSix, aliases: ["/app/einstellungen"] },
 ];
@@ -176,7 +178,7 @@ function MobileTabs({ pathname }: { pathname: string }) {
   return (
     <nav
       aria-label="Hauptnavigation"
-      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-separator bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-7 border-t border-separator bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm lg:hidden"
     >
       {NAV.map((item) => {
         const active = isActive(item, pathname);

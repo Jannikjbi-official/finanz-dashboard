@@ -54,7 +54,7 @@ const legacyRedirects = [
   ["/app/planung", "/feste-kosten"],
   ["/app/planung/geplant", "/transaktionen"],
   ["/app/planung/budgets", "/"],
-  ["/app/planung/ziele", "/"],
+  ["/app/planung/ziele", "/wuensche"],
   ["/app/entscheiden/:path*", "/"],
   ["/app/rueckblick/:path*", "/"],
   ["/abos", "/abonnements"],

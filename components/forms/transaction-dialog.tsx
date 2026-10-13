@@ -15,7 +15,7 @@ export type DialogKind = TxType | "transfer";
 export type Lookups = { accounts: Account[]; categories: Category[]; today: string };
 
 /** Auswahlgruppe mit zwei bis drei Optionen. */
-function Segmented<T extends string>({
+export function Segmented<T extends string>({
   label,
   value,
   onChange,
