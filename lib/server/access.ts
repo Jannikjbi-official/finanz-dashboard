@@ -1,3 +1,4 @@
+import { ACCESS_DENIED_TEXT, SOCIAL_BLOCKED_TEXT } from "../auth-errors";
 import { db } from "./db";
 
 /**
@@ -26,9 +27,13 @@ export function accessConfigured() {
   return allowedEmails().length > 0;
 }
 
-export const ACCESS_DENIED = "Für diese Adresse besteht kein Zugang.";
-export const SOCIAL_BLOCKED_WITH_2FA =
-  "Für dieses Konto ist die Zwei-Faktor-Anmeldung aktiv. Bitte mit E-Mail, Passwort und Code anmelden.";
+export { ACCESS_DENIED_TEXT as ACCESS_DENIED, SOCIAL_BLOCKED_TEXT as SOCIAL_BLOCKED_WITH_2FA };
+
+/** Codes, mit denen die Anmeldeseite die Ablehnung erklaert (lib/auth-errors.ts). */
+export const REJECTION_CODE: Record<string, string> = {
+  [ACCESS_DENIED_TEXT]: "ACCESS_DENIED",
+  [SOCIAL_BLOCKED_TEXT]: "SOCIAL_BLOCKED_2FA",
+};
 
 /**
  * Darf fuer diesen Nutzer eine Sitzung entstehen? Liefert den Ablehnungsgrund
@@ -41,9 +46,9 @@ export function sessionRejection(input: {
   path: string | null | undefined;
   list?: string[];
 }): string | null {
-  if (!isAllowedEmail(input.email, input.list)) return ACCESS_DENIED;
+  if (!isAllowedEmail(input.email, input.list)) return ACCESS_DENIED_TEXT;
   const viaOAuth = Boolean(input.path && (input.path.startsWith("/callback/") || input.path.startsWith("/oauth2/callback/")));
-  if (viaOAuth && input.twoFactorEnabled) return SOCIAL_BLOCKED_WITH_2FA;
+  if (viaOAuth && input.twoFactorEnabled) return SOCIAL_BLOCKED_TEXT;
   return null;
 }
 

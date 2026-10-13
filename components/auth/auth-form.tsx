@@ -69,18 +69,21 @@ export function AuthForm({
   discord,
   canRegister,
   locked,
+  initialError = null,
 }: {
   mode: "sign-in" | "sign-up";
   next: string;
   discord: boolean;
   canRegister: boolean;
   locked: boolean;
+  /** Meldung aus /anmelden?error=... (z. B. abgelehnte Discord-Anmeldung). */
+  initialError?: string | null;
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [pending, setPending] = useState(false);
   const [step, setStep] = useState<"credentials" | "code">("credentials");
   const [code, setCode] = useState("");
@@ -212,7 +215,7 @@ export function AuthForm({
           <ErrorBox text={error} />
           <SubmitButton pending={pending}>{signUp ? "Zugang anlegen" : "Anmelden"}</SubmitButton>
           {discord && !signUp && (
-            <Button variant="secondary" fullWidth onPress={() => authClient.signIn.social({ provider: "discord", callbackURL: next })}>
+            <Button variant="secondary" fullWidth onPress={() => authClient.signIn.social({ provider: "discord", callbackURL: next, errorCallbackURL: "/anmelden" })}>
               Mit Discord anmelden
             </Button>
           )}
