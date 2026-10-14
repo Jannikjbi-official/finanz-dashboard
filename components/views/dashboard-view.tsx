@@ -3,6 +3,7 @@
 import { ArrowRight, Info, Warning } from "@phosphor-icons/react";
 import { Button, Disclosure, Tooltip } from "@heroui/react";
 import Link from "next/link";
+import { BalanceChart } from "@/components/charts/balance-chart";
 import { CashflowChart } from "@/components/charts/cashflow-chart";
 import { LastImportNotice } from "@/components/finance/import-list";
 import { AmountChangePanel, MatchPanel } from "@/components/finance/match-panel";
@@ -106,6 +107,20 @@ export function DashboardView({
 
         <SubscriptionsPanel dashboard={dashboard} className="lg:col-span-5" />
       </div>
+
+      {dashboard.timeline.length > 1 && (
+        <Panel
+          id="timeline"
+          title="Kontostand bis Monatsende"
+          description="Verfügbare Konten: gebucht der letzten Wochen, danach gestrichelt die Prognose mit allen bekannten Zahlungen"
+        >
+          <BalanceChart
+            points={dashboard.timeline.map((point) => ({ date: point.date, value: point.balance, forecast: point.forecast, changes: point.changes }))}
+            today={dashboard.today}
+            label={`Kontostand vom ${formatDayShort(dashboard.timeline[0].date)} bis ${formatDayShort(dashboard.availability.monthEnd)}`}
+          />
+        </Panel>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <Panel

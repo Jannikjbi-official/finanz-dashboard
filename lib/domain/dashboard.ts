@@ -4,6 +4,7 @@ import { dataStart, monthSummary, monthlyHistory, partialFrom, spendingBaseline 
 import { amountChanges } from "./amount-changes";
 import { findRecurringMatches } from "./matching";
 import { availability, openItems, savingsEstimate, type OpenItem } from "./overview";
+import { liquidTimeline } from "./timeline";
 import type { Account, Recurring, Transaction } from "./types";
 
 /**
@@ -85,6 +86,8 @@ export function buildDashboard(input: { accounts: Account[]; transactions: Trans
       partialFrom: partialFrom(summary.month, start),
     })),
     upcoming,
+    /** Verfuegbare Konten: letzte 30 Tage gebucht, dann Prognose bis Monatsende. */
+    timeline: liquidTimeline({ accounts, transactions, today, forecast: avail.forecast }),
     upcomingTotalUntilMonthEnd: avail.bankPending.total + avail.dueUnpaid.total + avail.plannedExpenses.total,
     /** Buchungen, die offenen Terminen zugeordnet werden koennen (#17). */
     matches: findRecurringMatches(recurring, transactions, today),

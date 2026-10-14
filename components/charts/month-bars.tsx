@@ -169,7 +169,9 @@ export function MonthBars({ data, average, color }: { data: MonthBar[]; average:
               </div>
               <div className="num flex justify-between gap-3">
                 <span className="text-muted">{current.count} Buchungen</span>
-                <Figures text={formatMoney(current.amount)} />
+                <span className="shrink-0">
+                  <Figures text={formatMoney(current.amount)} />
+                </span>
               </div>
             </div>
           )}

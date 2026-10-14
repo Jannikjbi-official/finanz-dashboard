@@ -7,14 +7,16 @@ import { useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/forms/confirm-dialog";
 import { DateInput, MoneyInput } from "@/components/forms/fields";
 import { FormDialog } from "@/components/forms/form-dialog";
+import { BalanceChart } from "@/components/charts/balance-chart";
 import { useQuickAdd } from "@/components/shell/quick-add";
 import { Money } from "@/components/ui/money";
 import { PageHeader, Panel, SummaryCell } from "@/components/ui/panel";
 import { useAction } from "@/lib/client/use-action";
 import { ACCOUNT_KIND_LABEL } from "@/lib/domain/labels";
 import { accountBalance, accountBalances, accountHistory, openingBalance } from "@/lib/domain/ledger";
+import { netWorthHistory } from "@/lib/domain/timeline";
 import type { Account, Category, Transaction } from "@/lib/domain/types";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, formatMonth } from "@/lib/format";
 import { parseAmountToCents } from "@/lib/money";
 import { deleteAccount, setAccountArchived, setBalanceAnchor } from "@/lib/server/actions/accounts";
 
@@ -35,6 +37,7 @@ export function AccountsView({ accounts, transactions, categories }: { accounts:
   const selected = accounts.find((a) => a.id === selectedId) ?? null;
   const history = useMemo(() => (selected ? accountHistory(selected, transactions) : []), [selected, transactions]);
 
+  const worth = useMemo(() => netWorthHistory(accounts, transactions, lookups.today), [accounts, transactions, lookups.today]);
   const active = accounts.filter((a) => !a.archived);
   const total = active.reduce((sum, a) => sum + (balances.get(a.id) ?? 0), 0);
   const liquid = active.filter((a) => a.liquid).reduce((sum, a) => sum + (balances.get(a.id) ?? 0), 0);
@@ -78,6 +81,22 @@ export function AccountsView({ accounts, transactions, categories }: { accounts:
         <SummaryCell label="Verfügbar" hint="Konten für laufende Ausgaben" value={<Money cents={liquid} />} />
         <SummaryCell label="Zurückgelegt" hint="zählt nicht zum verfügbaren Geld" value={<Money cents={total - liquid} />} />
       </section>
+
+      {worth.length > 2 && (
+        <Panel title="Vermögensverlauf" description="Alle Konten jeweils am Monatsende, zuletzt heute" className="mb-4">
+          <BalanceChart
+            points={worth.map((point) => ({
+              date: point.date,
+              value: point.total,
+              label: point.current ? "Heute" : `Ende ${formatMonth(point.date.slice(0, 7))}`,
+              note: `davon verfügbar ${formatMoney(point.liquid)}`,
+            }))}
+            step={false}
+            height={180}
+            label="Vermögen je Monatsende"
+          />
+        </Panel>
+      )}
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
         <Panel

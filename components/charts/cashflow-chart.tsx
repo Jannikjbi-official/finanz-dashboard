@@ -187,13 +187,13 @@ export function CashflowChart({ data }: { data: CashflowMonth[] }) {
                 <span className="inline-flex items-center gap-1.5 text-muted">
                   <span className="size-2 rounded-[2px] bg-chart-income" /> Einnahmen
                 </span>
-                <Figures text={formatMoney(current.income)} />
+                <span className="shrink-0"><Figures text={formatMoney(current.income)} /></span>
               </div>
               <div className="num flex justify-between gap-3">
                 <span className="inline-flex items-center gap-1.5 text-muted">
                   <span className="size-2 rounded-[2px] bg-chart-expense" /> Ausgaben
                 </span>
-                <Figures text={formatMoney(current.expense)} />
+                <span className="shrink-0"><Figures text={formatMoney(current.expense)} /></span>
               </div>
               <div className="num mt-1.5 flex justify-between gap-3 border-t border-separator pt-1.5">
                 <span className="text-muted">Saldo</span>
