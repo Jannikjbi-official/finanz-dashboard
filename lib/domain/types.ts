@@ -184,3 +184,14 @@ export type SnapshotInfo = {
   /** Anzahl je Collection. */
   counts: Record<string, number>;
 };
+
+/** Vorlage fuer haeufige Buchungen (z. B. "Baecker 3,20 €"). Betrag optional. */
+export type Template = {
+  id: string;
+  type: TxType;
+  title: string;
+  amountCents: Cents | null;
+  categoryId: string | null;
+  accountId: string | null;
+  note: string | null;
+};

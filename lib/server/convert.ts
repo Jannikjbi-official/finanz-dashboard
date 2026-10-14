@@ -1,8 +1,8 @@
 import type { WithId } from "mongodb";
 import { inferCostType } from "../domain/labels";
 import type { CategoryRule } from "../domain/rules";
-import type { Account, Category, ImportInfo, Recurring, Transaction, Wish } from "../domain/types";
-import type { AccountDoc, CategoryDoc, ImportDoc, RecurringDoc, RuleDoc, TransactionDoc, WishDoc } from "./db";
+import type { Account, Category, ImportInfo, Recurring, Template, Transaction, Wish } from "../domain/types";
+import type { AccountDoc, CategoryDoc, ImportDoc, RecurringDoc, RuleDoc, TemplateDoc, TransactionDoc, WishDoc } from "./db";
 
 /**
  * Dokumente in die Fachtypen aus lib/domain uebersetzen. Fehlende Felder aus
@@ -108,5 +108,17 @@ export function toRule(doc: WithId<RuleDoc>): CategoryRule {
     kind: doc.kind ?? null,
     accountId: doc.accountId ?? null,
     order: doc.order ?? 0,
+  };
+}
+
+export function toTemplate(doc: WithId<TemplateDoc>): Template {
+  return {
+    id: doc._id.toString(),
+    type: doc.type,
+    title: doc.title,
+    amountCents: doc.amountCents ?? null,
+    categoryId: doc.categoryId ?? null,
+    accountId: doc.accountId ?? null,
+    note: doc.note ?? null,
   };
 }

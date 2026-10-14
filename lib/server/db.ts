@@ -171,6 +171,18 @@ export type RuleDoc = {
   createdAt: Date;
 };
 
+/** Vorlage fuer haeufige Buchungen (siehe Template in lib/domain/types.ts). */
+export type TemplateDoc = {
+  userId: string;
+  type: TxType;
+  title: string;
+  amountCents: number | null;
+  categoryId: string | null;
+  accountId: string | null;
+  note: string | null;
+  createdAt: Date;
+};
+
 /** Ein CSV-Import. Alle Datensaetze daraus tragen die importId. */
 export type ImportDoc = {
   _id: string;
@@ -210,6 +222,7 @@ export const planned = db.collection<LegacyPlannedDoc>("planned");
 export const wishes = db.collection<WishDoc>("wishes");
 export const imports = db.collection<ImportDoc>("imports");
 export const rules = db.collection<RuleDoc>("rules");
+export const templates = db.collection<TemplateDoc>("templates");
 /**
  * Papierkorb: Kopie aller geloeschten Buchungen - aus "Loeschen" und aus
  * "Import rueckgaengig". Ein Eintrag je Vorgang, wiederherstellbar. Die
@@ -242,6 +255,7 @@ export const USER_DATA_COLLECTIONS = [
   "imports",
   "import_trash",
   "rules",
+  "templates",
   "planned",
   "goals",
   "refunds",
@@ -261,6 +275,7 @@ export function ensureIndexes(): Promise<void> {
       wishes.createIndex({ userId: 1, status: 1 }),
       imports.createIndex({ userId: 1, createdAt: -1 }),
       rules.createIndex({ userId: 1, order: 1 }),
+      templates.createIndex({ userId: 1, title: 1 }),
       transactions.createIndex(
         { userId: 1, legacyPlannedId: 1 },
         { unique: true, partialFilterExpression: { legacyPlannedId: { $type: "string" } } },

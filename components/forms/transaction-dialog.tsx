@@ -4,9 +4,10 @@ import { Button, Label, ToggleButton, ToggleButtonGroup, type Key } from "@herou
 import { useState } from "react";
 import { formatAmountInput, formatDate } from "@/lib/format";
 import { useAction } from "@/lib/client/use-action";
-import type { Account, Category, Transaction, TxStatus, TxType } from "@/lib/domain/types";
+import type { Account, Category, Template, Transaction, TxStatus, TxType } from "@/lib/domain/types";
 import { unlinkRecurringPayment } from "@/lib/server/actions/matching";
 import { ruleFromTransaction } from "@/lib/server/actions/rules";
+import { saveTemplate } from "@/lib/server/actions/templates";
 import { deleteTransaction, saveTransaction, saveTransfer } from "@/lib/server/actions/transactions";
 import { useQuickAdd } from "@/components/shell/quick-add";
 import { ConfirmDialog } from "./confirm-dialog";
@@ -15,7 +16,7 @@ import { FormDialog } from "./form-dialog";
 
 export type DialogKind = TxType | "transfer";
 
-export type Lookups = { accounts: Account[]; categories: Category[]; today: string };
+export type Lookups = { accounts: Account[]; categories: Category[]; today: string; templates?: Template[] };
 
 /** Auswahlgruppe mit zwei bis drei Optionen. */
 export function Segmented<T extends string>({
@@ -116,6 +117,18 @@ export function TransactionDialog({
     );
   };
 
+  // Vorlage uebernehmen: alle Felder ausser Datum und Status
+  const applyTemplate = (template: Template) => {
+    setKind(template.type);
+    setTitle(template.title);
+    setAmount(template.amountCents !== null ? formatAmountInput(template.amountCents) : "");
+    setCategoryId(template.categoryId);
+    if (template.accountId && accounts.some((account) => account.id === template.accountId && !account.archived)) setAccountId(template.accountId);
+    setNote(template.note ?? "");
+  };
+  const templates = lookups.templates ?? [];
+  const canSaveTemplate = !isEdit || !transaction?.transferGroupId;
+
   const accountOptions = accounts.map((account) => ({ id: account.id, label: account.name + (account.archived ? " (archiviert)" : "") }));
   const title_ = isEdit
     ? "Buchung bearbeiten"
@@ -138,7 +151,7 @@ export function TransactionDialog({
         onSubmit={submit}
         extraActions={
           isEdit ? (
-            <div className="flex gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
               <Button variant="danger-soft" size="sm" onPress={() => setConfirmDelete(true)}>
                 Löschen
               </Button>
@@ -154,10 +167,48 @@ export function TransactionDialog({
                   Duplizieren
                 </Button>
               )}
+              {canSaveTemplate && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  isPending={pending}
+                  onPress={() => run(() => saveTemplate({ type, title, amount, categoryId, accountId, note }))}
+                >
+                  Als Vorlage
+                </Button>
+              )}
             </div>
+          ) : kind !== "transfer" ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              isPending={pending}
+              isDisabled={!title.trim()}
+              onPress={() => run(() => saveTemplate({ type, title, amount, categoryId, accountId, note }))}
+            >
+              Als Vorlage speichern
+            </Button>
           ) : undefined
         }
       >
+        {!isEdit && !duplicateOf && templates.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <span className="label">Vorlagen</span>
+            <div className="flex flex-wrap gap-1.5">
+              {templates.map((template) => (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => applyTemplate(template)}
+                  className="rounded-full border border-separator px-2.5 py-1 text-[12.5px] outline-none hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-focus"
+                >
+                  {template.title}
+                  {template.amountCents !== null && <span className="text-muted"> · {formatAmountInput(template.amountCents)} €</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {!isEdit && (
           <Segmented
             label="Art"

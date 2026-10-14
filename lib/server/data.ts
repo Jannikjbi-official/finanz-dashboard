@@ -2,14 +2,17 @@ import "server-only";
 import { cache } from "react";
 import type { WithId } from "mongodb";
 import { todayIn } from "../domain/calendar";
-import type { Account, Category, ImportInfo, Recurring, Transaction, Wish } from "../domain/types";
+import type { Account, Category, ImportInfo, Recurring, Template, Transaction, Wish } from "../domain/types";
 import type { CategoryRule } from "../domain/rules";
-import { toAccount, toCategory, toImportInfo, toRecurring, toRule, toTransaction, toWish } from "./convert";
-import { accounts, categories, db, ensureIndexes, imports, recurring, rules, transactions, wishes, type TransactionDoc } from "./db";
+import { toAccount, toCategory, toImportInfo, toRecurring, toRule, toTemplate, toTransaction, toWish } from "./convert";
+import { accounts, categories, db, ensureIndexes, imports, recurring, rules, templates, transactions, wishes, type TransactionDoc } from "./db";
 import { LEGACY_PREFIX, listLegacyImports } from "./import-undo";
 import { getSettings } from "./user-data";
 
 export { toAccount, toCategory, toRecurring, toTransaction, toWish };
+
+/** Hoechstens so viele Vorlagen je Nutzer. */
+export const MAX_TEMPLATES = 30;
 
 /**
  * Lesezugriff. Jede Abfrage ist an die userId gebunden; die Uebersetzung in
@@ -92,4 +95,10 @@ export async function loadImports(userId: string, kind: ImportInfo["kind"], limi
 export async function loadRules(userId: string): Promise<CategoryRule[]> {
   const docs = await rules.find({ userId }).sort({ order: 1, createdAt: 1 }).toArray();
   return docs.map(toRule);
+}
+
+/** Vorlagen fuer haeufige Buchungen, alphabetisch. */
+export async function loadTemplates(userId: string): Promise<Template[]> {
+  const docs = await templates.find({ userId }).sort({ title: 1 }).limit(MAX_TEMPLATES).toArray();
+  return docs.map(toTemplate);
 }

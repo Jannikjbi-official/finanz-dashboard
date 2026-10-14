@@ -47,6 +47,7 @@ beforeEach(async () => {
     db.rules.deleteMany({}),
     db.importTrash.deleteMany({}),
     db.wishes.deleteMany({}),
+    db.templates.deleteMany({}),
     db.db.collection("user_snapshots").deleteMany({}),
     db.settings.deleteMany({}),
     db.db.collection("notifications").deleteMany({}),
@@ -602,5 +603,26 @@ describe("JSON-Sicherung wiederherstellen", () => {
     expect(await tx.restoreFromTrash("aaaaaaaaaaaaaaaaaaaaaaaa")).toMatchObject({ ok: true });
     expect(await db.transactions.findOne({ title: "Fremd" })).toMatchObject({ userId: "user-a" });
     expect(await db.transactions.countDocuments({ userId: "user-b" })).toBe(1);
+  });
+});
+
+describe("Vorlagen", () => {
+  it("speichert, ersetzt bei gleichem Titel, loescht nur eigene", async () => {
+    const templates = await import("./templates");
+    const { loadTemplates } = await import("@/lib/server/data");
+    const giro = await createAccount("Giro", "giro", "0");
+    expect(await templates.saveTemplate({ type: "expense", title: "Bäcker", amount: "3,20", accountId: giro })).toMatchObject({ ok: true, message: "Vorlage „Bäcker“ gespeichert" });
+    expect(await templates.saveTemplate({ type: "expense", title: "Bäcker", amount: "3,50" })).toMatchObject({ ok: true, message: "Vorlage „Bäcker“ aktualisiert" });
+    expect(await templates.saveTemplate({ type: "expense", title: "Tanken", amount: "" })).toMatchObject({ ok: true });
+    expect(await templates.saveTemplate({ type: "expense", title: "x", amount: "abc" })).toMatchObject({ ok: false });
+    const list = await loadTemplates("user-a");
+    expect(list.map((entry) => [entry.title, entry.amountCents])).toEqual([["Bäcker", 3_50], ["Tanken", null]]);
+
+    session.userId = "user-b";
+    expect(await templates.deleteTemplate(list[0].id)).toMatchObject({ ok: false });
+    expect(await templates.saveTemplate({ type: "expense", title: "Fremd", accountId: giro })).toMatchObject({ ok: false, error: "Konto nicht gefunden" });
+    session.userId = "user-a";
+    expect(await templates.deleteTemplate(list[0].id)).toMatchObject({ ok: true });
+    expect(await loadTemplates("user-a")).toHaveLength(1);
   });
 });
