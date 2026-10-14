@@ -3,16 +3,18 @@ import { getFinanceData, loadImports, loadRules } from "@/lib/server/data";
 import { getNotifySettings, maskWebhook } from "@/lib/server/notify";
 import { getSecurityOverview } from "@/lib/server/security";
 import { requireUser } from "@/lib/server/session";
+import { listTrash } from "@/lib/server/trash";
 
 export const metadata = { title: "Einstellungen" };
 
 export default async function SettingsPage() {
   const user = await requireUser();
-  const [data, security, imports, rules] = await Promise.all([
+  const [data, security, imports, rules, trash] = await Promise.all([
     getFinanceData(user.id),
     getSecurityOverview(),
     loadImports(user.id, "transactions"),
     loadRules(user.id),
+    listTrash(user.id),
   ]);
   const notify = await getNotifySettings(user.id);
   const usage = new Map<string, number>();
@@ -25,6 +27,7 @@ export default async function SettingsPage() {
       categories={data.categories.map((c) => ({ ...c, usage: usage.get(c.id) ?? 0 }))}
       accounts={data.accounts}
       imports={imports}
+      trash={trash}
       rules={rules}
       notify={{ webhook: maskWebhook(notify.webhookUrl), due: notify.due, monthly: notify.monthly }}
       counts={{ transactions: data.transactions.length, recurring: data.recurring.length, accounts: data.accounts.length }}

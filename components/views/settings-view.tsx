@@ -10,13 +10,14 @@ import { ImportDialog } from "@/components/forms/import-dialog";
 import { ImportList } from "@/components/finance/import-list";
 import { NotificationsPanel } from "@/components/settings/notifications-panel";
 import { RulesPanel } from "@/components/settings/rules-panel";
+import { TrashPanel } from "@/components/finance/trash-panel";
 import { SecurityPanel } from "@/components/settings/security-panel";
 import { SignOutButton } from "@/components/shell/app-shell";
 import { PageHeader, Panel } from "@/components/ui/panel";
 import { useAction } from "@/lib/client/use-action";
 import { useTheme } from "@/lib/client/theme";
 import type { CategoryRule } from "@/lib/domain/rules";
-import type { Account, Category, ImportInfo, TxType } from "@/lib/domain/types";
+import type { Account, Category, ImportInfo, TrashEntry, TxType } from "@/lib/domain/types";
 import { deleteCategory, saveCategory, saveTimeZone } from "@/lib/server/actions/accounts";
 
 type CategoryRow = Category & { usage: number };
@@ -31,6 +32,7 @@ export function SettingsView({
   categories,
   accounts,
   imports,
+  trash,
   rules,
   notify,
   counts,
@@ -41,6 +43,7 @@ export function SettingsView({
   categories: CategoryRow[];
   accounts: Account[];
   imports: ImportInfo[];
+  trash: TrashEntry[];
   rules: CategoryRule[];
   notify: { webhook: string | null; due: boolean; monthly: boolean };
   counts: { transactions: number; recurring: number; accounts: number };
@@ -117,6 +120,8 @@ export function SettingsView({
             </DataRow>
           </div>
         </Panel>
+
+        <TrashPanel entries={trash} />
 
         <Panel title="Kategorien" description="Ordnen Buchungen zu. Löschen entfernt die Kategorie nur aus den Buchungen, nicht die Buchungen selbst." className="lg:col-span-2" bodyClassName="grid grid-cols-1 gap-6 p-4 sm:p-5 md:grid-cols-2">
           {(["expense", "income"] as const).map((kind) => (

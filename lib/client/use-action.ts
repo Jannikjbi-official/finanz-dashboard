@@ -3,8 +3,9 @@
 import { toast } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
+import { restoreFromTrash } from "@/lib/server/actions/transactions";
 
-type Result = { ok: true; message?: string } | { ok: false; error: string };
+type Result = { ok: true; message?: string; undo?: string } | { ok: false; error: string };
 
 /**
  * Fuehrt eine Server Action aus, zeigt das Ergebnis als Toast und laedt die
@@ -20,7 +21,16 @@ export function useAction() {
       try {
         const result = await action();
         if (result.ok) {
-          if (result.message && !options.silent) toast.success(result.message);
+          const undo = result.undo;
+          if (undo) {
+            // Geloeschtes liegt im Papierkorb - direkt zurueckholen
+            toast.success(result.message ?? "Gelöscht", {
+              timeout: 8000,
+              actionProps: { children: "Rückgängig", onPress: () => void run(() => restoreFromTrash(undo)) },
+            });
+          } else if (result.message && !options.silent) {
+            toast.success(result.message);
+          }
           router.refresh();
           return true;
         }

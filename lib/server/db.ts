@@ -208,8 +208,24 @@ export const planned = db.collection<LegacyPlannedDoc>("planned");
 export const wishes = db.collection<WishDoc>("wishes");
 export const imports = db.collection<ImportDoc>("imports");
 export const rules = db.collection<RuleDoc>("rules");
-/** Sicherung aller Datensaetze, die ein "Import rueckgaengig" geloescht hat. */
-export const importTrash = db.collection<{ userId: string; importId: string; kind: "transactions" | "wishes"; docs: unknown[]; deletedAt: Date }>("import_trash");
+/**
+ * Papierkorb: Kopie aller geloeschten Buchungen - aus "Loeschen" und aus
+ * "Import rueckgaengig". Ein Eintrag je Vorgang, wiederherstellbar. Die
+ * Collection heisst aus historischen Gruenden import_trash.
+ */
+export type TrashDoc = {
+  userId: string;
+  /** Gesetzt, wenn der Eintrag aus "Import rueckgaengig" stammt. */
+  importId?: string | null;
+  kind: "transactions" | "wishes";
+  docs: unknown[];
+  /** Kurzbeschreibung fuer die Liste, z. B. "Lidl, 12,50 €" oder "3 Buchungen". */
+  label?: string;
+  deletedAt: Date;
+  /** Danach loescht MongoDB den Eintrag (TTL). Ohne Datum: bleibt bis "Endgueltig loeschen". */
+  expiresAt?: Date | null;
+};
+export const importTrash = db.collection<TrashDoc>("import_trash");
 
 /**
  * Alle Collections mit Finanzdaten eines Nutzers - auch die nicht mehr
@@ -249,6 +265,8 @@ export function ensureIndexes(): Promise<void> {
       ),
       recurring.createIndex({ userId: 1, status: 1 }),
       accounts.createIndex({ userId: 1, archived: 1 }),
+      importTrash.createIndex({ userId: 1, deletedAt: -1 }),
+      importTrash.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
     ]);
   })().catch((error) => {
     globalForMongo.__mongoIndexes = undefined;

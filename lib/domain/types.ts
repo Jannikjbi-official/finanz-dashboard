@@ -160,3 +160,15 @@ export type ImportInfo = {
   /** Import aus der Zeit vor der Import-ID, erkannt am gemeinsamen Anlagezeitpunkt. */
   legacy?: boolean;
 };
+
+/** Ein Vorgang im Papierkorb (eine geloeschte Buchung, eine Auswahl oder ein Import). */
+export type TrashEntry = {
+  id: string;
+  label: string;
+  count: number;
+  /** Zeitpunkte als ISO-String (mit Uhrzeit). */
+  deletedAt: string;
+  /** null: bleibt, bis er endgueltig geloescht wird (rueckgaengig gemachte Importe). */
+  expiresAt: string | null;
+  fromImport: boolean;
+};

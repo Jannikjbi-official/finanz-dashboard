@@ -1,7 +1,8 @@
 "use client";
 
-import { ArrowsLeftRight, DownloadSimple, UploadSimple } from "@phosphor-icons/react";
-import { Button, SearchField, Table, ToggleButton, ToggleButtonGroup, type Key, type SortDescriptor } from "@heroui/react";
+import { ArrowsLeftRight, CheckSquare, DownloadSimple, Trash, UploadSimple } from "@phosphor-icons/react";
+import { Button, Checkbox, Dropdown, Label, SearchField, Table, ToggleButton, ToggleButtonGroup, type Key, type Selection, type SortDescriptor } from "@heroui/react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/forms/confirm-dialog";
@@ -17,7 +18,7 @@ import { defaultFilter, filterToParams, matchesFilter, type TransactionFilter } 
 import type { Account, Category, Transaction } from "@/lib/domain/types";
 import { formatAmountInput, formatDate, formatMoney, formatMonth } from "@/lib/format";
 import { parseAmountToCents } from "@/lib/money";
-import { deleteTransaction, setTransactionStatus } from "@/lib/server/actions/transactions";
+import { deleteTransaction, deleteTransactions, setTransactionStatus, updateTransactions } from "@/lib/server/actions/transactions";
 
 type Row = {
   id: string;
@@ -74,12 +75,15 @@ export function TransactionsView({
   categories,
   today,
   initialFilter,
+  trashCount,
 }: {
   transactions: Transaction[];
   accounts: Account[];
   categories: Category[];
   today: string;
   initialFilter: TransactionFilter;
+  /** Eintraege im Papierkorb (fuer den Link). */
+  trashCount: number;
 }) {
   const { openTransaction } = useQuickAdd();
   const { run, pending } = useAction();
@@ -105,6 +109,9 @@ export function TransactionsView({
   const [limit, setLimit] = useState(PAGE);
   const [importOpen, setImportOpen] = useState(false);
   const [transferToDelete, setTransferToDelete] = useState<Row | null>(null);
+  const [selection, setSelection] = useState<Set<string>>(new Set());
+  // Auf dem Handy: Antippen waehlt aus statt zu oeffnen
+  const [selecting, setSelecting] = useState(false);
 
   const accountName = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts]);
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
@@ -161,6 +168,25 @@ export function TransactionsView({
   const visible = filtered.slice(0, limit);
   const filtersActive = filterToParams(filter, currentMonth).toString() !== "";
 
+  // Ausgewaehlt zaehlt nur, was die Filter gerade zeigen
+  const selectedRows = useMemo(() => filtered.filter((row) => selection.has(row.id)), [filtered, selection]);
+  const selectedIds = selectedRows.map((row) => row.id);
+  const toggle = (id: string) =>
+    setSelection((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const onTableSelection = (keys: Selection) => setSelection(keys === "all" ? new Set(visible.map((row) => row.id)) : new Set([...keys].map(String)));
+  const clearSelection = () => {
+    setSelection(new Set());
+    setSelecting(false);
+  };
+  const bulk = async (action: () => ReturnType<typeof updateTransactions>) => {
+    if (await run(action)) clearSelection();
+  };
+
   return (
     <div>
       <PageHeader
@@ -171,6 +197,14 @@ export function TransactionsView({
             <Button size="sm" variant="ghost" onPress={() => setImportOpen(true)}>
               <UploadSimple className="size-4" /> CSV-Import
             </Button>
+            {trashCount > 0 && (
+              <Link
+                href="/einstellungen#papierkorb"
+                className="inline-flex h-8 items-center gap-2 rounded-[var(--radius)] px-3 text-sm font-medium text-foreground hover:bg-default"
+              >
+                <Trash className="size-4" /> Papierkorb ({trashCount})
+              </Link>
+            )}
             <a
               href="/api/export"
               className="inline-flex h-8 items-center gap-2 rounded-[var(--radius)] px-3 text-sm font-medium text-foreground hover:bg-default"
@@ -307,11 +341,39 @@ export function TransactionsView({
             <Money cents={totals.income - totals.expense} signed />
           </span>
         </div>
-        <span className="text-muted">
-          {filtered.length} {filtered.length === 1 ? "Eintrag" : "Einträge"}
-          {totals.open > 0 && ` · ${totals.open} offen (nicht in den Summen)`}
+        <span className="flex items-baseline gap-3 text-muted">
+          <span>
+            {filtered.length} {filtered.length === 1 ? "Eintrag" : "Einträge"}
+            {totals.open > 0 && ` · ${totals.open} offen (nicht in den Summen)`}
+          </span>
+          {filtered.length > 0 && (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-foreground underline decoration-border underline-offset-4 md:hidden"
+              onClick={() => (selecting ? clearSelection() : setSelecting(true))}
+            >
+              <CheckSquare className="size-4" aria-hidden /> {selecting ? "Fertig" : "Auswählen"}
+            </button>
+          )}
         </span>
       </div>
+
+      {selectedRows.length > 0 && (
+        <BulkBar
+          rows={selectedRows}
+          total={filtered.length}
+          visible={visible.length}
+          accounts={accounts}
+          categories={categories}
+          pending={pending}
+          onSelectAll={() => setSelection(new Set(filtered.map((row) => row.id)))}
+          onClear={clearSelection}
+          onCategory={(categoryId) => bulk(() => updateTransactions({ ids: selectedIds, categoryId }))}
+          onAccount={(accountId) => bulk(() => updateTransactions({ ids: selectedIds, accountId }))}
+          onBooked={() => bulk(() => updateTransactions({ ids: selectedIds, booked: true }))}
+          onDelete={() => bulk(() => deleteTransactions(selectedIds))}
+        />
+      )}
 
       {byMonth.length > 1 && (
         <details className="panel mb-3 px-4 py-2.5 text-[13px] sm:px-5">
@@ -351,12 +413,25 @@ export function TransactionsView({
           <ul className="rows">
             {visible.map((row) => {
               const pending = row.tx.status === "pending";
+              const checked = selection.has(row.id);
               return (
-                <li key={row.id} className="flex items-center gap-3 px-4 py-2.5">
+                <li key={row.id} className={`flex items-center gap-3 px-4 py-2.5 ${checked ? "bg-surface-secondary" : ""}`}>
+                  {selecting && (
+                    <Checkbox isSelected={checked} onChange={() => toggle(row.id)} aria-label={`${row.title} auswählen`}>
+                      <Checkbox.Content>
+                        <Checkbox.Control>
+                          <Checkbox.Indicator />
+                        </Checkbox.Control>
+                      </Checkbox.Content>
+                    </Checkbox>
+                  )}
                   <button
                     type="button"
                     className="min-w-0 flex-1 text-left outline-none focus-visible:underline"
-                    onClick={() => (row.kind === "transfer" ? setTransferToDelete(row) : openTransaction(row.tx.type, row.tx))}
+                    aria-pressed={selecting ? checked : undefined}
+                    onClick={() =>
+                      selecting ? toggle(row.id) : row.kind === "transfer" ? setTransferToDelete(row) : openTransaction(row.tx.type, row.tx)
+                    }
                   >
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="truncate font-medium">{row.title}</span>
@@ -378,7 +453,7 @@ export function TransactionsView({
                       </span>
                     </div>
                   </button>
-                  {pending && (
+                  {pending && !selecting && (
                     <Button size="sm" variant="secondary" className="h-7 shrink-0 px-2.5 text-[12.5px]" onPress={() => run(() => setTransactionStatus(row.id, "booked"))}>
                       {row.kind === "income" ? "Eingegangen" : "Bezahlt"}
                     </Button>
@@ -396,6 +471,10 @@ export function TransactionsView({
             aria-label="Transaktionen"
             sortDescriptor={sort}
             onSortChange={setSort}
+            selectionMode="multiple"
+            selectionBehavior="toggle"
+            selectedKeys={new Set(selectedIds)}
+            onSelectionChange={onTableSelection}
             onRowAction={(key) => {
               const row = filtered.find((r) => r.id === key);
               if (row && row.kind !== "transfer") openTransaction(row.tx.type, row.tx);
@@ -404,6 +483,9 @@ export function TransactionsView({
             className="min-w-[640px]"
           >
             <Table.Header>
+              <Table.Column id="select" className="w-10">
+                <SelectionBox label="Alle sichtbaren auswählen" />
+              </Table.Column>
               <Table.Column id="date" allowsSorting className="w-28">
                 {({ sortDirection }) => <Table.SortableColumnHeader sortDirection={sortDirection}>Datum</Table.SortableColumnHeader>}
               </Table.Column>
@@ -426,7 +508,7 @@ export function TransactionsView({
             </Table.Header>
             <Table.Body
               items={visible}
-              dependencies={[accountName, categoryById, today]}
+              dependencies={[accountName, categoryById, today, selection]}
               renderEmptyState={() => (
                 <div className="py-12 text-center text-muted">
                   {transactions.length === 0
@@ -446,6 +528,9 @@ export function TransactionsView({
                 const pending = row.tx.status === "pending";
                 return (
                   <Table.Row id={row.id}>
+                    <Table.Cell>
+                      <SelectionBox label={`${row.title} auswählen`} />
+                    </Table.Cell>
                     <Table.Cell className="whitespace-nowrap text-muted">{formatDate(row.date)}</Table.Cell>
                     <Table.Cell>
                       <div className="min-w-0">
@@ -516,6 +601,120 @@ export function TransactionsView({
           </p>
         )}
       </ConfirmDialog>
+    </div>
+  );
+}
+
+/** Kontrollkaestchen der Tabellenauswahl (react-aria verdrahtet es ueber slot). */
+function SelectionBox({ label }: { label: string }) {
+  return (
+    <Checkbox slot="selection" aria-label={label}>
+      <Checkbox.Content>
+        <Checkbox.Control>
+          <Checkbox.Indicator />
+        </Checkbox.Control>
+      </Checkbox.Content>
+    </Checkbox>
+  );
+}
+
+/** Aktionen fuer die Auswahl: Kategorie, Konto, bezahlt, loeschen (in den Papierkorb). */
+function BulkBar({
+  rows,
+  total,
+  visible,
+  accounts,
+  categories,
+  pending,
+  onSelectAll,
+  onClear,
+  onCategory,
+  onAccount,
+  onBooked,
+  onDelete,
+}: {
+  rows: Row[];
+  total: number;
+  visible: number;
+  accounts: Account[];
+  categories: Category[];
+  pending: boolean;
+  onSelectAll: () => void;
+  onClear: () => void;
+  onCategory: (categoryId: string | null) => void;
+  onAccount: (accountId: string) => void;
+  onBooked: () => void;
+  onDelete: () => void;
+}) {
+  const kinds = new Set(rows.map((row) => row.kind));
+  const editable = rows.some((row) => row.kind !== "transfer");
+  const open = rows.some((row) => row.kind !== "transfer" && row.tx.status === "pending");
+  // Nur Kategorien der ausgewaehlten Art anbieten; gemischt: beide, Server ueberspringt Unpassendes
+  const usable = categories.filter((category) => kinds.has(category.kind));
+  const sum = rows.reduce((value, row) => (row.kind === "transfer" ? value : value + row.signed), 0);
+
+  return (
+    <div className="panel sticky top-[4.25rem] z-20 mb-3 flex flex-col gap-2 px-3 py-2.5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:px-4" role="region" aria-label="Auswahl">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[13px]">
+        <span className="font-medium">{rows.length} ausgewählt</span>
+        {editable && (
+          <span className="text-muted">
+            Summe <Money cents={sum} signed tone="plain" />
+          </span>
+        )}
+        {rows.length === visible && total > visible && (
+          <button type="button" className="underline decoration-border underline-offset-4" onClick={onSelectAll}>
+            Alle {total} Treffer auswählen
+          </button>
+        )}
+        <button type="button" className="text-muted underline decoration-border underline-offset-4" onClick={onClear}>
+          Aufheben
+        </button>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {editable && (
+          <Dropdown>
+            <Button size="sm" variant="secondary" isPending={pending}>
+              Kategorie
+            </Button>
+            <Dropdown.Popover placement="bottom end" className="max-h-80 overflow-auto">
+              <Dropdown.Menu aria-label="Kategorie setzen" onAction={(key) => onCategory(key === "none" ? null : String(key))}>
+                {[{ id: "none", name: "Ohne Kategorie" }, ...usable].map((category) => (
+                  <Dropdown.Item key={category.id} id={category.id} textValue={category.name}>
+                    <Label>{category.name}</Label>
+                  </Dropdown.Item>
+                ))}
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
+        )}
+        {editable && (
+          <Dropdown>
+            <Button size="sm" variant="secondary" isPending={pending}>
+              Konto
+            </Button>
+            <Dropdown.Popover placement="bottom end">
+              <Dropdown.Menu aria-label="Konto setzen" onAction={(key) => onAccount(String(key))}>
+                {accounts
+                  .filter((account) => !account.archived)
+                  .map((account) => (
+                    <Dropdown.Item key={account.id} id={account.id} textValue={account.name}>
+                      <Label>{account.name}</Label>
+                    </Dropdown.Item>
+                  ))}
+              </Dropdown.Menu>
+            </Dropdown.Popover>
+          </Dropdown>
+        )}
+        {open && (
+          <Button size="sm" variant="secondary" isPending={pending} onPress={onBooked}>
+            Als bezahlt
+          </Button>
+        )}
+        <Button size="sm" variant="danger-soft" isPending={pending} onPress={onDelete}>
+          <Trash className="size-4" /> Löschen
+        </Button>
+      </div>
     </div>
   );
 }

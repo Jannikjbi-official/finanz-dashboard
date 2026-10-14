@@ -2,10 +2,10 @@
 
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { reopenDue } from "../../domain/recurring";
 import { categorize } from "../../domain/rules";
-import { loadRules, toRecurring } from "../data";
-import { accounts, ensureIndexes, recurring, toObjectId, transactions, type TransactionDoc } from "../db";
+import { loadRules } from "../data";
+import { accounts, categories, ensureIndexes, toObjectId, transactions, type TransactionDoc } from "../db";
+import { purgeTrash, restoreTrash, trashTransactions } from "../trash";
 import { getSettings } from "../user-data";
 import { todayIn } from "../../domain/calendar";
 import {
@@ -115,44 +115,124 @@ export async function setTransactionStatus(id: string, status: "booked" | "pendi
 }
 
 /**
- * Loescht eine Buchung. War sie die Zahlung des zuletzt erledigten Termins
- * einer regelmaessigen Zahlung, wird dieser Termin wieder offen - sonst
- * wuerde er weder als bezahlt noch als offen zaehlen.
+ * Loescht eine Buchung (bei Transfers beide Seiten) in den Papierkorb. War
+ * sie die Zahlung eines erledigten Termins, wird der Termin wieder offen.
  */
 export async function deleteTransaction(id: string): Promise<ActionResult> {
+  return deleteTransactions([id]);
+}
+
+const idsSchema = z.array(z.string()).min(1, "Keine Buchung ausgewählt").max(1000, "Bitte höchstens 1.000 Buchungen auf einmal");
+
+/** Mehrere Buchungen in den Papierkorb; Transfers immer mit beiden Seiten. */
+export async function deleteTransactions(ids: string[]): Promise<ActionResult> {
   const auth = await authorize();
   if ("error" in auth) return auth.error;
-  const _id = toObjectId(id);
-  if (!_id) return fail("Buchung nicht gefunden");
+  const parsed = idsSchema.safeParse(ids);
+  if (!parsed.success) return fail(firstIssue(parsed.error));
+  const objectIds = parsed.data.map(toObjectId).filter((value) => value !== null);
 
-  const existing = await transactions.findOne({ _id, userId: auth.userId });
-  if (!existing) return fail("Buchung nicht gefunden");
+  const selected = await transactions.find({ _id: { $in: objectIds }, userId: auth.userId }).toArray();
+  if (selected.length === 0) return fail("Buchung nicht gefunden");
+  const groups = [...new Set(selected.map((doc) => doc.transferGroupId).filter((group): group is string => Boolean(group)))];
+  const partners = groups.length
+    ? await transactions.find({ userId: auth.userId, transferGroupId: { $in: groups }, _id: { $nin: selected.map((doc) => doc._id) } }).toArray()
+    : [];
 
-  if (existing.transferGroupId) {
-    await transactions.deleteMany({ userId: auth.userId, transferGroupId: existing.transferGroupId });
-    refresh();
-    return ok("Transfer gelöscht");
-  }
-
-  await transactions.deleteOne({ _id, userId: auth.userId });
-
-  const recurringId = toObjectId(existing.recurringId);
-  if (recurringId && existing.recurringDue) {
-    const doc = await recurring.findOne({ _id: recurringId, userId: auth.userId });
-    if (doc) {
-      const entry = toRecurring(doc);
-      const reopened = reopenDue(entry, existing.recurringDue);
-      if (reopened) {
-        await recurring.updateOne(
-          { _id: recurringId, userId: auth.userId, nextDue: entry.nextDue },
-          { $set: { nextDue: reopened, updatedAt: new Date() } },
-        );
-      }
-    }
-  }
-
+  const result = await trashTransactions(auth.userId, [...selected, ...partners]);
   refresh();
-  return ok("Buchung gelöscht");
+  const single = selected.length === 1 || (selected.length + partners.length === 2 && groups.length === 1);
+  const message = single ? (groups.length ? "Transfer gelöscht" : "Buchung gelöscht") : `${result?.deleted ?? 0} Buchungen gelöscht`;
+  return ok(message, result?.trashId);
+}
+
+const bulkSchema = z.object({
+  ids: idsSchema,
+  // undefined: unveraendert, null: Kategorie entfernen
+  categoryId: z.string().min(1).nullable().optional(),
+  accountId: z.string().min(1).optional(),
+  booked: z.literal(true).optional(),
+});
+
+export type BulkUpdateInput = z.input<typeof bulkSchema>;
+
+/**
+ * Mehrere Buchungen auf einmal aendern: Kategorie, Konto oder "bezahlt".
+ * Transfers bleiben unberuehrt; eine Kategorie gilt nur fuer Buchungen
+ * ihrer Art (Ausgabe-Kategorie nur fuer Ausgaben).
+ */
+export async function updateTransactions(input: BulkUpdateInput): Promise<ActionResult> {
+  const auth = await authorize();
+  if ("error" in auth) return auth.error;
+  const parsed = bulkSchema.safeParse(input);
+  if (!parsed.success) return fail(firstIssue(parsed.error));
+  const { ids, categoryId, accountId, booked } = parsed.data;
+  const base = {
+    _id: { $in: ids.map(toObjectId).filter((value) => value !== null) },
+    userId: auth.userId,
+    transferGroupId: { $in: [null] },
+  };
+  const now = new Date();
+
+  if (categoryId !== undefined) {
+    if (categoryId === null) {
+      const { modifiedCount } = await transactions.updateMany(base, { $set: { categoryId: null, updatedAt: now } });
+      refresh();
+      return ok(`Kategorie bei ${modifiedCount} Buchungen entfernt`);
+    }
+    const category = await categories.findOne({ _id: toObjectId(categoryId)!, userId: auth.userId });
+    if (!category) return fail("Kategorie nicht gefunden");
+    const { modifiedCount, matchedCount } = await transactions.updateMany({ ...base, type: category.kind }, { $set: { categoryId, updatedAt: now } });
+    const skipped = (await transactions.countDocuments(base)) - matchedCount;
+    refresh();
+    return ok(
+      `Kategorie „${category.name}“ bei ${modifiedCount} Buchungen gesetzt` +
+        (skipped > 0 ? `, ${skipped} übersprungen (${category.kind === "expense" ? "keine Ausgabe" : "keine Einnahme"})` : ""),
+    );
+  }
+
+  if (accountId !== undefined) {
+    if (!(await ownsAccount(auth.userId, accountId))) return fail("Konto nicht gefunden");
+    const { modifiedCount } = await transactions.updateMany(base, { $set: { accountId, updatedAt: now } });
+    refresh();
+    return ok(`${modifiedCount} Buchungen verschoben`);
+  }
+
+  if (booked) {
+    const today = todayIn((await getSettings(auth.userId)).timeZone);
+    const pending = { ...base, status: "pending" as const };
+    // Frueher bezahlt als geplant: Buchungsdatum ist heute, nie in der Zukunft
+    const future = await transactions.updateMany({ ...pending, date: { $gt: today } }, { $set: { status: "booked", date: today, updatedAt: now } });
+    const due = await transactions.updateMany(pending, { $set: { status: "booked", updatedAt: now } });
+    refresh();
+    return ok(`${future.modifiedCount + due.modifiedCount} Buchungen als bezahlt bzw. eingegangen markiert`);
+  }
+
+  return fail("Nichts zu ändern");
+}
+
+/** Einen Papierkorb-Eintrag zurueckholen (auch aus dem Toast "Rückgängig"). */
+export async function restoreFromTrash(trashId: string): Promise<ActionResult> {
+  const auth = await authorize();
+  if ("error" in auth) return auth.error;
+  if (typeof trashId !== "string") return fail("Eintrag nicht gefunden");
+  const result = await restoreTrash(auth.userId, trashId);
+  if (!result.ok) return fail(result.error);
+  refresh();
+  const parts = [result.restored === 1 ? "Buchung wiederhergestellt" : `${result.restored} Buchungen wiederhergestellt`];
+  if (result.unlinked > 0) parts.push(`${result.unlinked} ohne Zuordnung zur regelmäßigen Zahlung (Termin inzwischen anders erledigt)`);
+  return ok(parts.join(", "));
+}
+
+/** Endgueltig loeschen: ein Eintrag oder der ganze Papierkorb (ohne ID). */
+export async function purgeFromTrash(trashId?: string): Promise<ActionResult> {
+  const auth = await authorize();
+  if ("error" in auth) return auth.error;
+  if (trashId !== undefined && typeof trashId !== "string") return fail("Eintrag nicht gefunden");
+  const deleted = await purgeTrash(auth.userId, trashId);
+  refresh();
+  if (trashId === undefined) return ok(deleted ? "Papierkorb geleert" : "Der Papierkorb ist schon leer");
+  return deleted ? ok("Endgültig gelöscht") : fail("Eintrag nicht gefunden");
 }
 
 const transferSchema = z

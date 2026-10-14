@@ -8,9 +8,10 @@ import { limitUser } from "../rate-limit";
 import { getCurrentUser } from "../session";
 import { getSettings } from "../user-data";
 
-export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
+/** `undo`: Papierkorb-Eintrag, den der Toast mit "Rückgängig" zurückholt. */
+export type ActionResult = { ok: true; message?: string; undo?: string } | { ok: false; error: string };
 
-export const ok = (message?: string): ActionResult => ({ ok: true, message });
+export const ok = (message?: string, undo?: string): ActionResult => (undo ? { ok: true, message, undo } : { ok: true, message });
 export const fail = (error: string): ActionResult => ({ ok: false, error });
 
 /** Angemeldeter Nutzer mit Schreibkontingent - oder eine Fehlermeldung. */

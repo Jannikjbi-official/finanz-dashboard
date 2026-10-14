@@ -7,7 +7,8 @@ import { duplicateKey, MAX_IMPORT_ROWS } from "../../import";
 import { categorize } from "../../domain/rules";
 import { loadRules } from "../data";
 import { LEGACY_PREFIX, legacyFilter, parseLegacyId } from "../import-undo";
-import { linkSureMatches, reopenLinkedDues } from "../recurring-link";
+import { linkSureMatches } from "../recurring-link";
+import { trashTransactions } from "../trash";
 import { accounts, categories, ensureIndexes, importTrash, imports, toObjectId, transactions, wishes, type TransactionDoc } from "../db";
 import {
   anchorFor,
@@ -252,7 +253,11 @@ export async function importTransactions(input: ImportInput): Promise<ImportResu
 
 /** Vor dem Loeschen: vollstaendige Kopie in den Papierkorb (import_trash). */
 async function backup(userId: string, importId: string, kind: "transactions" | "wishes", docs: unknown[]) {
-  if (docs.length > 0) await importTrash.insertOne({ userId, importId, kind, docs, deletedAt: new Date() });
+  if (docs.length > 0) await importTrash.insertOne({ userId, importId, kind, docs, label: `Wunsch-Import (${docs.length})`, deletedAt: new Date() });
+}
+
+function importLabel(fileName: string | null, count: number) {
+  return `Import${fileName ? ` „${fileName}“` : ""} (${count} Buchungen)`;
 }
 
 async function setAnchor(userId: string, accountId: string, anchor: { date: string; amountCents: number }) {
@@ -273,9 +278,12 @@ export async function undoImport(importId: string): Promise<ActionResult> {
 
   const doc = await imports.findOne({ _id: importId, userId: auth.userId });
   if (!doc) return fail("Import nicht gefunden");
-  if (doc.undoneAt) return fail("Dieser Import wurde bereits rückgängig gemacht.");
+  // Zuerst als rueckgaengig markieren: ein zweiter Klick findet nichts mehr zu tun
+  const claimed = await imports.updateOne({ _id: importId, userId: auth.userId, undoneAt: { $in: [null] } }, { $set: { undoneAt: new Date() } });
+  if (claimed.modifiedCount === 0) return fail("Dieser Import wurde bereits rückgängig gemacht.");
 
   let deleted = 0;
+  let trashId: string | undefined;
   if (doc.kind === "wishes") {
     const linked = await wishes
       .find({ userId: auth.userId, importId, transactionId: { $type: "string" } }, { projection: { transactionId: 1 } })
@@ -285,17 +293,15 @@ export async function undoImport(importId: string): Promise<ActionResult> {
     if (wishIds.length > 0) await transactions.deleteMany({ userId: auth.userId, wishId: { $in: wishIds }, status: "pending" });
     deleted = (await wishes.deleteMany({ userId: auth.userId, importId })).deletedCount;
   } else {
-    const linked = await transactions
-      .find({ userId: auth.userId, importId, recurringId: { $type: "string" } }, { projection: { recurringId: 1, recurringDue: 1 } })
-      .toArray();
-    await backup(auth.userId, importId, "transactions", await transactions.find({ userId: auth.userId, importId }).toArray());
-    await reopenLinkedDues(auth.userId, linked);
-    deleted = (await transactions.deleteMany({ userId: auth.userId, importId })).deletedCount;
+    const docs = await transactions.find({ userId: auth.userId, importId }).toArray();
+    const trashed = await trashTransactions(auth.userId, docs, { importId, label: importLabel(doc.fileName, docs.length) });
+    deleted = trashed?.deleted ?? 0;
+    trashId = trashed?.trashId;
   }
 
-  await imports.updateOne({ _id: importId, userId: auth.userId }, { $set: { undoneAt: new Date(), undoneCount: deleted } });
+  await imports.updateOne({ _id: importId, userId: auth.userId }, { $set: { undoneCount: deleted } });
   refresh();
-  return ok(`Import rückgängig gemacht: ${deleted} ${doc.kind === "wishes" ? "Wünsche" : "Buchungen"} gelöscht`);
+  return ok(`Import rückgängig gemacht: ${deleted} ${doc.kind === "wishes" ? "Wünsche" : "Buchungen"} gelöscht`, trashId);
 }
 
 /**
@@ -310,10 +316,8 @@ async function undoLegacyImport(userId: string, id: string): Promise<ActionResul
   const filter = legacyFilter(userId, createdAt);
   const docs = await transactions.find(filter).toArray();
   if (docs.length === 0) return fail("Dieser Import wurde bereits gelöscht.");
-  await backup(userId, `legacy:${createdAt.toISOString()}`, "transactions", docs);
-  await reopenLinkedDues(userId, docs);
-
-  const deleted = (await transactions.deleteMany(filter)).deletedCount;
+  const result = await trashTransactions(userId, docs, { importId: `${LEGACY_PREFIX}${createdAt.toISOString()}`, label: importLabel(null, docs.length) });
+  const deleted = result?.deleted ?? 0;
   const dates = docs.map((doc) => doc.date).sort();
   const now = new Date();
   await imports.insertOne({
@@ -330,5 +334,5 @@ async function undoLegacyImport(userId: string, id: string): Promise<ActionResul
     undoneCount: deleted,
   });
   refresh();
-  return ok(`Import rückgängig gemacht: ${deleted} Buchungen gelöscht`);
+  return ok(`Import rückgängig gemacht: ${deleted} Buchungen gelöscht`, result?.trashId);
 }

@@ -45,6 +45,7 @@ beforeEach(async () => {
     db.categories.deleteMany({}),
     db.imports.deleteMany({}),
     db.rules.deleteMany({}),
+    db.importTrash.deleteMany({}),
     db.settings.deleteMany({}),
     db.db.collection("notifications").deleteMany({}),
     db.db.collection("rate_limits").deleteMany({}),
@@ -403,5 +404,124 @@ describe("Betragsaenderungen", () => {
     expect(await match.resolveAmountChange({ recurringId: id, accept: true })).toMatchObject({ ok: true });
     after = await load();
     expect(after.recurring[0].amountCents).toBe(278_48);
+  });
+});
+
+describe("Papierkorb und Mehrfachauswahl", () => {
+  it("Loeschen landet im Papierkorb, Rueckgaengig holt Buchung und Termin zurueck", async () => {
+    const giro = await createAccount("Giro", "giro", "100");
+    await rec.saveRecurring({
+      type: "expense", title: "Streaming", amount: "12,99", interval: "monthly",
+      nextDue: "2026-10-05", costType: "subscription", accountId: giro,
+    });
+    const id = (await db.recurring.findOne({}))!._id.toString();
+    await rec.settleRecurring({ id, due: "2026-10-05", mode: "book" });
+    const paid = (await db.transactions.findOne({ recurringId: id }))!;
+
+    const deleted = await tx.deleteTransaction(paid._id.toString());
+    expect(deleted).toMatchObject({ ok: true, message: "Buchung gelöscht", undo: expect.any(String) });
+    expect(await db.transactions.countDocuments()).toBe(0);
+    expect((await db.recurring.findOne({}))!.nextDue).toBe("2026-10-05");
+
+    const { listTrash } = await import("@/lib/server/trash");
+    const [entry] = await listTrash("user-a");
+    expect(entry).toMatchObject({ label: expect.stringMatching(/^Streaming, 12,99\s€$/), count: 1, fromImport: false });
+    expect(entry.expiresAt).not.toBeNull();
+
+    // Doppelklick auf "Rückgängig": nur einmal wiederhergestellt
+    const results = await Promise.all([tx.restoreFromTrash((deleted as { undo: string }).undo), tx.restoreFromTrash(entry.id)]);
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    const restored = await db.transactions.find({}).toArray();
+    expect(restored).toHaveLength(1);
+    expect(restored[0]).toMatchObject({ _id: paid._id, recurringId: id, recurringDue: "2026-10-05" });
+    expect((await db.recurring.findOne({}))!.nextDue).toBe("2026-11-05");
+    expect(await listTrash("user-a")).toEqual([]);
+  });
+
+  it("ist der Termin inzwischen anders erledigt, kommt die Buchung ohne Zuordnung zurueck", async () => {
+    const giro = await createAccount("Giro", "giro", "100");
+    await rec.saveRecurring({
+      type: "expense", title: "Streaming", amount: "12,99", interval: "monthly",
+      nextDue: "2026-10-05", costType: "subscription", accountId: giro,
+    });
+    const id = (await db.recurring.findOne({}))!._id.toString();
+    await rec.settleRecurring({ id, due: "2026-10-05", mode: "book" });
+    const paid = (await db.transactions.findOne({ recurringId: id }))!;
+    const deleted = (await tx.deleteTransaction(paid._id.toString())) as { undo: string };
+    await rec.settleRecurring({ id, due: "2026-10-05", mode: "book" });
+
+    expect(await tx.restoreFromTrash(deleted.undo)).toMatchObject({ ok: true, message: expect.stringContaining("1 ohne Zuordnung") });
+    expect(await db.transactions.countDocuments({ recurringId: id })).toBe(1);
+    expect(await db.transactions.findOne({ _id: paid._id })).toMatchObject({ recurringId: null, recurringDue: null });
+    expect((await db.recurring.findOne({}))!.nextDue).toBe("2026-11-05");
+  });
+
+  it("Mehrfachauswahl: loeschen mit Transfers, Kategorie nur fuer passende Art, Konto, bezahlt", async () => {
+    const giro = await createAccount("Giro", "giro", "500");
+    const spar = await createAccount("Spar", "savings", "0");
+    await tx.saveTransaction({ type: "expense", status: "booked", amount: "10", date: "2026-10-01", title: "Lidl", accountId: giro });
+    await tx.saveTransaction({ type: "income", status: "booked", amount: "20", date: "2026-10-02", title: "Erstattung", accountId: giro });
+    await tx.saveTransaction({ type: "expense", status: "pending", amount: "30", date: "2026-12-01", title: "Rechnung", accountId: giro });
+    await tx.saveTransfer({ fromAccountId: giro, toAccountId: spar, amount: "50", date: "2026-10-03" });
+    await db.categories.insertOne({ userId: "user-a", name: "Lebensmittel", kind: "expense", createdAt: new Date() } as never);
+    const food = (await db.categories.findOne({ name: "Lebensmittel" }))!._id.toString();
+    const ids = Object.fromEntries((await db.transactions.find({}).toArray()).map((doc) => [doc.title, doc._id.toString()]));
+
+    const all = [ids.Lidl, ids.Erstattung, ids.Rechnung, ids["Transfer an Spar"]];
+    expect(await tx.updateTransactions({ ids: all, categoryId: food })).toMatchObject({
+      ok: true,
+      message: "Kategorie „Lebensmittel“ bei 2 Buchungen gesetzt, 1 übersprungen (keine Ausgabe)",
+    });
+    expect(await db.transactions.countDocuments({ categoryId: food })).toBe(2);
+    expect(await tx.updateTransactions({ ids: all, accountId: spar })).toMatchObject({ ok: true, message: "3 Buchungen verschoben" });
+    // Das Konto des Transfers bleibt
+    expect(await db.transactions.findOne({ title: "Transfer an Spar" })).toMatchObject({ accountId: giro });
+    expect(await tx.updateTransactions({ ids: all, booked: true })).toMatchObject({ ok: true, message: expect.stringMatching(/^1 Buchungen/) });
+    expect(await db.transactions.findOne({ title: "Rechnung" })).toMatchObject({ status: "booked", date: "2026-10-14" });
+
+    const deleted = await tx.deleteTransactions([ids.Lidl, ids["Transfer an Spar"]]);
+    expect(deleted).toMatchObject({ ok: true, message: "3 Buchungen gelöscht" });
+    expect(await db.transactions.countDocuments()).toBe(2);
+    expect(await tx.restoreFromTrash((deleted as { undo: string }).undo)).toMatchObject({ ok: true, message: "3 Buchungen wiederhergestellt" });
+    expect(await db.transactions.countDocuments()).toBe(5);
+
+    // Fremde Nutzer koennen weder loeschen noch aendern noch wiederherstellen
+    const again = (await tx.deleteTransactions([ids.Lidl])) as { undo: string };
+    session.userId = "user-b";
+    expect(await tx.deleteTransactions([ids.Erstattung])).toMatchObject({ ok: false });
+    expect(await tx.updateTransactions({ ids: [ids.Erstattung], accountId: giro })).toMatchObject({ ok: false });
+    expect(await tx.restoreFromTrash(again.undo)).toMatchObject({ ok: false });
+    expect(await tx.purgeFromTrash(again.undo)).toMatchObject({ ok: false });
+    session.userId = "user-a";
+    expect(await tx.purgeFromTrash()).toMatchObject({ ok: true, message: "Papierkorb geleert" });
+    expect(await tx.restoreFromTrash(again.undo)).toMatchObject({ ok: false });
+  });
+
+  it("rueckgaengig gemachter Import: wiederherstellbar, aber nicht nach erneutem Import", async () => {
+    const giro = await createAccount("Giro", "giro", "0");
+    const { importTransactions, undoImport } = await import("./import");
+    const rows = [
+      { date: "2026-10-01", title: "Lidl", amountCents: 12_50, type: "expense" as const, status: "booked" as const, category: null, note: null },
+      { date: "2026-10-02", title: "Bäcker", amountCents: 3_20, type: "expense" as const, status: "booked" as const, category: null, note: null },
+    ];
+    await importTransactions({ accountId: giro, rows, fileName: "okt.csv" });
+    const record = (await db.imports.findOne({}))!;
+    expect(await Promise.all([undoImport(record._id), undoImport(record._id)])).toEqual(
+      expect.arrayContaining([expect.objectContaining({ ok: true }), expect.objectContaining({ ok: false })]),
+    );
+    const { listTrash } = await import("@/lib/server/trash");
+    const [entry] = await listTrash("user-a");
+    expect(entry).toMatchObject({ label: "Import „okt.csv“ (2 Buchungen)", count: 2, fromImport: true, expiresAt: null });
+
+    expect(await tx.restoreFromTrash(entry.id)).toMatchObject({ ok: true });
+    expect(await db.transactions.countDocuments({ importId: record._id })).toBe(2);
+    expect((await db.imports.findOne({}))!.undoneAt).toBeNull();
+
+    // Rueckgaengig, neu importiert, dann Wiederherstellen: wuerde doppeln
+    await undoImport(record._id);
+    await importTransactions({ accountId: giro, rows, fileName: "okt.csv" });
+    const [again] = await listTrash("user-a");
+    expect(await tx.restoreFromTrash(again.id)).toMatchObject({ ok: false, error: expect.stringContaining("neu importiert") });
+    expect(await db.transactions.countDocuments()).toBe(2);
   });
 });
