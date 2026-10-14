@@ -89,6 +89,10 @@ export type TransactionDoc = {
   wishId?: string | null;
   /** Herkunft aus der frueheren Collection "planned" (Migration 005). */
   legacyPlannedId?: string | null;
+  /** Teil einer Aufteilung: ID der urspruenglichen Buchung (die selbst Teil 1 ist). */
+  splitGroupId?: string | null;
+  /** Nur Teil 1: die Werte vor dem Aufteilen, fuer "Aufteilung aufheben". */
+  splitOriginal?: { title: string; amountCents: number; categoryId: string | null } | null;
   createdAt: Date;
   updatedAt?: Date;
 };

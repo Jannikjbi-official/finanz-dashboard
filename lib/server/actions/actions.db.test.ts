@@ -626,3 +626,38 @@ describe("Vorlagen", () => {
     expect(await loadTemplates("user-a")).toHaveLength(1);
   });
 });
+
+describe("Aufteilen", () => {
+  it("teilt auf, behaelt den Importschutz und hebt wieder auf", async () => {
+    const giro = await createAccount("Giro", "giro", "100");
+    const food = (await db.categories.insertOne({ userId: "user-a", name: "Lebensmittel", kind: "expense", color: "#000", createdAt: new Date() })).insertedId.toString();
+    const home = (await db.categories.insertOne({ userId: "user-a", name: "Haushalt", kind: "expense", color: "#000", createdAt: new Date() })).insertedId.toString();
+    const { importTransactions } = await import("./import");
+    await importTransactions({ accountId: giro, rows: [{ date: "2026-10-10", title: "Rossmann", amountCents: 30_00, type: "expense", status: "booked", category: null, note: null }] });
+    const original = (await db.transactions.findOne({ title: "Rossmann" }))!;
+    const id = original._id.toString();
+
+    expect(await tx.splitTransaction({ id, parts: [{ amount: "10", categoryId: food }, { amount: "15", categoryId: home }] })).toMatchObject({ ok: false, error: expect.stringContaining("ergeben 25,00") });
+    const results = await Promise.all([
+      tx.splitTransaction({ id, parts: [{ amount: "12,50", categoryId: food }, { amount: "17,50", categoryId: home, title: "Putzmittel" }] }),
+      tx.splitTransaction({ id, parts: [{ amount: "12,50", categoryId: food }, { amount: "17,50", categoryId: home, title: "Putzmittel" }] }),
+    ]);
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    const parts = await db.transactions.find({ splitGroupId: id }).sort({ amountCents: 1 }).toArray();
+    expect(parts.map((part) => [part.title, part.amountCents, part.categoryId])).toEqual([
+      ["Rossmann", 12_50, food],
+      ["Putzmittel", 17_50, home],
+    ]);
+    // Teil 1 ist die urspruengliche Buchung: gleicher Importschutz, Kontostand unveraendert
+    expect(parts[0]).toMatchObject({ _id: original._id, importHash: original.importHash, importId: original.importId });
+    expect((await load()).availability.liquidBalance).toBe(100_00 - 30_00);
+    const again = await importTransactions({ accountId: giro, rows: [{ date: "2026-10-10", title: "Rossmann", amountCents: 30_00, type: "expense", status: "booked", category: null, note: null }] });
+    expect(again).toMatchObject({ imported: 0, skipped: 1 });
+
+    expect(await tx.unsplitTransaction(parts[1]._id.toString())).toMatchObject({ ok: true });
+    const merged = await db.transactions.find({ title: "Rossmann" }).toArray();
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ _id: original._id, amountCents: 30_00, categoryId: null, splitGroupId: null });
+    expect(await db.transactions.countDocuments()).toBe(1);
+  });
+});

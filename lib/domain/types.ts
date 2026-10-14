@@ -64,6 +64,8 @@ export type Transaction = {
   dismissedRecurring?: string[];
   /** CSV-Import, aus dem die Buchung stammt. */
   importId?: string | null;
+  /** Teil einer Aufteilung (ID der urspruenglichen Buchung). */
+  splitGroupId?: string | null;
 };
 
 export type RecurringStatus = "active" | "paused" | "cancelled" | "archived";

@@ -42,6 +42,8 @@ function duplicates(transactions: Transaction[], since: ISODate): Anomaly[] {
       if (payeeKey(a.title) !== payeeKey(b.title)) continue;
       // Beide aus derselben Importdatei: dort stehen sie wirklich zweimal
       if (a.importId && a.importId === b.importId) continue;
+      // Teile derselben Aufteilung
+      if (a.splitGroupId && a.splitGroupId === b.splitGroupId) continue;
       // Zwei verschiedene Termine derselben regelmaessigen Zahlung sind kein Doppel
       if (a.recurringId && a.recurringId === b.recurringId && a.recurringDue !== b.recurringDue) continue;
       used.add(a.id);

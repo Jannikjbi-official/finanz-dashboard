@@ -530,7 +530,9 @@ export function TransactionsView({
                 const meta =
                   row.kind === "transfer"
                     ? `${accountName.get(row.tx.accountId ?? "") ?? "?"} → ${accountName.get(row.counterAccountId ?? "") ?? "?"}`
-                    : [category?.name, row.tx.accountId ? accountName.get(row.tx.accountId) : "ohne Konto"].filter(Boolean).join(" · ");
+                    : [category?.name, row.tx.accountId ? accountName.get(row.tx.accountId) : "ohne Konto", row.tx.splitGroupId ? "Teil einer Aufteilung" : null]
+                        .filter(Boolean)
+                        .join(" · ");
                 const pending = row.tx.status === "pending";
                 return (
                   <Table.Row id={row.id}>

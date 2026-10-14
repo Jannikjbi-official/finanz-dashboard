@@ -8,6 +8,7 @@ import { accounts, categories, ensureIndexes, toObjectId, transactions, type Tra
 import { purgeTrash, restoreTrash, trashTransactions } from "../trash";
 import { getSettings } from "../user-data";
 import { todayIn } from "../../domain/calendar";
+import { formatMoney } from "../../format";
 import {
   authorize,
   fail,
@@ -286,4 +287,121 @@ export async function saveTransfer(input: TransferInput): Promise<ActionResult> 
   ]);
   refresh();
   return ok("Transfer gebucht");
+}
+
+const splitSchema = z.object({
+  id: z.string().min(1),
+  parts: z
+    .array(
+      z.object({
+        amount: positiveAmount,
+        title: optionalText(120),
+        categoryId: optionalId,
+      }),
+    )
+    .min(2, "Mindestens zwei Teile")
+    .max(20, "Höchstens 20 Teile"),
+});
+
+export type SplitInput = z.input<typeof splitSchema>;
+
+/**
+ * Buchung in Teile mit eigener Kategorie aufteilen. Die Buchung selbst wird
+ * Teil 1 (behaelt ID, Import-Kennung und Dublettenschutz), die weiteren
+ * Teile kommen hinzu. Die Summe muss genau dem Betrag entsprechen.
+ */
+export async function splitTransaction(input: SplitInput): Promise<ActionResult> {
+  const auth = await authorize();
+  if ("error" in auth) return auth.error;
+  const parsed = splitSchema.safeParse(input);
+  if (!parsed.success) return fail(firstIssue(parsed.error));
+  const _id = toObjectId(parsed.data.id);
+  if (!_id) return fail("Buchung nicht gefunden");
+  const doc = await transactions.findOne({ _id, userId: auth.userId });
+  if (!doc) return fail("Buchung nicht gefunden");
+  if (doc.transferGroupId) return fail("Transfers lassen sich nicht aufteilen.");
+  if (doc.recurringId) return fail("Die Buchung ist einer regelmäßigen Zahlung zugeordnet – bitte zuerst die Zuordnung lösen.");
+  if (doc.splitGroupId) return fail("Die Buchung ist schon aufgeteilt.");
+
+  const parts = parsed.data.parts;
+  const sum = parts.reduce((total, part) => total + part.amount, 0);
+  if (sum !== doc.amountCents) return fail(`Die Teile ergeben ${formatMoney(sum)}, die Buchung hat ${formatMoney(doc.amountCents)}.`);
+  for (const part of parts) {
+    if (!(await ownsCategory(auth.userId, part.categoryId))) return fail("Kategorie nicht gefunden");
+  }
+
+  const group = doc._id.toString();
+  const now = new Date();
+  const [first, ...rest] = parts;
+  // Erst Teil 1 an den unveraenderten Zustand binden: ein zweiter Klick teilt nichts doppelt
+  const updated = await transactions.updateOne(
+    { _id, userId: auth.userId, amountCents: doc.amountCents, splitGroupId: { $in: [null] } },
+    {
+      $set: {
+        amountCents: first.amount,
+        title: first.title || doc.title,
+        categoryId: first.categoryId,
+        splitGroupId: group,
+        splitOriginal: { title: doc.title, amountCents: doc.amountCents, categoryId: doc.categoryId },
+        updatedAt: now,
+      },
+    },
+  );
+  if (updated.modifiedCount === 0) return fail("Die Buchung wurde inzwischen geändert.");
+  await transactions.insertMany(
+    rest.map((part) => ({
+      userId: auth.userId,
+      type: doc.type,
+      status: doc.status,
+      amountCents: part.amount,
+      date: doc.date,
+      title: part.title || doc.title,
+      note: doc.note ?? null,
+      categoryId: part.categoryId,
+      accountId: doc.accountId ?? null,
+      transferGroupId: null,
+      recurringId: null,
+      recurringDue: null,
+      bankPending: doc.bankPending ?? false,
+      splitGroupId: group,
+      createdAt: now,
+    })),
+  );
+  refresh();
+  return ok(`In ${parts.length} Teile aufgeteilt`);
+}
+
+/** Aufteilung aufheben: Teil 1 bekommt Titel, Kategorie und die Summe aller Teile zurueck. */
+export async function unsplitTransaction(id: string): Promise<ActionResult> {
+  const auth = await authorize();
+  if ("error" in auth) return auth.error;
+  const _id = toObjectId(id);
+  if (!_id) return fail("Buchung nicht gefunden");
+  const doc = await transactions.findOne({ _id, userId: auth.userId });
+  if (!doc?.splitGroupId) return fail("Die Buchung ist nicht aufgeteilt.");
+
+  const group = doc.splitGroupId;
+  const parts = await transactions.find({ userId: auth.userId, splitGroupId: group }).toArray();
+  const main = parts.find((part) => part._id.toString() === group);
+  if (!main) return fail("Teil 1 der Aufteilung fehlt – bitte die Teile einzeln bearbeiten.");
+  const others = parts.filter((part) => part !== main);
+  const total = parts.reduce((sum, part) => sum + part.amountCents, 0);
+
+  await transactions.updateOne(
+    { _id: main._id, userId: auth.userId },
+    {
+      $set: {
+        amountCents: total,
+        title: main.splitOriginal ? main.splitOriginal.title : main.title,
+        // "ohne Kategorie" (null) muss erhalten bleiben
+        categoryId: main.splitOriginal ? main.splitOriginal.categoryId : main.categoryId,
+        splitGroupId: null,
+        splitOriginal: null,
+        updatedAt: new Date(),
+      },
+    },
+  );
+  if (others.length > 0) await transactions.deleteMany({ userId: auth.userId, _id: { $in: others.map((part) => part._id) } });
+  refresh();
+  return ok("Aufteilung aufgehoben");
 }

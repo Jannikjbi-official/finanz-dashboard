@@ -8,11 +8,12 @@ import type { Account, Category, Template, Transaction, TxStatus, TxType } from 
 import { unlinkRecurringPayment } from "@/lib/server/actions/matching";
 import { ruleFromTransaction } from "@/lib/server/actions/rules";
 import { saveTemplate } from "@/lib/server/actions/templates";
-import { deleteTransaction, saveTransaction, saveTransfer } from "@/lib/server/actions/transactions";
+import { deleteTransaction, saveTransaction, saveTransfer, unsplitTransaction } from "@/lib/server/actions/transactions";
 import { useQuickAdd } from "@/components/shell/quick-add";
 import { ConfirmDialog } from "./confirm-dialog";
 import { DateInput, MoneyInput, NoteInput, SelectInput, TextInput } from "./fields";
 import { FormDialog } from "./form-dialog";
+import { SplitDialog } from "./split-dialog";
 
 export type DialogKind = TxType | "transfer";
 
@@ -90,6 +91,8 @@ export function TransactionDialog({
   const [categoryId, setCategoryId] = useState<string | null>(source?.categoryId ?? null);
   const [note, setNote] = useState(source?.note ?? "");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Aufteilen ersetzt den Dialog (keine verschachtelten Fenster)
+  const [splitting, setSplitting] = useState(false);
   const { run, pending } = useAction();
 
   const isEdit = Boolean(transaction);
@@ -140,6 +143,10 @@ export function TransactionDialog({
         ? "Einnahme erfassen"
         : "Ausgabe erfassen";
 
+  if (splitting && transaction) {
+    return <SplitDialog isOpen={isOpen} onOpenChange={onOpenChange} transaction={transaction} categories={lookups.categories} />;
+  }
+
   return (
     <>
       <FormDialog
@@ -165,6 +172,11 @@ export function TransactionDialog({
                   }}
                 >
                   Duplizieren
+                </Button>
+              )}
+              {transaction && !transaction.transferGroupId && !transaction.recurringId && !transaction.splitGroupId && (
+                <Button variant="ghost" size="sm" onPress={() => setSplitting(true)}>
+                  Aufteilen
                 </Button>
               )}
               {canSaveTemplate && (
@@ -276,6 +288,21 @@ export function TransactionDialog({
             <p className="label font-normal">Künftige Buchungen mit „{transaction.title}“ automatisch so einordnen?</p>
             <Button size="sm" variant="ghost" isPending={pending} onPress={() => run(() => ruleFromTransaction(transaction.id))}>
               Immer so kategorisieren
+            </Button>
+          </div>
+        )}
+        {transaction?.splitGroupId && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="label font-normal">Teil einer aufgeteilten Buchung.</p>
+            <Button
+              size="sm"
+              variant="ghost"
+              isPending={pending}
+              onPress={async () => {
+                if (await run(() => unsplitTransaction(transaction.id))) onOpenChange(false);
+              }}
+            >
+              Aufteilung aufheben
             </Button>
           </div>
         )}

@@ -43,6 +43,7 @@ export function toTransaction(doc: WithId<TransactionDoc>): Transaction {
     bankPending: Boolean(doc.bankPending),
     dismissedRecurring: doc.dismissedRecurring ?? [],
     importId: doc.importId ?? null,
+    splitGroupId: doc.splitGroupId ?? null,
   };
 }
 
