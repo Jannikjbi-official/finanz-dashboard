@@ -6,7 +6,8 @@ import { settleDue } from "../../domain/recurring";
 import { firstOccurrenceFrom } from "../../domain/schedule";
 import type { RecurringStatus } from "../../domain/types";
 import { toRecurring } from "../data";
-import { ensureIndexes, recurring, toObjectId, transactions, type RecurringDoc } from "../db";
+import { ensureIndexes, recurring, toObjectId, type RecurringDoc } from "../db";
+import { bookDue } from "../recurring-link";
 import { getSettings } from "../user-data";
 import {
   authorize,
@@ -46,10 +47,12 @@ const recurringSchema = z
       .refine((value) => value === null || (Number.isInteger(value) && value > 0 && value <= 365), "Kündigungsfrist ungültig"),
     noticeUnit: z.enum(["days", "weeks", "months"]).nullish(),
     note: optionalText(500),
+    autoBook: z.boolean().default(false),
   })
   .refine((value) => !value.endDate || value.endDate >= value.nextDue || value.cancelledOn !== null, {
     message: "Das Vertragsende liegt vor dem nächsten Zahlungstermin",
-  });
+  })
+  .refine((value) => !value.autoBook || value.accountId, { message: "Für automatisches Buchen bitte ein Konto wählen" });
 
 export type RecurringInput = z.input<typeof recurringSchema>;
 
@@ -78,6 +81,7 @@ export async function saveRecurring(input: RecurringInput): Promise<ActionResult
     cancelledOn: data.cancelledOn,
     noticePeriod: data.noticeValue && data.noticeUnit ? { value: data.noticeValue, unit: data.noticeUnit } : null,
     note: data.note,
+    autoBook: data.autoBook,
     updatedAt: new Date(),
   };
 
@@ -200,41 +204,21 @@ export async function settleRecurring(input: SettleInput): Promise<ActionResult>
     if (!(await ownsAccount(auth.userId, accountId))) return fail("Konto nicht gefunden");
   }
 
-  const moved = await recurring.updateOne(
-    { _id, userId: auth.userId, nextDue: data.due },
-    { $set: { nextDue: next, updatedAt: new Date() } },
-  );
-  if (moved.modifiedCount === 0) return fail("Dieser Termin wurde bereits erledigt. Die Ansicht wird aktualisiert.");
-
   if (data.mode === "skip") {
+    const moved = await recurring.updateOne(
+      { _id, userId: auth.userId, nextDue: data.due },
+      { $set: { nextDue: next, updatedAt: new Date() } },
+    );
+    if (moved.modifiedCount === 0) return fail("Dieser Termin wurde bereits erledigt. Die Ansicht wird aktualisiert.");
     refresh();
     return ok("Termin übersprungen");
   }
 
   const today = todayIn((await getSettings(auth.userId)).timeZone);
   const date = data.date ?? (data.due <= today ? data.due : today);
-  try {
-    await ensureIndexes();
-    await transactions.insertOne({
-      userId: auth.userId,
-      type: entry.type,
-      status: "booked",
-      amountCents,
-      date,
-      title: entry.title,
-      note: null,
-      categoryId: entry.categoryId,
-      accountId,
-      transferGroupId: null,
-      recurringId: entry.id,
-      recurringDue: data.due,
-      createdAt: new Date(),
-    });
-  } catch (error) {
-    // Buchung fehlgeschlagen: Termin wieder oeffnen, damit nichts verloren geht
-    await recurring.updateOne({ _id, userId: auth.userId, nextDue: next }, { $set: { nextDue: data.due } });
-    throw error;
-  }
+  await ensureIndexes();
+  const booked = await bookDue(auth.userId, entry, data.due, { amountCents, date, accountId: accountId! });
+  if (!booked) return fail("Dieser Termin wurde bereits erledigt. Die Ansicht wird aktualisiert.");
 
   refresh();
   return ok(entry.type === "income" ? "Als eingegangen gebucht" : "Als bezahlt gebucht");

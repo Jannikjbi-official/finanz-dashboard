@@ -109,6 +109,8 @@ export type Recurring = {
   cancelledOn: ISODate | null;
   noticePeriod: NoticePeriod | null;
   note: string | null;
+  /** Am Faelligkeitstag automatisch als bezahlt/eingegangen buchen (Cron, opt-in). */
+  autoBook?: boolean;
 };
 
 export type Category = {

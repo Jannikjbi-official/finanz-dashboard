@@ -322,3 +322,35 @@ describe("Kategorisierungsregeln (#22)", () => {
     expect(await rules.saveRule({ match: "x", categoryId, kind: null })).toMatchObject({ ok: false });
   });
 });
+
+describe("Automatisch buchen (#20)", () => {
+  it("bucht faellige Termine einmal, ordnet Importiertes vorher zu und braucht ein Konto", async () => {
+    const giro = await createAccount("Giro", "giro", "100");
+    const { today } = await load();
+    const { addDays } = await import("@/lib/domain/calendar");
+    const due = addDays(today, -3);
+    expect(await rec.saveRecurring({ type: "expense", title: "Streaming", amount: "9,99", interval: "monthly", nextDue: due, costType: "subscription", accountId: giro, autoBook: true })).toMatchObject({ ok: true });
+    expect(await rec.saveRecurring({ type: "expense", title: "Ohne Konto", amount: "5", interval: "monthly", nextDue: due, costType: "subscription", autoBook: true })).toMatchObject({ ok: false });
+    // Fitness kam schon per Buchung - wird zugeordnet, nicht doppelt gebucht
+    await rec.saveRecurring({ type: "expense", title: "Fitnessstudio", amount: "29", interval: "monthly", nextDue: due, costType: "subscription", accountId: giro, autoBook: true });
+    await tx.saveTransaction({ type: "expense", status: "booked", amount: "29", date: due, title: "Fitnessstudio GmbH", accountId: giro });
+
+    const { runAutoBooking } = await import("@/lib/server/auto-book");
+    expect(await runAutoBooking()).toEqual({ users: 1, linked: 1, booked: 1 });
+    expect(await db.transactions.countDocuments({ title: "Streaming", status: "booked", recurringDue: due })).toBe(1);
+    expect(await db.transactions.countDocuments({ title: /Fitness/ })).toBe(1);
+    expect(await runAutoBooking()).toEqual({ users: 1, linked: 0, booked: 0 });
+  });
+
+  it("Cron-Endpunkt nur mit CRON_SECRET", async () => {
+    const { GET } = await import("@/app/api/cron/recurring/route");
+    const call = (header?: string) => GET(new Request("http://localhost/api/cron/recurring", { headers: header ? { authorization: header } : {} }));
+    delete process.env.CRON_SECRET;
+    expect((await call("Bearer x")).status).toBe(503);
+    process.env.CRON_SECRET = "geheim";
+    expect((await call()).status).toBe(401);
+    expect((await call("Bearer falsch")).status).toBe(401);
+    expect((await call("Bearer geheim")).status).toBe(200);
+    delete process.env.CRON_SECRET;
+  });
+});

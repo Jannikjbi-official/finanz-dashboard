@@ -112,6 +112,8 @@ export type RecurringDoc = {
   cancelledOn?: string | null;
   noticePeriod?: NoticePeriod | null;
   note: string | null;
+  /** Am Faelligkeitstag automatisch buchen (opt-in). */
+  autoBook?: boolean;
   createdAt: Date;
   updatedAt?: Date;
 };

@@ -89,3 +89,43 @@ export async function reopenLinkedDues(userId: string, docs: Array<{ recurringId
     }
   }
 }
+
+/**
+ * Einen Termin als bezahlt/eingegangen buchen: nextDue rueckt atomar weiter
+ * (an den erwarteten Termin gebunden), dann entsteht genau eine Buchung.
+ * Scheitert die Buchung, wird der Termin wieder geoeffnet. Genutzt von
+ * "Bezahlt"/"Eingegangen" und vom automatischen Buchen.
+ */
+export async function bookDue(
+  userId: string,
+  entry: Recurring,
+  due: string,
+  options: { amountCents: number; date: string; accountId: string },
+): Promise<boolean> {
+  const _id = toObjectId(entry.id);
+  if (!_id || due !== entry.nextDue) return false;
+  const next = followingDue(entry, due);
+  const moved = await recurring.updateOne({ _id, userId, nextDue: due }, { $set: { nextDue: next, updatedAt: new Date() } });
+  if (moved.modifiedCount === 0) return false;
+  try {
+    await transactions.insertOne({
+      userId,
+      type: entry.type,
+      status: "booked",
+      amountCents: options.amountCents,
+      date: options.date,
+      title: entry.title,
+      note: null,
+      categoryId: entry.categoryId,
+      accountId: options.accountId,
+      transferGroupId: null,
+      recurringId: entry.id,
+      recurringDue: due,
+      createdAt: new Date(),
+    });
+  } catch (error) {
+    await recurring.updateOne({ _id, userId, nextDue: next }, { $set: { nextDue: due } });
+    throw error;
+  }
+  return true;
+}

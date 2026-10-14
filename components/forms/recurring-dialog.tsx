@@ -1,6 +1,6 @@
 "use client";
 
-import { Disclosure } from "@heroui/react";
+import { Description, Disclosure, Switch } from "@heroui/react";
 import { useState } from "react";
 import { Figures } from "@/components/ui/money";
 import { formatAmountInput, formatMoney } from "@/lib/format";
@@ -48,6 +48,7 @@ export function RecurringDialog({
   const [noticeValue, setNoticeValue] = useState(entry?.noticePeriod ? String(entry.noticePeriod.value) : "");
   const [noticeUnit, setNoticeUnit] = useState<string | null>(entry?.noticePeriod?.unit ?? "months");
   const [note, setNote] = useState(entry?.note ?? "");
+  const [autoBook, setAutoBook] = useState(Boolean(entry?.autoBook));
   const { run, pending } = useAction();
 
   const isSubscription = type === "expense" && costType === "subscription";
@@ -87,6 +88,7 @@ export function RecurringDialog({
             noticeValue,
             noticeUnit: noticeValue ? (noticeUnit as "days" | "weeks" | "months") : null,
             note,
+            autoBook: autoBook && Boolean(accountId && accountId !== "none"),
           }),
         )
       }
@@ -213,6 +215,20 @@ export function RecurringDialog({
           </Disclosure.Content>
         </Disclosure>
       )}
+
+      <Switch isSelected={autoBook} onChange={setAutoBook} size="sm" isDisabled={!accountId || accountId === "none"}>
+        <Switch.Content>
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+          Am Fälligkeitstag automatisch als {type === "income" ? "eingegangen" : "bezahlt"} buchen
+        </Switch.Content>
+        <Description>
+          {!accountId || accountId === "none"
+            ? "Dafür bitte ein Konto wählen."
+            : "Läuft einmal täglich. Kommt die Zahlung per CSV-Import, wird sie vorher zugeordnet statt doppelt gebucht."}
+        </Description>
+      </Switch>
 
       <NoteInput value={note} onChange={setNote} />
       {cents && (

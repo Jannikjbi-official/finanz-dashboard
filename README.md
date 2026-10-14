@@ -76,6 +76,11 @@ docs/DESIGNSYSTEM.md Farben, Typografie, Abstände, Komponenten, Diagramme
 - **Aktuell verfügbar** = Kontostand der Konten, die zum verfügbaren Geld zählen
   − von der Bank vorgemerkte Umsätze − fällige, unbezahlte Zahlungen − bis Monatsende geplante Ausgaben.
   Erwartete Einnahmen zählen nicht; sie fließen nur in die Prognose für den Monatsletzten.
+- **Abgleich**: Kommt eine regelmäßige Zahlung als Buchung (Import oder von Hand), wird sie dem Termin
+  zugeordnet – automatisch, wenn Betrag (± max. 2 €/10 %) und Name passen, sonst als Vorschlag.
+  Überfällige erwartete Einnahmen zählen nicht in die Prognose, sie werden zum Prüfen angezeigt.
+- **Automatisch buchen** (optional, pro Eintrag): täglicher Vercel Cron `/api/cron/recurring`
+  (`vercel.json`), nur mit gesetztem `CRON_SECRET`. Vorher werden sichere Treffer zugeordnet.
 - **Regelmäßige Zahlungen**: Jeder Termin vor `nextDue` ist erledigt (bezahlt oder
   übersprungen), ab `nextDue` offen. „Bezahlt“ erzeugt genau eine Buchung und rückt
   den Termin weiter – die Aktualisierung ist an den erwarteten Termin gebunden, ein
