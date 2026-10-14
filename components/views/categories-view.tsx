@@ -32,6 +32,9 @@ export function CategoriesView({ breakdown, currentMonth }: { breakdown: Categor
         }
         actions={
           <>
+            <Link href={`/rueckblick?monat=${month}`} className="rounded-[var(--radius)] px-2 py-1 text-[13px] text-muted hover:bg-default hover:text-foreground">
+              Rückblick
+            </Link>
             <nav aria-label="Art" className="flex rounded-[var(--radius)] bg-surface-secondary p-0.5 text-[13px]">
               {(["expense", "income"] as const).map((value) => (
                 <Link

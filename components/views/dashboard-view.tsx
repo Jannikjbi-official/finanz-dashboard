@@ -72,6 +72,17 @@ export function DashboardView({
     <div className="flex flex-col gap-4">
       <h1 className="sr-only">Übersicht</h1>
       {lastImport && <LastImportNotice entry={lastImport} />}
+      {Number(dashboard.today.slice(8)) <= 7 && !dashboard.previousEmpty && dashboard.previous.count > 0 && (
+        <Link href="/rueckblick" className="panel flex items-center justify-between gap-3 px-4 py-3 text-[13.5px] hover:bg-surface-secondary sm:px-5">
+          <span>
+            <span className="font-medium">Rückblick {formatMonth(dashboard.previous.month)}: </span>
+            <span className="text-muted">
+              {dashboard.previous.net >= 0 ? "Überschuss" : "Fehlbetrag"} <Money cents={dashboard.previous.net} signed tone="plain" />
+            </span>
+          </span>
+          <ArrowRight className="size-4 shrink-0 text-muted" aria-hidden />
+        </Link>
+      )}
       <div className="panel px-4 py-3 sm:px-5">
         <QuickEntryBar />
       </div>
@@ -363,7 +374,20 @@ function MonthPanel({ dashboard, className }: { dashboard: Dashboard; className?
   ];
 
   return (
-    <Panel id="month" title={formatMonth(dashboard.month)} description="Gebuchte Beträge, ohne Transfers" className={className} bodyClassName="px-4 pb-4 sm:px-5">
+    <Panel
+      id="month"
+      title={formatMonth(dashboard.month)}
+      description="Gebuchte Beträge, ohne Transfers"
+      className={className}
+      bodyClassName="px-4 pb-4 sm:px-5"
+      action={
+        !previousEmpty ? (
+          <Link href="/rueckblick" className="label font-normal hover:text-foreground">
+            Rückblick {monthName(previous.month)}
+          </Link>
+        ) : undefined
+      }
+    >
       <table className="w-full">
         <thead>
           <tr className="label border-b border-separator">
