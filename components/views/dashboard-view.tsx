@@ -12,6 +12,8 @@ import { SettleMenu } from "@/components/finance/settle-menu";
 import { useQuickAdd } from "@/components/shell/quick-add";
 import { Figures, Money } from "@/components/ui/money";
 import { Panel } from "@/components/ui/panel";
+import { Status } from "@/components/ui/status";
+import { aboveAverage, type CategoryBreakdown } from "@/lib/domain/categories";
 import { COST_TYPE_LABEL, INTERVAL_UNIT } from "@/lib/domain/labels";
 import { monthlyEquivalent } from "@/lib/domain/recurring";
 import type { Dashboard } from "@/lib/domain/dashboard";
@@ -23,11 +25,14 @@ export function DashboardView({
   recurring,
   pending,
   lastImport = null,
+  categories = null,
 }: {
   dashboard: Dashboard;
   recurring: Recurring[];
   pending: Transaction[];
   lastImport?: ImportInfo | null;
+  /** Ausgaben des Monats je Kategorie (null: keine Kategorien angelegt). */
+  categories?: CategoryBreakdown | null;
 }) {
   const { openAccount, openTransaction } = useQuickAdd();
 
@@ -102,14 +107,77 @@ export function DashboardView({
         <SubscriptionsPanel dashboard={dashboard} className="lg:col-span-5" />
       </div>
 
-      <Panel id="history" title="Einnahmen und Ausgaben" description="Gebuchte Beträge je Monat, ohne Transfers zwischen eigenen Konten">
-        {dashboard.history.length === 0 ? (
-          <p className="py-8 text-center text-muted">Sobald Buchungen erfasst sind, erscheint hier der Verlauf der letzten zwölf Monate.</p>
-        ) : (
-          <CashflowChart data={dashboard.history} />
-        )}
-      </Panel>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <Panel
+          id="history"
+          title="Einnahmen und Ausgaben"
+          description="Gebuchte Beträge je Monat, ohne Transfers zwischen eigenen Konten"
+          className={categories ? "lg:col-span-7" : "lg:col-span-12"}
+        >
+          {dashboard.history.length === 0 ? (
+            <p className="py-8 text-center text-muted">Sobald Buchungen erfasst sind, erscheint hier der Verlauf der letzten zwölf Monate.</p>
+          ) : (
+            <CashflowChart data={dashboard.history} />
+          )}
+        </Panel>
+        {categories && <CategoryPanel breakdown={categories} className="lg:col-span-5" />}
+      </div>
     </div>
+  );
+}
+
+/* ----------------------------- Ausgaben nach Kategorie ----------------------------- */
+
+function CategoryPanel({ breakdown, className }: { breakdown: CategoryBreakdown; className?: string }) {
+  const top = breakdown.items.filter((item) => item.amount > 0).slice(0, 6);
+  const rest = breakdown.items.slice(top.length).reduce((sum, item) => sum + item.amount, 0);
+  const max = Math.max(...top.map((item) => Math.max(item.amount, item.average ?? 0)), 1);
+  return (
+    <Panel
+      id="categories"
+      title="Ausgaben nach Kategorie"
+      description={`${formatMonth(breakdown.month)} bisher, mit Ø vollständiger Monate`}
+      className={className}
+      bodyClassName=""
+      action={
+        <Link href="/kategorien" className="label font-normal hover:text-foreground">
+          Alle
+        </Link>
+      }
+    >
+      {top.length === 0 ? (
+        <p className="px-4 py-8 text-center text-muted sm:px-5">In diesem Monat noch keine gebuchten Ausgaben.</p>
+      ) : (
+        <ul className="rows">
+          {top.map((item) => (
+            <li key={item.id}>
+              <Link href={`/kategorien/${item.id}`} className="block px-4 py-2.5 outline-none hover:bg-surface-secondary focus-visible:bg-surface-secondary sm:px-5">
+                <div className="flex items-baseline justify-between gap-3 text-[13.5px]">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="size-2 shrink-0 rounded-full" style={{ background: item.color ?? "var(--muted)" }} aria-hidden />
+                    <span className="truncate">{item.name}</span>
+                    {aboveAverage(item) && <Status tone="warning">über Ø</Status>}
+                  </span>
+                  <Money cents={item.amount} tone="plain" className="shrink-0 font-medium" />
+                </div>
+                <div className="relative mt-1.5 h-1 overflow-hidden rounded-full bg-surface-secondary">
+                  <div className="h-full rounded-full" style={{ width: `${(item.amount / max) * 100}%`, background: item.color ?? "var(--muted)" }} />
+                  {item.average !== null && item.average > 0 && (
+                    <div className="absolute inset-y-0 w-0.5 bg-foreground/60" style={{ left: `calc(${(item.average / max) * 100}% - 1px)` }} />
+                  )}
+                </div>
+              </Link>
+            </li>
+          ))}
+          {rest > 0 && (
+            <li className="flex justify-between px-4 py-2.5 text-[13px] text-muted sm:px-5">
+              <span>Weitere Kategorien</span>
+              <Money cents={rest} tone="plain" />
+            </li>
+          )}
+        </ul>
+      )}
+    </Panel>
   );
 }
 

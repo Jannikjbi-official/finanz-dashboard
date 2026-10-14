@@ -1,4 +1,5 @@
 import { DashboardView } from "@/components/views/dashboard-view";
+import { categoryBreakdown } from "@/lib/domain/categories";
 import { buildDashboard } from "@/lib/domain/dashboard";
 import { getFinanceData, loadImports } from "@/lib/server/data";
 import { requireUser } from "@/lib/server/session";
@@ -18,6 +19,7 @@ export default async function OverviewPage() {
       recurring={data.recurring}
       pending={data.transactions.filter((tx) => tx.status === "pending")}
       lastImport={lastImport}
+      categories={data.categories.length > 0 ? categoryBreakdown(data.transactions, data.categories, dashboard.month) : null}
     />
   );
 }

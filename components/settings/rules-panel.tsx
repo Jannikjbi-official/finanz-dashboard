@@ -35,6 +35,7 @@ export function RulesPanel({ rules, categories }: { rules: CategoryRule[]; categ
 
   return (
     <Panel
+      id="regeln"
       title="Regeln für Kategorien"
       description="Enthält die Bezeichnung oder Notiz einer Buchung den Text, bekommt sie die Kategorie – beim Import und bei neuen Buchungen ohne Kategorie. Die oberste passende Regel gewinnt."
       className="lg:col-span-2"

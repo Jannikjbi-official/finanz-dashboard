@@ -2,6 +2,7 @@
 
 import { DownloadSimple, Plus, UploadSimple } from "@phosphor-icons/react";
 import { Button, ToggleButton, ToggleButtonGroup, type Key } from "@heroui/react";
+import Link from "next/link";
 import { useState } from "react";
 import { ConfirmDialog } from "@/components/forms/confirm-dialog";
 import { SelectInput, TextInput } from "@/components/forms/fields";
@@ -139,7 +140,9 @@ export function SettingsView({
                     <li key={category.id} className="flex items-center justify-between gap-3 py-2">
                       <span className="flex min-w-0 items-center gap-2.5">
                         <span className="size-2.5 shrink-0 rounded-[3px]" style={{ background: category.color }} aria-hidden />
-                        <span className="truncate">{category.name}</span>
+                        <Link href={`/kategorien/${category.id}`} className="truncate underline decoration-transparent underline-offset-4 hover:decoration-border">
+                          {category.name}
+                        </Link>
                         <span className="label font-normal">{category.usage}</span>
                       </span>
                       <span className="flex shrink-0 gap-1">
