@@ -8,7 +8,7 @@ import { categorize } from "../../domain/rules";
 import { loadRules } from "../data";
 import { LEGACY_PREFIX, legacyFilter, parseLegacyId } from "../import-undo";
 import { linkSureMatches, reopenLinkedDues } from "../recurring-link";
-import { accounts, categories, ensureIndexes, imports, toObjectId, transactions, wishes, type TransactionDoc } from "../db";
+import { accounts, categories, ensureIndexes, importTrash, imports, toObjectId, transactions, wishes, type TransactionDoc } from "../db";
 import {
   anchorFor,
   authorize,
@@ -250,6 +250,11 @@ export async function importTransactions(input: ImportInput): Promise<ImportResu
   return { ok: true, imported: rows.length, skipped, message: parts.join(", ") };
 }
 
+/** Vor dem Loeschen: vollstaendige Kopie in den Papierkorb (import_trash). */
+async function backup(userId: string, importId: string, kind: "transactions" | "wishes", docs: unknown[]) {
+  if (docs.length > 0) await importTrash.insertOne({ userId, importId, kind, docs, deletedAt: new Date() });
+}
+
 async function setAnchor(userId: string, accountId: string, anchor: { date: string; amountCents: number }) {
   const _id = toObjectId(accountId);
   if (_id) await accounts.updateOne({ _id, userId }, { $set: { balanceAnchor: anchor, updatedAt: new Date() } });
@@ -276,12 +281,14 @@ export async function undoImport(importId: string): Promise<ActionResult> {
       .find({ userId: auth.userId, importId, transactionId: { $type: "string" } }, { projection: { transactionId: 1 } })
       .toArray();
     const wishIds = linked.map((wish) => wish._id.toString());
+    await backup(auth.userId, importId, "wishes", await wishes.find({ userId: auth.userId, importId }).toArray());
     if (wishIds.length > 0) await transactions.deleteMany({ userId: auth.userId, wishId: { $in: wishIds }, status: "pending" });
     deleted = (await wishes.deleteMany({ userId: auth.userId, importId })).deletedCount;
   } else {
     const linked = await transactions
       .find({ userId: auth.userId, importId, recurringId: { $type: "string" } }, { projection: { recurringId: 1, recurringDue: 1 } })
       .toArray();
+    await backup(auth.userId, importId, "transactions", await transactions.find({ userId: auth.userId, importId }).toArray());
     await reopenLinkedDues(auth.userId, linked);
     deleted = (await transactions.deleteMany({ userId: auth.userId, importId })).deletedCount;
   }
@@ -301,8 +308,9 @@ async function undoLegacyImport(userId: string, id: string): Promise<ActionResul
   if (!createdAt) return fail("Import nicht gefunden");
 
   const filter = legacyFilter(userId, createdAt);
-  const docs = await transactions.find(filter, { projection: { date: 1, recurringId: 1, recurringDue: 1 } }).toArray();
+  const docs = await transactions.find(filter).toArray();
   if (docs.length === 0) return fail("Dieser Import wurde bereits gelöscht.");
+  await backup(userId, `legacy:${createdAt.toISOString()}`, "transactions", docs);
   await reopenLinkedDues(userId, docs);
 
   const deleted = (await transactions.deleteMany(filter)).deletedCount;

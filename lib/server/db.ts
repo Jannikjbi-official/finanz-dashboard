@@ -200,6 +200,8 @@ export const planned = db.collection<LegacyPlannedDoc>("planned");
 export const wishes = db.collection<WishDoc>("wishes");
 export const imports = db.collection<ImportDoc>("imports");
 export const rules = db.collection<RuleDoc>("rules");
+/** Sicherung aller Datensaetze, die ein "Import rueckgaengig" geloescht hat. */
+export const importTrash = db.collection<{ userId: string; importId: string; kind: "transactions" | "wishes"; docs: unknown[]; deletedAt: Date }>("import_trash");
 
 /**
  * Alle Collections mit Finanzdaten eines Nutzers - auch die nicht mehr
@@ -212,6 +214,7 @@ export const USER_DATA_COLLECTIONS = [
   "recurring",
   "wishes",
   "imports",
+  "import_trash",
   "rules",
   "planned",
   "goals",
