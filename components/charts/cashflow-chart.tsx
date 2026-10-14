@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Figures } from "@/components/ui/money";
-import { formatMoney, formatMonth } from "@/lib/format";
+import { formatDayShort, formatMoney, formatMonth } from "@/lib/format";
 
-export type CashflowMonth = { month: string; income: number; expense: number; partial?: boolean };
+export type CashflowMonth = { month: string; income: number; expense: number; partial?: boolean; partialFrom?: string | null };
 
 const HEIGHT = 220;
 const PAD = { top: 12, right: 8, bottom: 26, left: 52 };
@@ -98,7 +98,7 @@ export function CashflowChart({ data }: { data: CashflowMonth[] }) {
                 <tr key={month.month} className="border-b border-separator last:border-0">
                   <td className="py-2">
                     {formatMonth(month.month)}
-                    {month.partial && <span className="text-muted"> (bisher)</span>}
+                    {month.partial && <span className="text-muted"> ({month.partialFrom ? `ab ${formatDayShort(month.partialFrom)}` : "bisher"})</span>}
                   </td>
                   <td className="py-2 text-right"><Figures text={formatMoney(month.income)} /></td>
                   <td className="py-2 text-right"><Figures text={formatMoney(month.expense)} /></td>
@@ -143,7 +143,7 @@ export function CashflowChart({ data }: { data: CashflowMonth[] }) {
                     <path d={barPath(expenseX, y(month.expense), barWidth, y(0) - y(month.expense))} fill="var(--chart-expense)" />
                     {month.partial && (
                       <text x={center} y={PAD.top + 10} textAnchor="middle" className="fill-muted text-[10px]">
-                        bisher
+                        {month.partialFrom ? `ab ${Number(month.partialFrom.slice(8))}.` : "bisher"}
                       </text>
                     )}
                     {(!compact || index % 2 === data.length % 2) && (
@@ -181,19 +181,19 @@ export function CashflowChart({ data }: { data: CashflowMonth[] }) {
             >
               <div className="mb-1.5 font-semibold">
                 {formatMonth(current.month)}
-                {current.partial && <span className="font-normal text-muted"> · bisher</span>}
+                {current.partial && <span className="font-normal text-muted"> · {current.partialFrom ? `ab ${formatDayShort(current.partialFrom)}` : "bisher"}</span>}
               </div>
               <div className="num flex justify-between gap-3">
                 <span className="inline-flex items-center gap-1.5 text-muted">
                   <span className="size-2 rounded-[2px] bg-chart-income" /> Einnahmen
                 </span>
-                <Figures text={formatMoney(current.income)} />
+                <span className="shrink-0"><Figures text={formatMoney(current.income)} /></span>
               </div>
               <div className="num flex justify-between gap-3">
                 <span className="inline-flex items-center gap-1.5 text-muted">
                   <span className="size-2 rounded-[2px] bg-chart-expense" /> Ausgaben
                 </span>
-                <Figures text={formatMoney(current.expense)} />
+                <span className="shrink-0"><Figures text={formatMoney(current.expense)} /></span>
               </div>
               <div className="num mt-1.5 flex justify-between gap-3 border-t border-separator pt-1.5">
                 <span className="text-muted">Saldo</span>

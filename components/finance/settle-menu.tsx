@@ -2,15 +2,16 @@
 
 import { DotsThreeVertical } from "@phosphor-icons/react";
 import { Button, Dropdown, Label } from "@heroui/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ConfirmDialog } from "@/components/forms/confirm-dialog";
 import { DateInput, MoneyInput, SelectInput } from "@/components/forms/fields";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { useQuickAdd } from "@/components/shell/quick-add";
 import { useAction } from "@/lib/client/use-action";
-import { formatAmountInput, formatDate } from "@/lib/format";
+import { formatAmountInput, formatDate, formatDayShort, formatMoney } from "@/lib/format";
 import type { OpenItem } from "@/lib/domain/overview";
 import type { Recurring, Transaction } from "@/lib/domain/types";
+import { findLinkCandidates, linkRecurringPayment, type LinkCandidate } from "@/lib/server/actions/matching";
 import { settleRecurring } from "@/lib/server/actions/recurring";
 import { setTransactionStatus } from "@/lib/server/actions/transactions";
 
@@ -22,7 +23,7 @@ import { setTransactionStatus } from "@/lib/server/actions/transactions";
 export function SettleMenu({ item, recurring, transaction }: { item: OpenItem; recurring?: Recurring; transaction?: Transaction }) {
   const { lookups, openTransaction, openRecurring } = useQuickAdd();
   const { run, pending } = useAction();
-  const [dialog, setDialog] = useState<"details" | "skip" | null>(null);
+  const [dialog, setDialog] = useState<"details" | "skip" | "link" | null>(null);
   const [amount, setAmount] = useState(formatAmountInput(item.amountCents));
   const [date, setDate] = useState<string | null>(item.date <= lookups.today ? item.date : lookups.today);
   const [accountId, setAccountId] = useState<string | null>(item.accountId);
@@ -54,6 +55,7 @@ export function SettleMenu({ item, recurring, transaction }: { item: OpenItem; r
               onAction={(key) => {
                 if (key === "details") setDialog("details");
                 if (key === "skip") setDialog("skip");
+                if (key === "link") setDialog("link");
                 if (key === "edit") {
                   if (recurring) openRecurring(recurring);
                   else if (transaction) openTransaction(transaction.type, transaction);
@@ -63,6 +65,11 @@ export function SettleMenu({ item, recurring, transaction }: { item: OpenItem; r
               {isRecurring ? (
                 <Dropdown.Item id="details" textValue="Mit Details buchen">
                   <Label>{doneLabel} mit anderem Betrag oder Datum …</Label>
+                </Dropdown.Item>
+              ) : null}
+              {isRecurring ? (
+                <Dropdown.Item id="link" textValue="Mit vorhandener Buchung verknüpfen">
+                  <Label>Mit vorhandener Buchung verknüpfen …</Label>
                 </Dropdown.Item>
               ) : null}
               {isRecurring ? (
@@ -106,6 +113,8 @@ export function SettleMenu({ item, recurring, transaction }: { item: OpenItem; r
         </FormDialog>
       )}
 
+      {isRecurring && dialog === "link" && <LinkDialog item={item} onClose={() => setDialog(null)} />}
+
       {isRecurring && (
         <ConfirmDialog
           isOpen={dialog === "skip"}
@@ -123,5 +132,68 @@ export function SettleMenu({ item, recurring, transaction }: { item: OpenItem; r
         </ConfirmDialog>
       )}
     </>
+  );
+}
+
+/**
+ * Termin mit einer vorhandenen Buchung verknuepfen, z. B. wenn die Zahlung
+ * per Import kam und anders heisst oder einen anderen Betrag hat.
+ */
+function LinkDialog({ item, onClose }: { item: OpenItem; onClose: () => void }) {
+  const { run, pending } = useAction();
+  const [candidates, setCandidates] = useState<LinkCandidate[] | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    findLinkCandidates(item.sourceId, item.date).then((list) => {
+      if (cancelled) return;
+      setCandidates(list);
+      setSelected(list.find((candidate) => candidate.likely)?.id ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [item.sourceId, item.date]);
+
+  return (
+    <FormDialog
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+      title={`${item.title}: mit Buchung verknüpfen`}
+      description={`Termin vom ${formatDate(item.date)} über ${formatMoney(item.amountCents)}. Die gewählte Buchung gilt dann als diese Zahlung – es entsteht keine neue Buchung.`}
+      submitLabel="Verknüpfen"
+      pending={pending}
+      onSubmit={async () => (selected ? run(() => linkRecurringPayment({ recurringId: item.sourceId, due: item.date, transactionId: selected })) : false)}
+    >
+      {candidates === null ? (
+        <p className="text-muted">Suche passende Buchungen …</p>
+      ) : candidates.length === 0 ? (
+        <p className="text-muted">Keine passende Buchung 20 Tage vor oder nach dem Termin gefunden.</p>
+      ) : (
+        <div role="radiogroup" aria-label="Buchung" className="max-h-72 overflow-auto rounded-[var(--radius)] border border-border">
+          {candidates.map((candidate) => (
+            <button
+              key={candidate.id}
+              type="button"
+              role="radio"
+              aria-checked={selected === candidate.id}
+              onClick={() => setSelected(candidate.id)}
+              className={`flex w-full items-center justify-between gap-3 border-b border-separator px-3 py-2 text-left text-[13px] last:border-0 ${
+                selected === candidate.id ? "bg-surface-secondary font-medium" : "hover:bg-surface-secondary/60"
+              }`}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <span aria-hidden className={`size-3 shrink-0 rounded-full border ${selected === candidate.id ? "border-accent bg-accent" : "border-border"}`} />
+                <span className="w-14 shrink-0 text-muted">{formatDayShort(candidate.date)}</span>
+                <span className="truncate">{candidate.title}</span>
+                {candidate.likely && <span className="label shrink-0 font-normal text-success">passt</span>}
+              </span>
+              <span className="num shrink-0">{formatMoney(candidate.amountCents)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </FormDialog>
   );
 }

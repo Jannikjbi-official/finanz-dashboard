@@ -1,7 +1,8 @@
 import type { WithId } from "mongodb";
 import { inferCostType } from "../domain/labels";
-import type { Account, Category, ImportInfo, Recurring, Transaction, Wish } from "../domain/types";
-import type { AccountDoc, CategoryDoc, ImportDoc, RecurringDoc, TransactionDoc, WishDoc } from "./db";
+import type { CategoryRule } from "../domain/rules";
+import type { Account, Category, ImportInfo, Recurring, Template, Transaction, Wish } from "../domain/types";
+import type { AccountDoc, CategoryDoc, ImportDoc, RecurringDoc, RuleDoc, TemplateDoc, TransactionDoc, WishDoc } from "./db";
 
 /**
  * Dokumente in die Fachtypen aus lib/domain uebersetzen. Fehlende Felder aus
@@ -15,6 +16,7 @@ export function toAccount(doc: WithId<AccountDoc>): Account {
     name: doc.name,
     kind: doc.kind,
     startBalanceCents: doc.startBalanceCents ?? 0,
+    balanceAnchor: doc.balanceAnchor ?? null,
     liquid: doc.liquid ?? doc.kind !== "savings",
     archived: Boolean(doc.archived),
   };
@@ -39,6 +41,10 @@ export function toTransaction(doc: WithId<TransactionDoc>): Transaction {
     recurringId: doc.recurringId ?? null,
     recurringDue: doc.recurringDue ?? null,
     bankPending: Boolean(doc.bankPending),
+    dismissedRecurring: doc.dismissedRecurring ?? [],
+    importId: doc.importId ?? null,
+    splitGroupId: doc.splitGroupId ?? null,
+    receiptCount: doc.receiptCount ?? 0,
   };
 }
 
@@ -60,6 +66,8 @@ export function toRecurring(doc: WithId<RecurringDoc>): Recurring {
     cancelledOn: doc.cancelledOn ?? null,
     noticePeriod: doc.noticePeriod ?? null,
     note: doc.note ?? null,
+    autoBook: Boolean(doc.autoBook),
+    amountCheckedCents: doc.amountCheckedCents ?? null,
   };
 }
 
@@ -91,5 +99,28 @@ export function toImportInfo(doc: ImportDoc): ImportInfo {
     createdAt: doc.createdAt.toISOString(),
     undoneAt: doc.undoneAt ? doc.undoneAt.toISOString() : null,
     undoneCount: doc.undoneCount ?? null,
+  };
+}
+
+export function toRule(doc: WithId<RuleDoc>): CategoryRule {
+  return {
+    id: doc._id.toString(),
+    match: doc.match,
+    categoryId: doc.categoryId,
+    kind: doc.kind ?? null,
+    accountId: doc.accountId ?? null,
+    order: doc.order ?? 0,
+  };
+}
+
+export function toTemplate(doc: WithId<TemplateDoc>): Template {
+  return {
+    id: doc._id.toString(),
+    type: doc.type,
+    title: doc.title,
+    amountCents: doc.amountCents ?? null,
+    categoryId: doc.categoryId ?? null,
+    accountId: doc.accountId ?? null,
+    note: doc.note ?? null,
   };
 }

@@ -69,6 +69,8 @@ const legacyRedirects = [
 const nextConfig = {
   serverExternalPackages: ["mongodb"],
   poweredByHeader: false,
+  // JSON-Sicherung wiederherstellen laedt die ganze Datei hoch (Vercel erlaubt 4,5 MB)
+  experimental: { serverActions: { bodySizeLimit: "4mb" } },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

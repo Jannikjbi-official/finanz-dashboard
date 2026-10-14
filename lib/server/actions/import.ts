@@ -4,9 +4,26 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { isISODate } from "../../domain/calendar";
 import { duplicateKey, MAX_IMPORT_ROWS } from "../../import";
+import { categorize } from "../../domain/rules";
+import { loadRules } from "../data";
 import { LEGACY_PREFIX, legacyFilter, parseLegacyId } from "../import-undo";
-import { categories, ensureIndexes, imports, transactions, wishes, type TransactionDoc } from "../db";
-import { authorize, fail, fileNameSchema, firstIssue, ok, optionalId, ownsAccount, refresh, type ActionResult } from "./shared";
+import { linkSureMatches } from "../recurring-link";
+import { trashTransactions } from "../trash";
+import { accounts, categories, ensureIndexes, importTrash, imports, toObjectId, transactions, wishes, type TransactionDoc } from "../db";
+import {
+  anchorFor,
+  authorize,
+  fail,
+  fileNameSchema,
+  firstIssue,
+  ok,
+  optionalId,
+  optionalIsoDate,
+  ownsAccount,
+  refresh,
+  signedAmount,
+  type ActionResult,
+} from "./shared";
 
 /**
  * CSV-Import. Die Datei wird im Browser gelesen und zugeordnet
@@ -36,6 +53,9 @@ const importSchema = z.object({
   counterAccountId: optionalId,
   /** Kategorien aus der Datei anlegen, die es noch nicht gibt. */
   createCategories: z.boolean().default(false),
+  /** Optional: Kontostand laut Bank fuer das Importkonto (Kontostand mit Datum). */
+  balance: signedAmount.optional(),
+  balanceDate: optionalIsoDate,
 });
 
 export type ImportInput = z.input<typeof importSchema>;
@@ -81,6 +101,9 @@ export async function importTransactions(input: ImportInput): Promise<ImportResu
   for (const id of accountIds) {
     if (!(await ownsAccount(auth.userId, id))) return { ok: false, error: "Konto nicht gefunden" };
   }
+  const hasBalance = typeof input.balance === "string" && input.balance.trim() !== "";
+  const anchor = hasBalance ? await anchorFor(auth.userId, parsed.data.balance ?? 0, parsed.data.balanceDate) : null;
+  if (anchor && !anchor.ok) return { ok: false, error: anchor.error };
   await ensureIndexes();
 
   // Dubletten auch auf dem Server: schon importierte Zeilen nicht noch einmal
@@ -101,7 +124,11 @@ export async function importTransactions(input: ImportInput): Promise<ImportResu
     return left === 0;
   });
   const skipped = parsed.data.rows.length - rows.length;
-  if (rows.length === 0) return { ok: true, imported: 0, skipped, message: "Alle Zeilen sind schon importiert" };
+  if (rows.length === 0) {
+    if (anchor?.ok) await setAnchor(auth.userId, accountId, anchor.anchor);
+    if (anchor?.ok) refresh();
+    return { ok: true, imported: 0, skipped, message: anchor?.ok ? "Alle Zeilen sind schon importiert – Kontostand übernommen" : "Alle Zeilen sind schon importiert" };
+  }
 
   // Kategorien per Name zuordnen; fehlende auf Wunsch anlegen
   const known = await categories.find({ userId: auth.userId }).toArray();
@@ -121,10 +148,12 @@ export async function importTransactions(input: ImportInput): Promise<ImportResu
       }
     }
   }
-  const categoryId = (name: string | null, kind: "income" | "expense") => {
-    if (!name) return null;
-    const match = known.find((doc) => doc.kind === kind && doc.name.toLowerCase() === name.toLowerCase());
-    return match ? match._id.toString() : null;
+  // Kategorie aus der Datei, sonst aus den Kategorisierungsregeln
+  const ruleList = await loadRules(auth.userId);
+  const categoryId = (name: string | null, kind: "income" | "expense", row?: { title: string; note: string | null; accountId: string }) => {
+    const match = name ? known.find((doc) => doc.kind === kind && doc.name.toLowerCase() === name.toLowerCase()) : null;
+    if (match) return match._id.toString();
+    return row ? categorize({ title: row.title, note: row.note, type: kind, accountId: row.accountId }, ruleList) : null;
   };
 
   const now = new Date();
@@ -169,7 +198,7 @@ export async function importTransactions(input: ImportInput): Promise<ImportResu
       // Vorgemerkt und geplant veraendern den Kontostand noch nicht
       status: row.status === "booked" ? "booked" : "pending",
       bankPending: row.status === "pending",
-      categoryId: categoryId(row.category, row.type),
+      categoryId: categoryId(row.category, row.type, { title: row.title, note: row.note, accountId: rowAccount }),
       accountId: rowAccount,
       transferGroupId: null,
       importHash,
@@ -203,18 +232,37 @@ export async function importTransactions(input: ImportInput): Promise<ImportResu
       })
     ).deletedCount;
     await transactions.insertMany(docs);
+    if (anchor?.ok) await setAnchor(auth.userId, accountId, anchor.anchor);
   } catch (error) {
     // Teilweise geschriebene Zeilen wieder entfernen, der Import gilt als nicht erfolgt
     await transactions.deleteMany({ userId: auth.userId, importId });
     await imports.deleteOne({ _id: importId, userId: auth.userId });
     throw error;
   }
+  // Regelmaessige Zahlungen, die jetzt als Buchung da sind, nicht mehr als offen zaehlen
+  const linked = await linkSureMatches(auth.userId);
   refresh();
 
   const parts = [`${rows.length} Buchungen importiert`];
   if (skipped) parts.push(`${skipped} schon vorhanden`);
+  if (linked) parts.push(`${linked} regelmäßige Zahlungen zugeordnet`);
   if (replaced) parts.push(`${replaced} alte Vormerkungen ersetzt`);
+  if (anchor?.ok) parts.push("Kontostand übernommen");
   return { ok: true, imported: rows.length, skipped, message: parts.join(", ") };
+}
+
+/** Vor dem Loeschen: vollstaendige Kopie in den Papierkorb (import_trash). */
+async function backup(userId: string, importId: string, kind: "transactions" | "wishes", docs: unknown[]) {
+  if (docs.length > 0) await importTrash.insertOne({ userId, importId, kind, docs, label: `Wunsch-Import (${docs.length})`, deletedAt: new Date() });
+}
+
+function importLabel(fileName: string | null, count: number) {
+  return `Import${fileName ? ` „${fileName}“` : ""} (${count} Buchungen)`;
+}
+
+async function setAnchor(userId: string, accountId: string, anchor: { date: string; amountCents: number }) {
+  const _id = toObjectId(accountId);
+  if (_id) await accounts.updateOne({ _id, userId }, { $set: { balanceAnchor: anchor, updatedAt: new Date() } });
 }
 
 /**
@@ -230,23 +278,30 @@ export async function undoImport(importId: string): Promise<ActionResult> {
 
   const doc = await imports.findOne({ _id: importId, userId: auth.userId });
   if (!doc) return fail("Import nicht gefunden");
-  if (doc.undoneAt) return fail("Dieser Import wurde bereits rückgängig gemacht.");
+  // Zuerst als rueckgaengig markieren: ein zweiter Klick findet nichts mehr zu tun
+  const claimed = await imports.updateOne({ _id: importId, userId: auth.userId, undoneAt: { $in: [null] } }, { $set: { undoneAt: new Date() } });
+  if (claimed.modifiedCount === 0) return fail("Dieser Import wurde bereits rückgängig gemacht.");
 
   let deleted = 0;
+  let trashId: string | undefined;
   if (doc.kind === "wishes") {
     const linked = await wishes
       .find({ userId: auth.userId, importId, transactionId: { $type: "string" } }, { projection: { transactionId: 1 } })
       .toArray();
     const wishIds = linked.map((wish) => wish._id.toString());
+    await backup(auth.userId, importId, "wishes", await wishes.find({ userId: auth.userId, importId }).toArray());
     if (wishIds.length > 0) await transactions.deleteMany({ userId: auth.userId, wishId: { $in: wishIds }, status: "pending" });
     deleted = (await wishes.deleteMany({ userId: auth.userId, importId })).deletedCount;
   } else {
-    deleted = (await transactions.deleteMany({ userId: auth.userId, importId })).deletedCount;
+    const docs = await transactions.find({ userId: auth.userId, importId }).toArray();
+    const trashed = await trashTransactions(auth.userId, docs, { importId, label: importLabel(doc.fileName, docs.length) });
+    deleted = trashed?.deleted ?? 0;
+    trashId = trashed?.trashId;
   }
 
-  await imports.updateOne({ _id: importId, userId: auth.userId }, { $set: { undoneAt: new Date(), undoneCount: deleted } });
+  await imports.updateOne({ _id: importId, userId: auth.userId }, { $set: { undoneCount: deleted } });
   refresh();
-  return ok(`Import rückgängig gemacht: ${deleted} ${doc.kind === "wishes" ? "Wünsche" : "Buchungen"} gelöscht`);
+  return ok(`Import rückgängig gemacht: ${deleted} ${doc.kind === "wishes" ? "Wünsche" : "Buchungen"} gelöscht`, trashId);
 }
 
 /**
@@ -259,10 +314,10 @@ async function undoLegacyImport(userId: string, id: string): Promise<ActionResul
   if (!createdAt) return fail("Import nicht gefunden");
 
   const filter = legacyFilter(userId, createdAt);
-  const docs = await transactions.find(filter, { projection: { date: 1 } }).toArray();
+  const docs = await transactions.find(filter).toArray();
   if (docs.length === 0) return fail("Dieser Import wurde bereits gelöscht.");
-
-  const deleted = (await transactions.deleteMany(filter)).deletedCount;
+  const result = await trashTransactions(userId, docs, { importId: `${LEGACY_PREFIX}${createdAt.toISOString()}`, label: importLabel(null, docs.length) });
+  const deleted = result?.deleted ?? 0;
   const dates = docs.map((doc) => doc.date).sort();
   const now = new Date();
   await imports.insertOne({
@@ -279,5 +334,5 @@ async function undoLegacyImport(userId: string, id: string): Promise<ActionResul
     undoneCount: deleted,
   });
   refresh();
-  return ok(`Import rückgängig gemacht: ${deleted} Buchungen gelöscht`);
+  return ok(`Import rückgängig gemacht: ${deleted} Buchungen gelöscht`, result?.trashId);
 }

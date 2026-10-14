@@ -5,18 +5,29 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import { AccountDialog } from "@/components/forms/account-dialog";
 import { RecurringDialog } from "@/components/forms/recurring-dialog";
 import { TransactionDialog, type DialogKind, type Lookups } from "@/components/forms/transaction-dialog";
-import type { Account, CostType, Recurring, Transaction, TxType } from "@/lib/domain/types";
+import type { Account, CostType, Interval, Recurring, Transaction, TxType } from "@/lib/domain/types";
+
+/** Vorbelegung fuer neue regelmaessige Zahlungen (z. B. aus einer erkannten Zahlung). */
+export type RecurringDefaults = {
+  type?: TxType;
+  costType?: CostType;
+  title?: string;
+  amountCents?: number;
+  interval?: Interval;
+  nextDue?: string;
+  accountId?: string | null;
+};
 
 type DialogState =
-  | { kind: "transaction"; initialKind: DialogKind; transaction: Transaction | null; key: number }
-  | { kind: "recurring"; entry: Recurring | null; defaults?: { type?: TxType; costType?: CostType }; key: number }
+  | { kind: "transaction"; initialKind: DialogKind; transaction: Transaction | null; duplicateOf?: Transaction | null; key: number }
+  | { kind: "recurring"; entry: Recurring | null; defaults?: RecurringDefaults; key: number }
   | { kind: "account"; account: Account | null; key: number }
   | null;
 
 type QuickAdd = {
   lookups: Lookups;
-  openTransaction: (initialKind?: DialogKind, transaction?: Transaction | null) => void;
-  openRecurring: (entry?: Recurring | null, defaults?: { type?: TxType; costType?: CostType }) => void;
+  openTransaction: (initialKind?: DialogKind, transaction?: Transaction | null, options?: { duplicateOf?: Transaction }) => void;
+  openRecurring: (entry?: Recurring | null, defaults?: RecurringDefaults) => void;
   openAccount: (account?: Account | null) => void;
 };
 
@@ -38,14 +49,14 @@ export function QuickAddProvider({ lookups, children }: { lookups: Lookups; chil
   const value = useMemo<QuickAdd>(
     () => ({
       lookups,
-      openTransaction: (initialKind = "expense", transaction = null) => {
+      openTransaction: (initialKind = "expense", transaction = null, options) => {
         // Ohne Konto keine Buchung: zuerst ein Konto anlegen
         if (!transaction && !lookups.accounts.some((account) => !account.archived)) {
           toast.info("Lege zuerst ein Konto an – jede Buchung gehört zu einem Konto.");
           show({ kind: "account", account: null, key: Date.now() });
           return;
         }
-        show({ kind: "transaction", initialKind, transaction, key: Date.now() });
+        show({ kind: "transaction", initialKind, transaction, duplicateOf: options?.duplicateOf ?? null, key: Date.now() });
       },
       openRecurring: (entry = null, defaults) => show({ kind: "recurring", entry, defaults, key: Date.now() }),
       openAccount: (account = null) => show({ kind: "account", account, key: Date.now() }),
@@ -64,6 +75,7 @@ export function QuickAddProvider({ lookups, children }: { lookups: Lookups; chil
           lookups={lookups}
           initialKind={dialog.initialKind}
           transaction={dialog.transaction}
+          duplicateOf={dialog.duplicateOf}
         />
       )}
       {dialog?.kind === "recurring" && (

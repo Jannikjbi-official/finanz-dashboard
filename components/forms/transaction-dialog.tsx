@@ -1,18 +1,25 @@
 "use client";
 
-import { Button, Label, ToggleButton, ToggleButtonGroup, type Key } from "@heroui/react";
+import { CaretDown } from "@phosphor-icons/react";
+import { Button, Dropdown, Label, ToggleButton, ToggleButtonGroup, type Key } from "@heroui/react";
 import { useState } from "react";
-import { formatAmountInput } from "@/lib/format";
+import { formatAmountInput, formatDate } from "@/lib/format";
 import { useAction } from "@/lib/client/use-action";
-import type { Account, Category, Transaction, TxStatus, TxType } from "@/lib/domain/types";
-import { deleteTransaction, saveTransaction, saveTransfer } from "@/lib/server/actions/transactions";
+import type { Account, Category, Template, Transaction, TxStatus, TxType } from "@/lib/domain/types";
+import { unlinkRecurringPayment } from "@/lib/server/actions/matching";
+import { ruleFromTransaction } from "@/lib/server/actions/rules";
+import { saveTemplate } from "@/lib/server/actions/templates";
+import { deleteTransaction, saveTransaction, saveTransfer, unsplitTransaction } from "@/lib/server/actions/transactions";
+import { useQuickAdd } from "@/components/shell/quick-add";
 import { ConfirmDialog } from "./confirm-dialog";
 import { DateInput, MoneyInput, NoteInput, SelectInput, TextInput } from "./fields";
 import { FormDialog } from "./form-dialog";
+import { ReceiptsField } from "./receipts-field";
+import { SplitDialog } from "./split-dialog";
 
 export type DialogKind = TxType | "transfer";
 
-export type Lookups = { accounts: Account[]; categories: Category[]; today: string };
+export type Lookups = { accounts: Account[]; categories: Category[]; today: string; templates?: Template[] };
 
 /** Auswahlgruppe mit zwei bis drei Optionen. */
 export function Segmented<T extends string>({
@@ -61,26 +68,33 @@ export function TransactionDialog({
   lookups,
   initialKind = "expense",
   transaction,
+  duplicateOf,
 }: {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   lookups: Lookups;
   initialKind?: DialogKind;
   transaction?: Transaction | null;
+  /** Neue Buchung mit den Angaben dieser Buchung (Datum: heute). */
+  duplicateOf?: Transaction | null;
 }) {
+  const { openTransaction } = useQuickAdd();
+  const source = transaction ?? duplicateOf ?? null;
   const accounts = lookups.accounts.filter((account) => !account.archived || account.id === transaction?.accountId);
   const defaultAccount = accounts.find((account) => account.kind === "giro" && !account.archived) ?? accounts[0];
 
-  const [kind, setKind] = useState<DialogKind>(transaction ? transaction.type : initialKind);
+  const [kind, setKind] = useState<DialogKind>(source ? source.type : initialKind);
   const [status, setStatus] = useState<TxStatus>(transaction?.status ?? "booked");
-  const [amount, setAmount] = useState(transaction ? formatAmountInput(transaction.amountCents) : "");
-  const [title, setTitle] = useState(transaction?.title ?? "");
+  const [amount, setAmount] = useState(source ? formatAmountInput(source.amountCents) : "");
+  const [title, setTitle] = useState(source?.title ?? "");
   const [date, setDate] = useState<string | null>(transaction?.date ?? lookups.today);
-  const [accountId, setAccountId] = useState<string | null>(transaction?.accountId ?? defaultAccount?.id ?? null);
+  const [accountId, setAccountId] = useState<string | null>(source?.accountId ?? defaultAccount?.id ?? null);
   const [toAccountId, setToAccountId] = useState<string | null>(accounts.find((account) => account.id !== defaultAccount?.id)?.id ?? null);
-  const [categoryId, setCategoryId] = useState<string | null>(transaction?.categoryId ?? null);
-  const [note, setNote] = useState(transaction?.note ?? "");
+  const [categoryId, setCategoryId] = useState<string | null>(source?.categoryId ?? null);
+  const [note, setNote] = useState(source?.note ?? "");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Aufteilen ersetzt den Dialog (keine verschachtelten Fenster)
+  const [splitting, setSplitting] = useState(false);
   const { run, pending } = useAction();
 
   const isEdit = Boolean(transaction);
@@ -108,14 +122,31 @@ export function TransactionDialog({
     );
   };
 
+  // Vorlage uebernehmen: alle Felder ausser Datum und Status
+  const applyTemplate = (template: Template) => {
+    setKind(template.type);
+    setTitle(template.title);
+    setAmount(template.amountCents !== null ? formatAmountInput(template.amountCents) : "");
+    setCategoryId(template.categoryId);
+    if (template.accountId && accounts.some((account) => account.id === template.accountId && !account.archived)) setAccountId(template.accountId);
+    setNote(template.note ?? "");
+  };
+  const templates = lookups.templates ?? [];
+
   const accountOptions = accounts.map((account) => ({ id: account.id, label: account.name + (account.archived ? " (archiviert)" : "") }));
   const title_ = isEdit
     ? "Buchung bearbeiten"
+    : duplicateOf
+      ? "Buchung duplizieren"
     : kind === "transfer"
       ? "Transfer zwischen Konten"
       : kind === "income"
         ? "Einnahme erfassen"
         : "Ausgabe erfassen";
+
+  if (splitting && transaction) {
+    return <SplitDialog isOpen={isOpen} onOpenChange={onOpenChange} transaction={transaction} categories={lookups.categories} />;
+  }
 
   return (
     <>
@@ -128,12 +159,73 @@ export function TransactionDialog({
         onSubmit={submit}
         extraActions={
           isEdit ? (
-            <Button variant="danger-soft" size="sm" onPress={() => setConfirmDelete(true)}>
-              Löschen
+            <div className="flex items-center gap-1.5">
+              <Button variant="danger-soft" size="sm" onPress={() => setConfirmDelete(true)}>
+                Löschen
+              </Button>
+              {transaction && !transaction.transferGroupId && (
+                <Dropdown>
+                  <Button variant="ghost" size="sm" aria-label="Weitere Aktionen">
+                    Mehr <CaretDown className="size-3.5" />
+                  </Button>
+                  <Dropdown.Popover placement="top start">
+                    <Dropdown.Menu
+                      aria-label="Weitere Aktionen"
+                      disabledKeys={transaction.recurringId || transaction.splitGroupId ? ["split"] : []}
+                      onAction={(key) => {
+                        if (key === "duplicate") {
+                          onOpenChange(false);
+                          openTransaction(transaction.type, null, { duplicateOf: transaction });
+                        }
+                        if (key === "split") setSplitting(true);
+                        if (key === "template") void run(() => saveTemplate({ type, title, amount, categoryId, accountId, note }));
+                      }}
+                    >
+                      <Dropdown.Item id="duplicate" textValue="Duplizieren">
+                        <Label>Duplizieren</Label>
+                      </Dropdown.Item>
+                      <Dropdown.Item id="split" textValue="Aufteilen">
+                        <Label>Aufteilen</Label>
+                      </Dropdown.Item>
+                      <Dropdown.Item id="template" textValue="Als Vorlage speichern">
+                        <Label>Als Vorlage speichern</Label>
+                      </Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown.Popover>
+                </Dropdown>
+              )}
+            </div>
+          ) : kind !== "transfer" ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              isPending={pending}
+              isDisabled={!title.trim()}
+              onPress={() => run(() => saveTemplate({ type, title, amount, categoryId, accountId, note }))}
+            >
+              Als Vorlage speichern
             </Button>
           ) : undefined
         }
       >
+        {!isEdit && !duplicateOf && templates.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <span className="label">Vorlagen</span>
+            <div className="flex flex-wrap gap-1.5">
+              {templates.map((template) => (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => applyTemplate(template)}
+                  className="rounded-full border border-separator px-2.5 py-1 text-[12.5px] outline-none hover:bg-surface-secondary focus-visible:ring-2 focus-visible:ring-focus"
+                >
+                  {template.title}
+                  {template.amountCents !== null && <span className="text-muted"> · {formatAmountInput(template.amountCents)} €</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {!isEdit && (
           <Segmented
             label="Art"
@@ -196,8 +288,46 @@ export function TransactionDialog({
           </>
         )}
         <NoteInput value={note} onChange={setNote} />
+        {transaction && !transaction.transferGroupId && <ReceiptsField transactionId={transaction.id} />}
+        {transaction && !transaction.transferGroupId && transaction.categoryId && transaction.categoryId === categoryId && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="label font-normal">Künftige Buchungen mit „{transaction.title}“ automatisch so einordnen?</p>
+            <Button size="sm" variant="ghost" isPending={pending} onPress={() => run(() => ruleFromTransaction(transaction.id))}>
+              Immer so kategorisieren
+            </Button>
+          </div>
+        )}
+        {transaction?.splitGroupId && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="label font-normal">Teil einer aufgeteilten Buchung.</p>
+            <Button
+              size="sm"
+              variant="ghost"
+              isPending={pending}
+              onPress={async () => {
+                if (await run(() => unsplitTransaction(transaction.id))) onOpenChange(false);
+              }}
+            >
+              Aufteilung aufheben
+            </Button>
+          </div>
+        )}
         {transaction?.recurringId && (
-          <p className="label font-normal">Diese Buchung stammt aus einer regelmäßigen Zahlung.</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="label font-normal">
+              Diese Buchung gehört zu einer regelmäßigen Zahlung{transaction.recurringDue ? ` (Termin ${formatDate(transaction.recurringDue)})` : ""}.
+            </p>
+            <Button
+              size="sm"
+              variant="ghost"
+              isPending={pending}
+              onPress={async () => {
+                if (await run(() => unlinkRecurringPayment(transaction.id))) onOpenChange(false);
+              }}
+            >
+              Zuordnung lösen
+            </Button>
+          </div>
         )}
       </FormDialog>
 

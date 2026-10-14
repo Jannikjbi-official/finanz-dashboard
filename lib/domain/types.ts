@@ -11,12 +11,20 @@ export type { ISODate, Interval };
 
 export type AccountKind = "giro" | "savings" | "cash" | "paypal" | "other";
 
+export type BalanceAnchor = { date: ISODate; amountCents: Cents };
+
 export type Account = {
   id: string;
   name: string;
   kind: AccountKind;
-  /** Saldo vor der ersten erfassten Buchung. */
+  /** Saldo vor der ersten erfassten Buchung (nur ohne Kontostand-Anker). */
   startBalanceCents: Cents;
+  /**
+   * Echter Kontostand an einem Tag, z. B. laut Bank: Stand nach allen
+   * Buchungen dieses Tages. Ist er gesetzt, rechnet alles von hier aus -
+   * spaeter importierte aeltere Buchungen aendern den heutigen Stand nicht.
+   */
+  balanceAnchor: BalanceAnchor | null;
   /** Zaehlt zum verfuegbaren Geld. Sparkonten standardmaessig nicht. */
   liquid: boolean;
   archived: boolean;
@@ -52,6 +60,14 @@ export type Transaction = {
    * durch den neuen Stand ersetzt.
    */
   bankPending?: boolean;
+  /** Regelmaessige Zahlungen, fuer die diese Buchung als Treffer abgelehnt wurde. */
+  dismissedRecurring?: string[];
+  /** CSV-Import, aus dem die Buchung stammt. */
+  importId?: string | null;
+  /** Teil einer Aufteilung (ID der urspruenglichen Buchung). */
+  splitGroupId?: string | null;
+  /** Anzahl angehaengter Belege. */
+  receiptCount?: number;
 };
 
 export type RecurringStatus = "active" | "paused" | "cancelled" | "archived";
@@ -99,6 +115,10 @@ export type Recurring = {
   cancelledOn: ISODate | null;
   noticePeriod: NoticePeriod | null;
   note: string | null;
+  /** Am Faelligkeitstag automatisch als bezahlt/eingegangen buchen (Cron, opt-in). */
+  autoBook?: boolean;
+  /** Abweichender Betrag, der bewusst nicht uebernommen wurde (siehe amount-changes.ts). */
+  amountCheckedCents?: number | null;
 };
 
 export type Category = {
@@ -145,4 +165,37 @@ export type ImportInfo = {
   undoneCount: number | null;
   /** Import aus der Zeit vor der Import-ID, erkannt am gemeinsamen Anlagezeitpunkt. */
   legacy?: boolean;
+};
+
+/** Ein Vorgang im Papierkorb (eine geloeschte Buchung, eine Auswahl oder ein Import). */
+export type TrashEntry = {
+  id: string;
+  label: string;
+  count: number;
+  /** Zeitpunkte als ISO-String (mit Uhrzeit). */
+  deletedAt: string;
+  /** null: bleibt, bis er endgueltig geloescht wird (rueckgaengig gemachte Importe). */
+  expiresAt: string | null;
+  fromImport: boolean;
+};
+
+/** Automatisch gesicherter Stand vor einer Wiederherstellung. */
+export type SnapshotInfo = {
+  id: string;
+  /** ISO-Zeitstempel. */
+  createdAt: string;
+  reason: string;
+  /** Anzahl je Collection. */
+  counts: Record<string, number>;
+};
+
+/** Vorlage fuer haeufige Buchungen (z. B. "Baecker 3,20 €"). Betrag optional. */
+export type Template = {
+  id: string;
+  type: TxType;
+  title: string;
+  amountCents: Cents | null;
+  categoryId: string | null;
+  accountId: string | null;
+  note: string | null;
 };

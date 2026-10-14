@@ -3,13 +3,20 @@
 import { ArrowRight, Info, Warning } from "@phosphor-icons/react";
 import { Button, Disclosure, Tooltip } from "@heroui/react";
 import Link from "next/link";
+import { BalanceChart } from "@/components/charts/balance-chart";
 import { CashflowChart } from "@/components/charts/cashflow-chart";
 import { LastImportNotice } from "@/components/finance/import-list";
+import { AnomalyPanel } from "@/components/finance/anomaly-panel";
+import { AmountChangePanel, MatchPanel } from "@/components/finance/match-panel";
+import { QuickEntryBar } from "@/components/shell/quick-entry";
 import { ItemStatus } from "@/components/finance/item-status";
 import { SettleMenu } from "@/components/finance/settle-menu";
 import { useQuickAdd } from "@/components/shell/quick-add";
 import { Figures, Money } from "@/components/ui/money";
 import { Panel } from "@/components/ui/panel";
+import { Status } from "@/components/ui/status";
+import type { Anomaly } from "@/lib/domain/anomalies";
+import { aboveAverage, type CategoryBreakdown } from "@/lib/domain/categories";
 import { COST_TYPE_LABEL, INTERVAL_UNIT } from "@/lib/domain/labels";
 import { monthlyEquivalent } from "@/lib/domain/recurring";
 import type { Dashboard } from "@/lib/domain/dashboard";
@@ -21,11 +28,16 @@ export function DashboardView({
   recurring,
   pending,
   lastImport = null,
+  categories = null,
+  anomalies = [],
 }: {
   dashboard: Dashboard;
   recurring: Recurring[];
   pending: Transaction[];
   lastImport?: ImportInfo | null;
+  /** Ausgaben des Monats je Kategorie (null: keine Kategorien angelegt). */
+  categories?: CategoryBreakdown | null;
+  anomalies?: Anomaly[];
 }) {
   const { openAccount, openTransaction } = useQuickAdd();
 
@@ -60,10 +72,28 @@ export function DashboardView({
     <div className="flex flex-col gap-4">
       <h1 className="sr-only">Übersicht</h1>
       {lastImport && <LastImportNotice entry={lastImport} />}
+      {Number(dashboard.today.slice(8)) <= 7 && !dashboard.previousEmpty && dashboard.previous.count > 0 && (
+        <Link href="/rueckblick" className="panel flex items-center justify-between gap-3 px-4 py-3 text-[13.5px] hover:bg-surface-secondary sm:px-5">
+          <span>
+            <span className="font-medium">Rückblick {formatMonth(dashboard.previous.month)}: </span>
+            <span className="text-muted">
+              {dashboard.previous.net >= 0 ? "Überschuss" : "Fehlbetrag"} <Money cents={dashboard.previous.net} signed tone="plain" />
+            </span>
+          </span>
+          <ArrowRight className="size-4 shrink-0 text-muted" aria-hidden />
+        </Link>
+      )}
+      <div className="panel px-4 py-3 sm:px-5">
+        <QuickEntryBar />
+      </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <AvailabilityPanel dashboard={dashboard} className="lg:col-span-7" />
         <MonthPanel dashboard={dashboard} className="lg:col-span-5" />
       </div>
+
+      {dashboard.matches.length > 0 && <MatchPanel matches={dashboard.matches} />}
+      {dashboard.amountChanges.length > 0 && <AmountChangePanel changes={dashboard.amountChanges} />}
+      {anomalies.length > 0 && <AnomalyPanel anomalies={anomalies} />}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <Panel
@@ -73,9 +103,14 @@ export function DashboardView({
           className="lg:col-span-7"
           bodyClassName=""
           action={
-            <Button size="sm" variant="ghost" onPress={() => openTransaction("expense")}>
-              Zahlung planen
-            </Button>
+            <>
+              <Link href="/kalender" className="label font-normal hover:text-foreground">
+                Kalender
+              </Link>
+              <Button size="sm" variant="ghost" onPress={() => openTransaction("expense")}>
+                Zahlung planen
+              </Button>
+            </>
           }
         >
           {dashboard.upcoming.length === 0 ? (
@@ -94,14 +129,91 @@ export function DashboardView({
         <SubscriptionsPanel dashboard={dashboard} className="lg:col-span-5" />
       </div>
 
-      <Panel id="history" title="Einnahmen und Ausgaben" description="Gebuchte Beträge je Monat, ohne Transfers zwischen eigenen Konten">
-        {dashboard.history.length === 0 ? (
-          <p className="py-8 text-center text-muted">Sobald Buchungen erfasst sind, erscheint hier der Verlauf der letzten zwölf Monate.</p>
-        ) : (
-          <CashflowChart data={dashboard.history} />
-        )}
-      </Panel>
+      {dashboard.timeline.length > 1 && (
+        <Panel
+          id="timeline"
+          title="Kontostand bis Monatsende"
+          description="Verfügbare Konten: gebucht der letzten Wochen, danach gestrichelt die Prognose mit allen bekannten Zahlungen"
+        >
+          <BalanceChart
+            points={dashboard.timeline.map((point) => ({ date: point.date, value: point.balance, forecast: point.forecast, changes: point.changes }))}
+            today={dashboard.today}
+            label={`Kontostand vom ${formatDayShort(dashboard.timeline[0].date)} bis ${formatDayShort(dashboard.availability.monthEnd)}`}
+          />
+        </Panel>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <Panel
+          id="history"
+          title="Einnahmen und Ausgaben"
+          description="Gebuchte Beträge je Monat, ohne Transfers zwischen eigenen Konten"
+          className={categories ? "lg:col-span-7" : "lg:col-span-12"}
+        >
+          {dashboard.history.length === 0 ? (
+            <p className="py-8 text-center text-muted">Sobald Buchungen erfasst sind, erscheint hier der Verlauf der letzten zwölf Monate.</p>
+          ) : (
+            <CashflowChart data={dashboard.history} />
+          )}
+        </Panel>
+        {categories && <CategoryPanel breakdown={categories} className="lg:col-span-5" />}
+      </div>
     </div>
+  );
+}
+
+/* ----------------------------- Ausgaben nach Kategorie ----------------------------- */
+
+function CategoryPanel({ breakdown, className }: { breakdown: CategoryBreakdown; className?: string }) {
+  const top = breakdown.items.filter((item) => item.amount > 0).slice(0, 6);
+  const rest = breakdown.items.slice(top.length).reduce((sum, item) => sum + item.amount, 0);
+  const max = Math.max(...top.map((item) => Math.max(item.amount, item.average ?? 0)), 1);
+  return (
+    <Panel
+      id="categories"
+      title="Ausgaben nach Kategorie"
+      description={`${formatMonth(breakdown.month)} bisher, mit Ø vollständiger Monate`}
+      className={className}
+      bodyClassName=""
+      action={
+        <Link href="/kategorien" className="label font-normal hover:text-foreground">
+          Alle
+        </Link>
+      }
+    >
+      {top.length === 0 ? (
+        <p className="px-4 py-8 text-center text-muted sm:px-5">In diesem Monat noch keine gebuchten Ausgaben.</p>
+      ) : (
+        <ul className="rows">
+          {top.map((item) => (
+            <li key={item.id}>
+              <Link href={`/kategorien/${item.id}`} className="block px-4 py-2.5 outline-none hover:bg-surface-secondary focus-visible:bg-surface-secondary sm:px-5">
+                <div className="flex items-baseline justify-between gap-3 text-[13.5px]">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="size-2 shrink-0 rounded-full" style={{ background: item.color ?? "var(--muted)" }} aria-hidden />
+                    <span className="truncate">{item.name}</span>
+                    {aboveAverage(item) && <Status tone="warning">über Ø</Status>}
+                  </span>
+                  <Money cents={item.amount} tone="plain" className="shrink-0 font-medium" />
+                </div>
+                <div className="relative mt-1.5 h-1 overflow-hidden rounded-full bg-surface-secondary">
+                  <div className="h-full rounded-full" style={{ width: `${(item.amount / max) * 100}%`, background: item.color ?? "var(--muted)" }} />
+                  {item.average !== null && item.average > 0 && (
+                    <div className="absolute inset-y-0 w-0.5 bg-foreground/60" style={{ left: `calc(${(item.average / max) * 100}% - 1px)` }} />
+                  )}
+                </div>
+              </Link>
+            </li>
+          ))}
+          {rest > 0 && (
+            <li className="flex justify-between px-4 py-2.5 text-[13px] text-muted sm:px-5">
+              <span>Weitere Kategorien</span>
+              <Money cents={rest} tone="plain" />
+            </li>
+          )}
+        </ul>
+      )}
+    </Panel>
   );
 }
 
@@ -141,7 +253,7 @@ function Line({
 function AvailabilityPanel({ dashboard, className }: { dashboard: Dashboard; className?: string }) {
   const a = dashboard.availability;
   const endLabel = formatDayShort(a.monthEnd);
-  const lowBeforeIncome = a.lowestPoint.balance < 0;
+  const dip = a.dip;
   const count = (n: number) => (n === 1 ? "1 Posten" : `${n} Posten`);
 
   return (
@@ -176,15 +288,40 @@ function AvailabilityPanel({ dashboard, className }: { dashboard: Dashboard; cla
           <Line label="Aktuell verfügbar" value={a.available} sign="=" strong />
           <Line label="Erwartete Einnahmen" hint="noch nicht eingegangen" value={a.expectedIncome.total} sign="+" muted={a.expectedIncome.total === 0} />
           <Line label={`Voraussichtlich am ${endLabel}`} hint="Prognose" value={a.projectedMonthEnd} sign="=" strong />
+          {dashboard.variableForecast && (
+            <Line
+              label="Nach Ø variablen Ausgaben"
+              hint={`−${formatMoney(dashboard.variableForecast.reserve)} geschätzt`}
+              value={dashboard.variableForecast.projected}
+              muted
+            />
+          )}
+          {a.overdueIncome.total > 0 && (
+            <Line
+              label="Überfällige Einnahmen"
+              hint={`nicht eingerechnet – ${count(a.overdueIncome.items.length)} prüfen`}
+              value={a.overdueIncome.total}
+              muted
+            />
+          )}
         </div>
       </div>
 
-      {lowBeforeIncome && (
+      {(a.startsNegative || dip) && (
         <div className="mx-4 mt-2 flex items-start gap-2 rounded-[var(--radius)] bg-danger-soft px-3 py-2 text-[13px] text-danger-soft-foreground sm:mx-5">
           <Warning className="mt-0.5 size-4 shrink-0" />
           <span>
-            Der Kontostand fällt voraussichtlich am {formatDate(a.lowestPoint.date)} auf <Figures text={formatMoney(a.lowestPoint.balance)} />, bevor erwartete
-            Einnahmen eingehen.
+            {a.startsNegative && (
+              <>
+                Der Kontostand ist bereits negativ (<Figures text={formatMoney(a.liquidBalance)} />).{" "}
+              </>
+            )}
+            {dip && (
+              <>
+                {a.startsNegative ? "Er fällt" : "Der Kontostand fällt"} voraussichtlich am {formatDate(dip.date)} auf <Figures text={formatMoney(dip.balance)} />
+                , bevor erwartete Einnahmen eingehen.
+              </>
+            )}
           </span>
         </div>
       )}
@@ -213,7 +350,8 @@ function AvailabilityPanel({ dashboard, className }: { dashboard: Dashboard; cla
       </div>
       {dashboard.unassignedCount > 0 && (
         <p className="border-t border-separator px-4 py-2.5 text-[12.5px] text-muted sm:px-5">
-          {dashboard.unassignedCount} ältere Buchungen haben kein Konto und fließen nicht in den Kontostand ein.{" "}
+          {dashboard.unassignedCount} {dashboard.unassignedCount === 1 ? "Buchung hat" : "Buchungen haben"} kein Konto: Sie zählen in Einnahmen und
+          Ausgaben, aber nicht im Kontostand.{" "}
           <Link href="/transaktionen?konto=ohne" className="text-foreground underline decoration-border underline-offset-4">
             Zuordnen
           </Link>
@@ -226,7 +364,7 @@ function AvailabilityPanel({ dashboard, className }: { dashboard: Dashboard; cla
 /* --------------------------------- Monat --------------------------------- */
 
 function MonthPanel({ dashboard, className }: { dashboard: Dashboard; className?: string }) {
-  const { current, previous, savings, baseline } = dashboard;
+  const { current, previous, savings, baseline, previousPartialFrom, previousEmpty } = dashboard;
   const rows: Array<{ label: string; now: number; before: number; strong?: boolean; indent?: boolean; net?: boolean }> = [
     { label: "Einnahmen", now: current.income, before: previous.income },
     { label: "Ausgaben", now: current.expense, before: previous.expense },
@@ -236,7 +374,20 @@ function MonthPanel({ dashboard, className }: { dashboard: Dashboard; className?
   ];
 
   return (
-    <Panel id="month" title={formatMonth(dashboard.month)} description="Gebuchte Beträge, ohne Transfers" className={className} bodyClassName="px-4 pb-4 sm:px-5">
+    <Panel
+      id="month"
+      title={formatMonth(dashboard.month)}
+      description="Gebuchte Beträge, ohne Transfers"
+      className={className}
+      bodyClassName="px-4 pb-4 sm:px-5"
+      action={
+        !previousEmpty ? (
+          <Link href="/rueckblick" className="label font-normal hover:text-foreground">
+            Rückblick {monthName(previous.month)}
+          </Link>
+        ) : undefined
+      }
+    >
       <table className="w-full">
         <thead>
           <tr className="label border-b border-separator">
@@ -244,7 +395,15 @@ function MonthPanel({ dashboard, className }: { dashboard: Dashboard; className?
               <span className="sr-only">Posten</span>
             </th>
             <th className="py-2 text-right font-medium">bisher</th>
-            <th className="py-2 pl-4 text-right font-medium">{monthName(previous.month)}</th>
+            <th className="py-2 pl-4 text-right font-medium">
+              {monthName(previous.month)}
+              {previousPartialFrom && (
+                <span className="block font-normal" title="Unvollständig erfasst – Daten erst ab diesem Tag">
+                  nur ab {formatDayShort(previousPartialFrom)}
+                </span>
+              )}
+              {previousEmpty && <span className="block font-normal">keine Daten</span>}
+            </th>
           </tr>
         </thead>
         <tbody className="num">
@@ -273,7 +432,8 @@ function MonthPanel({ dashboard, className }: { dashboard: Dashboard; className?
               <Figures text={formatMoney(savings.income)} /> Einnahmen (inkl. erwarteter) − <Figures text={formatMoney(savings.committed)} /> Ausgaben und Verpflichtungen
               {savings.variableReserve !== null && baseline
                 ? ` − ${formatMoney(savings.variableReserve)} geschätzte variable Ausgaben für ${savings.remainingDays} Tage (Ø ${baseline.months.length} ${baseline.months.length === 1 ? "Monat" : "Monate"})`
-                : ". Variable Ausgaben für den Rest des Monats sind noch nicht geschätzt – dafür fehlt ein abgeschlossener Monat."}
+                : ". Variable Ausgaben für den Rest des Monats sind noch nicht geschätzt – dafür fehlt ein vollständig erfasster Monat."}
+              {savings.cappedByBalance && ` Begrenzt auf den voraussichtlichen Kontostand am ${formatDayShort(dashboard.availability.monthEnd)}.`}
             </>
           ) : (
             "Erfasse Einnahmen oder regelmäßige Einnahmen, um das Sparpotenzial zu berechnen."
@@ -458,8 +618,10 @@ function SubscriptionsPanel({ dashboard, className }: { dashboard: Dashboard; cl
                 </div>
                 <p className="label mt-1 font-normal">
                   {shareBase === "average" && baseline
-                    ? `Bezogen auf Ø ${formatMoney(baseline.averageExpense)} Ausgaben der letzten ${baseline.months.length === 1 ? "Monats" : `${baseline.months.length} Monate`}`
-                    : `Bezogen auf ${formatMoney(dashboard.fixed.monthlyExpenses)} feste Kosten pro Monat`}
+                    ? `Bezogen auf Ø ${formatMoney(baseline.averageExpense)} Ausgaben ${baseline.months.length === 1 ? "des letzten vollständigen Monats" : `der letzten ${baseline.months.length} vollständigen Monate`}`
+                    : `Bezogen auf ${formatMoney(dashboard.fixed.monthlyExpenses)} feste Kosten pro Monat${
+                        baseline ? "" : " – für Ausgaben fehlt noch ein vollständig erfasster Monat"
+                      }`}
                 </p>
               </div>
             )}

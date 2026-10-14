@@ -41,6 +41,9 @@ function useUndo(noun: Noun) {
           Alle {target.rowCount} {noun.many} {target.fileName ? `aus „${target.fileName}“` : "dieses Imports"} vom {stamp.format(new Date(target.createdAt))}
           {target.dateFrom && target.dateTo ? ` (Zeitraum ${formatDate(target.dateFrom)} – ${formatDate(target.dateTo)})` : ""} werden gelöscht – auch wenn du
           sie danach bearbeitet hast. Selbst angelegte Buchungen, Konten, regelmäßige Zahlungen und Abos bleiben unverändert.
+          {noun.many === "Buchungen"
+            ? " Die gelöschten Buchungen kommen in den Papierkorb und lassen sich dort wiederherstellen."
+            : " Eine vollständige Kopie der gelöschten Einträge wird vorher gesichert."}
         </p>
       )}
     </ConfirmDialog>

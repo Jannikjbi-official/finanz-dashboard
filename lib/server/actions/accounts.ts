@@ -3,11 +3,13 @@
 import { z } from "zod";
 import { accounts, categories, ensureIndexes, planned, recurring, settings, toObjectId, transactions } from "../db";
 import {
+  anchorFor,
   authorize,
   fail,
   firstIssue,
   ok,
   optionalId,
+  optionalIsoDate,
   refresh,
   signedAmount,
   text,
@@ -20,7 +22,11 @@ const accountSchema = z.object({
   id: optionalId,
   name: text(60, "Bitte einen Namen angeben"),
   kind: z.enum(["giro", "savings", "cash", "paypal", "other"], { message: "Bitte eine Kontoart wählen" }),
-  startBalance: signedAmount,
+  /** Altes Feld: Saldo vor der ersten Buchung. Nur noch ohne Kontostand mit Datum. */
+  startBalance: signedAmount.optional(),
+  /** Kontostand laut Bank und der Tag, fuer den er gilt. */
+  balance: signedAmount.optional(),
+  balanceDate: optionalIsoDate,
   liquid: z.boolean(),
 });
 
@@ -34,7 +40,23 @@ export async function saveAccount(input: AccountInput): Promise<ActionResult> {
   const { id, name, kind, startBalance, liquid } = parsed.data;
   await ensureIndexes();
 
-  const fields = { name, kind, startBalanceCents: startBalance, liquid, updatedAt: new Date() };
+  // Leeres Feld = kein neuer Kontostand; dann gilt wie bisher der Anfangssaldo
+  const hasBalance = typeof input.balance === "string" && input.balance.trim() !== "";
+  let anchor: { date: string; amountCents: number } | undefined;
+  if (hasBalance) {
+    const result = await anchorFor(auth.userId, parsed.data.balance ?? 0, parsed.data.balanceDate);
+    if (!result.ok) return fail(result.error);
+    anchor = result.anchor;
+  }
+
+  const fields = {
+    name,
+    kind,
+    liquid,
+    updatedAt: new Date(),
+    ...(anchor ? { balanceAnchor: anchor } : {}),
+    ...(startBalance !== undefined && !anchor ? { startBalanceCents: startBalance } : {}),
+  };
   if (id) {
     const _id = toObjectId(id);
     if (!_id) return fail("Konto nicht gefunden");
@@ -44,9 +66,37 @@ export async function saveAccount(input: AccountInput): Promise<ActionResult> {
     return ok("Konto gespeichert");
   }
 
-  await accounts.insertOne({ ...fields, userId: auth.userId, archived: false, createdAt: new Date() });
+  await accounts.insertOne({ startBalanceCents: 0, ...fields, userId: auth.userId, archived: false, createdAt: new Date() });
   refresh();
   return ok("Konto angelegt");
+}
+
+const anchorSchema = z.object({
+  accountId: z.string().min(1),
+  balance: signedAmount,
+  date: optionalIsoDate,
+});
+
+export type BalanceAnchorInput = z.input<typeof anchorSchema>;
+
+/**
+ * Kontostand abgleichen: "laut Bank X € am Tag Y". Ab dann rechnet das Konto
+ * von hier aus; aeltere Buchungen stecken im Stand, neuere kommen dazu.
+ */
+export async function setBalanceAnchor(input: BalanceAnchorInput): Promise<ActionResult> {
+  const auth = await authorize();
+  if ("error" in auth) return auth.error;
+  const parsed = anchorSchema.safeParse(input);
+  if (!parsed.success) return fail(firstIssue(parsed.error));
+  const _id = toObjectId(parsed.data.accountId);
+  if (!_id) return fail("Konto nicht gefunden");
+
+  const result = await anchorFor(auth.userId, parsed.data.balance, parsed.data.date);
+  if (!result.ok) return fail(result.error);
+  const updated = await accounts.updateOne({ _id, userId: auth.userId }, { $set: { balanceAnchor: result.anchor, updatedAt: new Date() } });
+  if (updated.matchedCount === 0) return fail("Konto nicht gefunden");
+  refresh();
+  return ok("Kontostand übernommen");
 }
 
 export async function setAccountArchived(id: string, archived: boolean): Promise<ActionResult> {

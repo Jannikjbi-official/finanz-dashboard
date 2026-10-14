@@ -5,32 +5,39 @@ import { Button, Dropdown, Label } from "@heroui/react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/forms/confirm-dialog";
+import { DateInput, MoneyInput } from "@/components/forms/fields";
+import { FormDialog } from "@/components/forms/form-dialog";
+import { BalanceChart } from "@/components/charts/balance-chart";
 import { useQuickAdd } from "@/components/shell/quick-add";
 import { Money } from "@/components/ui/money";
 import { PageHeader, Panel, SummaryCell } from "@/components/ui/panel";
 import { useAction } from "@/lib/client/use-action";
 import { ACCOUNT_KIND_LABEL } from "@/lib/domain/labels";
-import { accountBalances, accountHistory } from "@/lib/domain/ledger";
+import { accountBalance, accountBalances, accountHistory, openingBalance } from "@/lib/domain/ledger";
+import { netWorthHistory } from "@/lib/domain/timeline";
 import type { Account, Category, Transaction } from "@/lib/domain/types";
-import { formatDate } from "@/lib/format";
-import { deleteAccount, setAccountArchived } from "@/lib/server/actions/accounts";
+import { formatDate, formatMoney, formatMonth } from "@/lib/format";
+import { parseAmountToCents } from "@/lib/money";
+import { deleteAccount, setAccountArchived, setBalanceAnchor } from "@/lib/server/actions/accounts";
 
 const HISTORY_PAGE = 50;
 
 export function AccountsView({ accounts, transactions, categories }: { accounts: Account[]; transactions: Transaction[]; categories: Category[] }) {
-  const { openAccount, openTransaction } = useQuickAdd();
+  const { openAccount, openTransaction, lookups } = useQuickAdd();
+  const [reconcile, setReconcile] = useState<Account | null>(null);
   const { run, pending } = useAction();
   const [showArchived, setShowArchived] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(accounts.find((a) => !a.archived)?.id ?? null);
   const [toDelete, setToDelete] = useState<Account | null>(null);
   const [limit, setLimit] = useState(HISTORY_PAGE);
 
-  const balances = useMemo(() => accountBalances(accounts, transactions), [accounts, transactions]);
+  const balances = useMemo(() => accountBalances(accounts, transactions, lookups.today), [accounts, transactions, lookups.today]);
   const categoryName = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
   const visibleAccounts = accounts.filter((a) => showArchived || !a.archived);
   const selected = accounts.find((a) => a.id === selectedId) ?? null;
   const history = useMemo(() => (selected ? accountHistory(selected, transactions) : []), [selected, transactions]);
 
+  const worth = useMemo(() => netWorthHistory(accounts, transactions, lookups.today), [accounts, transactions, lookups.today]);
   const active = accounts.filter((a) => !a.archived);
   const total = active.reduce((sum, a) => sum + (balances.get(a.id) ?? 0), 0);
   const liquid = active.filter((a) => a.liquid).reduce((sum, a) => sum + (balances.get(a.id) ?? 0), 0);
@@ -42,7 +49,7 @@ export function AccountsView({ accounts, transactions, categories }: { accounts:
         <Panel>
           <div className="py-8 text-center">
             <p className="font-medium">Noch keine Konten</p>
-            <p className="mx-auto mt-1 max-w-md text-muted">Girokonto, Sparkonto, Bargeld oder PayPal – jeweils mit dem Stand vor der ersten erfassten Buchung.</p>
+            <p className="mx-auto mt-1 max-w-md text-muted">Girokonto, Sparkonto, Bargeld oder PayPal – jeweils mit dem Kontostand laut Bank und dem Tag, für den er gilt.</p>
             <Button className="mt-4" onPress={() => openAccount()}>
               Konto anlegen
             </Button>
@@ -56,7 +63,7 @@ export function AccountsView({ accounts, transactions, categories }: { accounts:
     <div>
       <PageHeader
         title="Konten"
-        description="Kontostände aus Anfangssaldo und gebuchten Bewegungen"
+        description="Kontostände aus dem abgeglichenen Stand laut Bank und den gebuchten Bewegungen"
         actions={
           <>
             <Button size="sm" variant="secondary" onPress={() => openTransaction("transfer")} isDisabled={active.length < 2}>
@@ -74,6 +81,22 @@ export function AccountsView({ accounts, transactions, categories }: { accounts:
         <SummaryCell label="Verfügbar" hint="Konten für laufende Ausgaben" value={<Money cents={liquid} />} />
         <SummaryCell label="Zurückgelegt" hint="zählt nicht zum verfügbaren Geld" value={<Money cents={total - liquid} />} />
       </section>
+
+      {worth.length > 2 && (
+        <Panel title="Vermögensverlauf" description="Alle Konten jeweils am Monatsende, zuletzt heute" className="mb-4">
+          <BalanceChart
+            points={worth.map((point) => ({
+              date: point.date,
+              value: point.total,
+              label: point.current ? "Heute" : `Ende ${formatMonth(point.date.slice(0, 7))}`,
+              note: `davon verfügbar ${formatMoney(point.liquid)}`,
+            }))}
+            step={false}
+            height={180}
+            label="Vermögen je Monatsende"
+          />
+        </Panel>
+      )}
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-12">
         <Panel
@@ -120,10 +143,14 @@ export function AccountsView({ accounts, transactions, categories }: { accounts:
                       <Dropdown.Menu
                         onAction={(key) => {
                           if (key === "edit") openAccount(account);
+                          if (key === "reconcile") setReconcile(account);
                           if (key === "archive") void run(() => setAccountArchived(account.id, !account.archived));
                           if (key === "delete") setToDelete(account);
                         }}
                       >
+                        <Dropdown.Item id="reconcile" textValue="Kontostand abgleichen">
+                          <Label>Kontostand abgleichen …</Label>
+                        </Dropdown.Item>
                         <Dropdown.Item id="edit" textValue="Bearbeiten">
                           <Label>Bearbeiten</Label>
                         </Dropdown.Item>
@@ -144,14 +171,27 @@ export function AccountsView({ accounts, transactions, categories }: { accounts:
 
         <Panel
           title={selected ? selected.name : "Kontoverlauf"}
-          description={selected ? `${ACCOUNT_KIND_LABEL[selected.kind]} · ${history.length} Buchungen` : undefined}
+          description={
+            selected
+              ? `${ACCOUNT_KIND_LABEL[selected.kind]} · ${history.length} Buchungen · ${
+                  selected.balanceAnchor
+                    ? `abgeglichen: ${formatMoney(selected.balanceAnchor.amountCents)} am ${formatDate(selected.balanceAnchor.date)}`
+                    : "noch nicht mit der Bank abgeglichen"
+                }`
+              : undefined
+          }
           className="lg:col-span-7"
           bodyClassName=""
           action={
             selected ? (
-              <Link href={`/transaktionen?konto=${selected.id}`} className="text-[13px] text-muted hover:text-foreground">
-                In Transaktionen öffnen
-              </Link>
+              <>
+                <Button size="sm" variant="secondary" onPress={() => setReconcile(selected)}>
+                  Kontostand abgleichen
+                </Button>
+                <Link href={`/transaktionen?konto=${selected.id}`} className="hidden text-[13px] text-muted hover:text-foreground sm:inline">
+                  In Transaktionen öffnen
+                </Link>
+              </>
             ) : undefined
           }
         >
@@ -187,10 +227,10 @@ export function AccountsView({ accounts, transactions, categories }: { accounts:
                   {history.length <= limit && (
                     <tr>
                       <td className="py-2 pl-4 text-muted sm:pl-5">–</td>
-                      <td className="py-2 text-muted">Anfangssaldo</td>
+                      <td className="py-2 text-muted">{selected.balanceAnchor ? "Stand vor der ersten Buchung (aus dem Abgleich)" : "Anfangssaldo"}</td>
                       <td />
                       <td className="py-2 pl-3 pr-4 text-right sm:pr-5">
-                        <Money cents={selected.startBalanceCents} tone="muted" />
+                        <Money cents={openingBalance(selected, transactions)} tone="muted" />
                       </td>
                     </tr>
                   )}
@@ -208,6 +248,10 @@ export function AccountsView({ accounts, transactions, categories }: { accounts:
         </Panel>
       </div>
 
+      {reconcile && (
+        <ReconcileDialog key={reconcile.id} account={reconcile} transactions={transactions} today={lookups.today} onClose={() => setReconcile(null)} />
+      )}
+
       <ConfirmDialog
         isOpen={toDelete !== null}
         onOpenChange={(open) => !open && setToDelete(null)}
@@ -220,4 +264,75 @@ export function AccountsView({ accounts, transactions, categories }: { accounts:
       </ConfirmDialog>
     </div>
   );
+}
+
+/**
+ * Kontostand abgleichen: Stand laut Bank eingeben, die Differenz zum
+ * berechneten Stand an diesem Tag wird sofort angezeigt.
+ */
+function ReconcileDialog({
+  account,
+  transactions,
+  today,
+  onClose,
+}: {
+  account: Account;
+  transactions: Transaction[];
+  today: string;
+  onClose: () => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const { run, pending } = useAction();
+  const [date, setDate] = useState<string | null>(today);
+  const [balance, setBalance] = useState("");
+  const computed = accountBalance(account, transactions, date ?? today);
+  const entered = parseSigned(balance);
+
+  return (
+    <FormDialog
+      isOpen={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) onClose();
+      }}
+      title={`${account.name}: Kontostand abgleichen`}
+      description="Trag den Kontostand laut Bank ein – gebuchter Stand am Ende des Tages, ohne vorgemerkte Umsätze. Ab dann rechnet das Konto von hier aus."
+      submitLabel="Kontostand übernehmen"
+      pending={pending}
+      onSubmit={() => run(() => setBalanceAnchor({ accountId: account.id, balance, date }))}
+    >
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <MoneyInput label="Kontostand laut Bank" value={balance} onChange={setBalance} allowNegative autoFocus />
+        <DateInput label="Stand am" value={date} onChange={setDate} isRequired />
+      </div>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-[var(--radius)] bg-surface-secondary px-3 py-2.5 text-[13px]">
+        <dt className="text-muted">Laut Portal am {date ? formatDate(date) : "–"}</dt>
+        <dd className="text-right">
+          <Money cents={computed} />
+        </dd>
+        {entered !== null && (
+          <>
+            <dt className="text-muted">Differenz</dt>
+            <dd className={`text-right ${entered - computed === 0 ? "text-success" : ""}`}>
+              {entered - computed === 0 ? "stimmt überein" : <Money cents={entered - computed} signed />}
+            </dd>
+          </>
+        )}
+      </dl>
+      {account.balanceAnchor && (
+        <p className="label font-normal">
+          Bisher abgeglichen: {formatMoney(account.balanceAnchor.amountCents)} am {formatDate(account.balanceAnchor.date)}. Der neue Stand ersetzt ihn.
+        </p>
+      )}
+    </FormDialog>
+  );
+}
+
+/** "1.234,56" / "-12,50" in Cent, sonst null (nur fuer die Anzeige der Differenz). */
+function parseSigned(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const cents = parseAmountToCents(trimmed.replace(/^[-−]\s*/, ""));
+  if (cents === null) return null;
+  return /^[-−]/.test(trimmed) ? -cents : cents;
 }

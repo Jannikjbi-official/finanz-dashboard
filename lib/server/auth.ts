@@ -3,7 +3,7 @@ import { APIError } from "better-auth/api";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import { twoFactor } from "better-auth/plugins/two-factor";
 import { dash } from "@better-auth/infra";
-import { ACCESS_DENIED, isAllowedEmail, sessionRejection } from "./access";
+import { ACCESS_DENIED, isAllowedEmail, REJECTION_CODE, sessionRejection } from "./access";
 import { resolveAuthUrls } from "./auth-urls";
 import { db, toObjectId } from "./db";
 import { ensureUserSetup } from "./user-data";
@@ -38,6 +38,8 @@ export const auth = betterAuth({
     revokeSessionsOnPasswordReset: true,
   },
   socialProviders: discordId && discordSecret ? { discord: { clientId: discordId, clientSecret: discordSecret } } : {},
+  // Fehler bei Discord-Anmeldungen auf die eigene Anmeldeseite statt auf /api/auth/error
+  onAPIError: { errorURL: `${urls.baseURL}/anmelden` },
   account: {
     accountLinking: {
       enabled: true,
@@ -78,7 +80,7 @@ export const auth = betterAuth({
     user: {
       create: {
         before: async (user) => {
-          if (!isAllowedEmail(user.email)) throw new APIError("FORBIDDEN", { message: ACCESS_DENIED });
+          if (!isAllowedEmail(user.email)) throw new APIError("FORBIDDEN", { message: ACCESS_DENIED, code: "ACCESS_DENIED" });
           return { data: user };
         },
         after: async (user) => {
@@ -98,7 +100,8 @@ export const auth = betterAuth({
             twoFactorEnabled: (user as { twoFactorEnabled?: boolean } | null)?.twoFactorEnabled,
             path: context?.path,
           });
-          if (reason) throw new APIError("FORBIDDEN", { message: reason });
+          // Mit Code, damit eine abgelehnte Discord-Anmeldung auf /anmelden?error=... landet
+          if (reason) throw new APIError("FORBIDDEN", { message: reason, code: REJECTION_CODE[reason] ?? "ACCESS_DENIED" });
           return { data: session };
         },
       },

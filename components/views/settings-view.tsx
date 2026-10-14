@@ -2,18 +2,25 @@
 
 import { DownloadSimple, Plus, UploadSimple } from "@phosphor-icons/react";
 import { Button, ToggleButton, ToggleButtonGroup, type Key } from "@heroui/react";
+import Link from "next/link";
 import { useState } from "react";
 import { ConfirmDialog } from "@/components/forms/confirm-dialog";
 import { SelectInput, TextInput } from "@/components/forms/fields";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { ImportDialog } from "@/components/forms/import-dialog";
 import { ImportList } from "@/components/finance/import-list";
+import { NotificationsPanel } from "@/components/settings/notifications-panel";
+import { RestoreRow } from "@/components/settings/restore-row";
+import { RulesPanel } from "@/components/settings/rules-panel";
+import { TemplatesPanel } from "@/components/settings/templates-panel";
+import { TrashPanel } from "@/components/finance/trash-panel";
 import { SecurityPanel } from "@/components/settings/security-panel";
 import { SignOutButton } from "@/components/shell/app-shell";
 import { PageHeader, Panel } from "@/components/ui/panel";
 import { useAction } from "@/lib/client/use-action";
 import { useTheme } from "@/lib/client/theme";
-import type { Account, Category, ImportInfo, TxType } from "@/lib/domain/types";
+import type { CategoryRule } from "@/lib/domain/rules";
+import type { Account, Category, ImportInfo, SnapshotInfo, Template, TrashEntry, TxType } from "@/lib/domain/types";
 import { deleteCategory, saveCategory, saveTimeZone } from "@/lib/server/actions/accounts";
 
 type CategoryRow = Category & { usage: number };
@@ -28,6 +35,11 @@ export function SettingsView({
   categories,
   accounts,
   imports,
+  trash,
+  snapshots,
+  templates,
+  rules,
+  notify,
   counts,
 }: {
   user: { name: string; email: string };
@@ -36,9 +48,14 @@ export function SettingsView({
   categories: CategoryRow[];
   accounts: Account[];
   imports: ImportInfo[];
+  trash: TrashEntry[];
+  snapshots: SnapshotInfo[];
+  templates: Template[];
+  rules: CategoryRule[];
+  notify: { webhook: string | null; due: boolean; monthly: boolean };
   counts: { transactions: number; recurring: number; accounts: number };
 }) {
-  const { theme, setTheme } = useTheme();
+  const { preference, setPreference } = useTheme();
   const { run, pending } = useAction();
   const [zone, setZone] = useState(timeZone);
   const [editing, setEditing] = useState<{ category: CategoryRow | null; kind: TxType } | null>(null);
@@ -58,14 +75,15 @@ export function SettingsView({
               <ToggleButtonGroup
                 selectionMode="single"
                 disallowEmptySelection
-                selectedKeys={new Set<Key>([theme])}
-                onSelectionChange={(keys) => setTheme(String([...keys][0]) as "dark" | "light")}
+                selectedKeys={new Set<Key>([preference])}
+                onSelectionChange={(keys) => setPreference(String([...keys][0]) as "dark" | "light" | "system")}
                 size="sm"
                 aria-label="Farbschema"
                 className="w-fit"
               >
                 <ToggleButton id="dark">Dunkel</ToggleButton>
                 <ToggleButton id="light">Hell</ToggleButton>
+                <ToggleButton id="system">Wie Gerät</ToggleButton>
               </ToggleButtonGroup>
               <span className="label font-normal">Wird in diesem Browser gespeichert.</span>
             </div>
@@ -87,6 +105,8 @@ export function SettingsView({
           </div>
         </Panel>
 
+        <NotificationsPanel webhook={notify.webhook} due={notify.due} monthly={notify.monthly} />
+
         <Panel title="Daten" description={`${counts.accounts} Konten · ${counts.transactions} Buchungen · ${counts.recurring} regelmäßige Zahlungen`} id="import">
           <div className="flex flex-col gap-4">
             <DataRow title="CSV importieren" text="Umsätze aus dem Export deiner Bank übernehmen, mit Vorschau und Dublettenprüfung.">
@@ -105,8 +125,13 @@ export function SettingsView({
                 <DownloadSimple className="size-4" /> JSON
               </a>
             </DataRow>
+            <RestoreRow snapshots={snapshots} />
           </div>
         </Panel>
+
+        <TrashPanel entries={trash} />
+
+        <TemplatesPanel templates={templates} categories={categories} accounts={accounts} />
 
         <Panel title="Kategorien" description="Ordnen Buchungen zu. Löschen entfernt die Kategorie nur aus den Buchungen, nicht die Buchungen selbst." className="lg:col-span-2" bodyClassName="grid grid-cols-1 gap-6 p-4 sm:p-5 md:grid-cols-2">
           {(["expense", "income"] as const).map((kind) => (
@@ -124,7 +149,9 @@ export function SettingsView({
                     <li key={category.id} className="flex items-center justify-between gap-3 py-2">
                       <span className="flex min-w-0 items-center gap-2.5">
                         <span className="size-2.5 shrink-0 rounded-[3px]" style={{ background: category.color }} aria-hidden />
-                        <span className="truncate">{category.name}</span>
+                        <Link href={`/kategorien/${category.id}`} className="truncate underline decoration-transparent underline-offset-4 hover:decoration-border">
+                          {category.name}
+                        </Link>
                         <span className="label font-normal">{category.usage}</span>
                       </span>
                       <span className="flex shrink-0 gap-1">
@@ -142,9 +169,14 @@ export function SettingsView({
           ))}
         </Panel>
 
+        <RulesPanel rules={rules} categories={categories} />
+
         <Panel title="So wird gerechnet" className="lg:col-span-2">
           <dl className="grid grid-cols-1 gap-x-8 gap-y-3 text-[13px] md:grid-cols-2">
-            <Explain term="Kontostand">Anfangssaldo plus alle bezahlten Ausgaben und eingegangenen Einnahmen eines Kontos. Geplantes und Erwartetes zählt nicht.</Explain>
+            <Explain term="Kontostand">
+              Abgeglichener Stand laut Bank (Konten → Kontostand abgleichen) plus alle danach gebuchten Bewegungen bis heute. Ältere Buchungen stecken schon im
+              Stand. Ohne Abgleich: Anfangssaldo plus alle Buchungen bis heute. Vorgemerktes, Geplantes und Erwartetes zählt nicht.
+            </Explain>
             <Explain term="Aktuell verfügbar">
               Kontostand der Konten, die zum verfügbaren Geld zählen, minus fälliger und bis Monatsende geplanter Zahlungen. Erwartete Einnahmen zählen erst, wenn sie eingegangen sind.
             </Explain>

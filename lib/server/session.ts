@@ -15,9 +15,14 @@ export async function getCurrentUser() {
   return session.user;
 }
 
-/** Fuer Seiten: ohne gueltige, freigegebene Sitzung zur Anmeldung. */
+/**
+ * Fuer Seiten: ohne gueltige, freigegebene Sitzung zur Anmeldung. Wurde die
+ * Adresse inzwischen aus der Freigabeliste entfernt, erklaert die
+ * Anmeldeseite das, statt stumm umzuleiten.
+ */
 export async function requireUser() {
-  const user = await getCurrentUser();
-  if (!user) redirect("/anmelden");
-  return user;
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) redirect("/anmelden");
+  if (!isAllowedEmail(session.user.email)) redirect("/anmelden?error=ACCESS_REVOKED");
+  return session.user;
 }

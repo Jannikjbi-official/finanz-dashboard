@@ -11,7 +11,11 @@ import { PageHeader, Panel, SummaryCell } from "@/components/ui/panel";
 import type { FixedCostSummary } from "@/lib/domain/commitments";
 import { COST_TYPE_LABEL } from "@/lib/domain/labels";
 import type { OpenItem } from "@/lib/domain/overview";
+import type { RecurringSuggestion } from "@/lib/domain/recurring-detect";
 import type { Account, Recurring } from "@/lib/domain/types";
+import { useAction } from "@/lib/client/use-action";
+import { INTERVAL_UNIT } from "@/lib/domain/labels";
+import { dismissRecurringSuggestion } from "@/lib/server/actions/matching";
 import { formatDayShort, formatMoney, formatPercent } from "@/lib/format";
 
 export function FixedCostsView({
@@ -22,6 +26,7 @@ export function FixedCostsView({
   monthEnd,
   accounts,
   today,
+  suggestions = [],
 }: {
   summary: FixedCostSummary;
   recurring: Recurring[];
@@ -30,8 +35,56 @@ export function FixedCostsView({
   monthEnd: string;
   accounts: Account[];
   today: string;
+  suggestions?: RecurringSuggestion[];
 }) {
   const { openRecurring } = useQuickAdd();
+  const { run } = useAction();
+  const suggestionPanel =
+    suggestions.length > 0 ? (
+      <Panel
+        title="Erkannte regelmäßige Zahlungen"
+        description="Diese Buchungen wiederholen sich, sind aber noch nicht erfasst. Angelegt zählen sie in die Planung und werden künftig automatisch zugeordnet."
+        bodyClassName=""
+        className="mb-4"
+      >
+        <ul className="rows">
+          {suggestions.map((suggestion) => (
+            <li key={suggestion.key} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div className="min-w-0 text-[13.5px]">
+                <span className="font-medium">{suggestion.title}</span>
+                <span className="text-muted">
+                  {" "}
+                  · {suggestion.type === "income" ? "+" : "−"}
+                  {formatMoney(suggestion.amountCents)} / {INTERVAL_UNIT[suggestion.interval]} · {suggestion.count}× gebucht, zuletzt {formatDayShort(suggestion.lastDate)}
+                </span>
+              </div>
+              <div className="flex shrink-0 gap-1.5">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onPress={() =>
+                    openRecurring(null, {
+                      type: suggestion.type,
+                      costType: "other",
+                      title: suggestion.title,
+                      amountCents: suggestion.amountCents,
+                      interval: suggestion.interval,
+                      nextDue: suggestion.nextDue,
+                      accountId: suggestion.accountId,
+                    })
+                  }
+                >
+                  Anlegen …
+                </Button>
+                <Button size="sm" variant="ghost" onPress={() => run(() => dismissRecurringSuggestion(suggestion.key))}>
+                  Ignorieren
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Panel>
+    ) : null;
   const [tab, setTab] = useState<Key>("expenses");
   const accountName = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts]);
 
@@ -46,6 +99,7 @@ export function FixedCostsView({
     return (
       <div>
         <PageHeader title="Feste Kosten" description="Regelmäßige Zahlungen und Einnahmen" />
+        {suggestionPanel}
         <Panel>
           <div className="py-8 text-center">
             <p className="font-medium">Noch keine regelmäßigen Zahlungen erfasst</p>
@@ -81,6 +135,7 @@ export function FixedCostsView({
           </>
         }
       />
+      {suggestionPanel}
 
       <div className="flex flex-col gap-4">
         <section className="panel grid grid-cols-2 md:grid-cols-4 md:divide-x md:divide-separator" aria-label="Monatliche Planung">

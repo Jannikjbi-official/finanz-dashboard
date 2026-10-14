@@ -27,7 +27,7 @@ function message(error: { code?: string; status?: number; message?: string }) {
 
 function Brand() {
   return (
-    <div className="mb-8 flex items-center gap-2.5">
+    <Link href="/" aria-label="Zur Startseite" className="mb-8 flex w-fit items-center gap-2.5 rounded-[var(--radius)] outline-none focus-visible:ring-2 focus-visible:ring-focus">
       <svg viewBox="0 0 32 32" className="size-8" aria-hidden>
         <rect width="32" height="32" rx="7" className="fill-surface-secondary" />
         <path d="M9 21.5h14" className="stroke-accent" strokeWidth="2" strokeLinecap="round" />
@@ -37,7 +37,7 @@ function Brand() {
         <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Jannikjbi</div>
         <div className="text-[15px] font-semibold">Finanzen</div>
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -69,18 +69,21 @@ export function AuthForm({
   discord,
   canRegister,
   locked,
+  initialError = null,
 }: {
   mode: "sign-in" | "sign-up";
   next: string;
   discord: boolean;
   canRegister: boolean;
   locked: boolean;
+  /** Meldung aus /anmelden?error=... (z. B. abgelehnte Discord-Anmeldung). */
+  initialError?: string | null;
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [pending, setPending] = useState(false);
   const [step, setStep] = useState<"credentials" | "code">("credentials");
   const [code, setCode] = useState("");
@@ -212,7 +215,7 @@ export function AuthForm({
           <ErrorBox text={error} />
           <SubmitButton pending={pending}>{signUp ? "Zugang anlegen" : "Anmelden"}</SubmitButton>
           {discord && !signUp && (
-            <Button variant="secondary" fullWidth onPress={() => authClient.signIn.social({ provider: "discord", callbackURL: next })}>
+            <Button variant="secondary" fullWidth onPress={() => authClient.signIn.social({ provider: "discord", callbackURL: next, errorCallbackURL: "/anmelden" })}>
               Mit Discord anmelden
             </Button>
           )}

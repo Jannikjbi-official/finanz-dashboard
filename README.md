@@ -27,6 +27,20 @@ npm run dev                   # http://localhost:3000 → „Zugang einrichten�
 | `npm run db:backup` | Alle Collections als Extended JSON nach `backups/` |
 | `npm run db:restore -- <ordner> [--replace]` | Sicherung zurückspielen (mit `--replace` wird vorher gesichert) |
 | `npm run db:migrate [-- --dry-run]` | Ausstehende Migrationen (sichert vorher automatisch) |
+| `npm run db:undo-import -- <datei.csv> [--apply]` | Alten CSV-Import anhand der Datei finden und löschen (Probelauf ohne `--apply`, sichert vorher) |
+
+## Daten sichern und zurückholen (in der App)
+
+- **Papierkorb** (Einstellungen → Papierkorb): Gelöschte Buchungen bleiben 30 Tage,
+  rückgängig gemachte Importe bis zum endgültigen Löschen. Nach jedem Löschen bietet
+  die Meldung „Rückgängig“ an.
+- **JSON-Sicherung** (Einstellungen → Daten): herunterladen und wieder einspielen.
+  Einspielen ersetzt alle eigenen Daten; der Stand davor wird automatisch gespeichert
+  (die letzten drei, Collection `user_snapshots`) und lässt sich mit „Zurückholen“
+  wiederherstellen. Höchstens 4 MB pro Datei.
+- **Belege** (Foto oder PDF, bis 2 MB, Fotos werden im Browser verkleinert) liegen in der
+  Collection `receipts` und sind **nicht** Teil der JSON-Sicherung; `npm run db:backup`
+  sichert sie mit. Belege endgültig gelöschter Buchungen räumt der tägliche Cron auf.
 
 ## Umstieg von der Vorversion („Spielraum“)
 
@@ -69,10 +83,17 @@ docs/DESIGNSYSTEM.md Farben, Typografie, Abstände, Komponenten, Diagramme
 ## Rechenregeln
 
 - **Beträge** sind ganzzahlige Cent. „Heute“ richtet sich nach der Zeitzone in den Einstellungen.
-- **Kontostand** = Anfangssaldo + gebuchte Bewegungen. Geplante Ausgaben und erwartete Einnahmen ändern ihn nicht.
+- **Kontostand** = Stand laut Bank an einem Tag (Kontostand-Anker) + gebuchte Bewegungen nach diesem Tag bis heute.
+  Ohne Anker: Anfangssaldo + gebuchte Bewegungen bis heute. Später importierte ältere Umsätze ändern einen
+  abgeglichenen Stand nicht. Vorgemerkte, geplante Ausgaben und erwartete Einnahmen ändern ihn nicht.
 - **Aktuell verfügbar** = Kontostand der Konten, die zum verfügbaren Geld zählen
-  − fällige, unbezahlte Zahlungen − bis Monatsende geplante Ausgaben.
+  − von der Bank vorgemerkte Umsätze − fällige, unbezahlte Zahlungen − bis Monatsende geplante Ausgaben.
   Erwartete Einnahmen zählen nicht; sie fließen nur in die Prognose für den Monatsletzten.
+- **Abgleich**: Kommt eine regelmäßige Zahlung als Buchung (Import oder von Hand), wird sie dem Termin
+  zugeordnet – automatisch, wenn Betrag (± max. 2 €/10 %) und Name passen, sonst als Vorschlag.
+  Überfällige erwartete Einnahmen zählen nicht in die Prognose, sie werden zum Prüfen angezeigt.
+- **Automatisch buchen** (optional, pro Eintrag): täglicher Vercel Cron `/api/cron/recurring`
+  (`vercel.json`), nur mit gesetztem `CRON_SECRET`. Vorher werden sichere Treffer zugeordnet.
 - **Regelmäßige Zahlungen**: Jeder Termin vor `nextDue` ist erledigt (bezahlt oder
   übersprungen), ab `nextDue` offen. „Bezahlt“ erzeugt genau eine Buchung und rückt
   den Termin weiter – die Aktualisierung ist an den erwarteten Termin gebunden, ein
@@ -81,6 +102,10 @@ docs/DESIGNSYSTEM.md Farben, Typografie, Abstände, Komponenten, Diagramme
   Tatsächliche Abbuchungen kommen nur aus den Terminen.
 - **Pausiert / gekündigt** planen nichts mehr ein – außer bei gekündigten Verträgen mit Vertragsende.
 - **Transfers** sind zwei verknüpfte Buchungen, ändern beide Kontostände und zählen nie als Einnahme oder Ausgabe.
+  Beim CSV-Import werden Zeilen mit Typ „Umbuchung“ zu Transfers (Gegenkonto optional).
+- **CSV-Import**: „Gebucht“ ändert den Kontostand, „Vorgemerkt“ wird als vorgemerkt angezeigt und beim nächsten
+  Import ersetzt, „Geplant“ gehört auf die Wunschliste. Jeder Import hat eine ID und lässt sich rückgängig machen.
+- **Wünsche** ändern keine Zahl. Erst „Einplanen“ legt eine geplante Zahlung an, die in „Aktuell verfügbar“ zählt.
 
 ## Sicherheit
 

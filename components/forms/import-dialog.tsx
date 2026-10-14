@@ -23,7 +23,7 @@ import {
   type Table,
 } from "@/lib/import";
 import { findExistingImportKeys, importTransactions } from "@/lib/server/actions/import";
-import { SelectInput } from "./fields";
+import { DateInput, MoneyInput, SelectInput } from "./fields";
 import { FormDialog } from "./form-dialog";
 
 const FIELDS: ImportField[] = ["date", "title", "amount", "debit", "credit", "type", "status", "account", "category", "note"];
@@ -59,6 +59,8 @@ export function ImportDialog({
   const [excluded, setExcluded] = useState<Set<number>>(new Set());
   const [counterAccountId, setCounterAccountId] = useState<string>("none");
   const [createCategories, setCreateCategories] = useState(true);
+  const [balance, setBalance] = useState("");
+  const [balanceDate, setBalanceDate] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -127,6 +129,15 @@ export function ImportDialog({
     transfers: selected.filter((row) => row.transfer && row.status === "booked").length,
   };
 
+  // Kontostand gilt fuer den letzten gebuchten Tag der Datei
+  const lastBooked = selected
+    .filter((row) => row.status === "booked" && row.date && row.date <= lookups.today)
+    .map((row) => row.date!)
+    .sort()
+    .at(-1);
+  const anchorDate = balanceDate ?? lastBooked ?? lookups.today;
+  const target = active.find((account) => account.id === accountId);
+
   async function submit() {
     if (!table) return false;
     if (problems.length > 0) {
@@ -144,6 +155,8 @@ export function ImportDialog({
         fileName,
         counterAccountId: counterAccountId === "none" ? null : counterAccountId,
         createCategories,
+        balance,
+        balanceDate: balance.trim() ? anchorDate : null,
         rows: selected.map((row) => {
           const target = rowAccount(row);
           return {
@@ -295,6 +308,21 @@ export function ImportDialog({
                 </table>
               </div>
               {rows.length > 300 && <p className="label mt-1 font-normal">Vorschau zeigt die ersten 300 von {rows.length} Zeilen.</p>}
+            </div>
+          )}
+
+          {problems.length === 0 && (
+            <div className="flex flex-col gap-2 rounded-[var(--radius)] border border-separator px-3 py-3">
+              <div className="text-[13px] font-medium">Kontostand laut Bank (empfohlen)</div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <MoneyInput label={`Stand ${target ? `von ${target.name}` : ""}`} value={balance} onChange={setBalance} isRequired={false} allowNegative />
+                <DateInput label="am" value={anchorDate} onChange={setBalanceDate} />
+              </div>
+              <p className="label font-normal">
+                Gebuchter Stand am Ende dieses Tages, ohne vorgemerkte Umsätze. Dann stimmt der Kontostand im Portal sofort – die Datei selbst enthält
+                keinen Anfangssaldo.
+                {target?.balanceAnchor ? ` Bisher: ${formatMoney(target.balanceAnchor.amountCents)} am ${formatDate(target.balanceAnchor.date)}.` : ""}
+              </p>
             </div>
           )}
 

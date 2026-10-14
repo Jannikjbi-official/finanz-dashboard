@@ -1,15 +1,17 @@
 import "server-only";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { isISODate } from "../../domain/calendar";
+import { isISODate, todayIn } from "../../domain/calendar";
 import { parseAmountToCents } from "../../money";
 import { accounts, categories, toObjectId } from "../db";
 import { limitUser } from "../rate-limit";
 import { getCurrentUser } from "../session";
+import { getSettings } from "../user-data";
 
-export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
+/** `undo`: Papierkorb-Eintrag, den der Toast mit "Rückgängig" zurückholt. */
+export type ActionResult = { ok: true; message?: string; undo?: string } | { ok: false; error: string };
 
-export const ok = (message?: string): ActionResult => ({ ok: true, message });
+export const ok = (message?: string, undo?: string): ActionResult => (undo ? { ok: true, message, undo } : { ok: true, message });
 export const fail = (error: string): ActionResult => ({ ok: false, error });
 
 /** Angemeldeter Nutzer mit Schreibkontingent - oder eine Fehlermeldung. */
@@ -96,4 +98,12 @@ export async function ownsCategory(userId: string, id: string | null) {
   const _id = toObjectId(id);
   if (!_id) return false;
   return (await categories.countDocuments({ _id, userId }, { limit: 1 })) > 0;
+}
+
+/** Kontostand mit Datum: nur bis heute, die Zukunft kennt die Bank noch nicht. */
+export async function anchorFor(userId: string, amountCents: number, date: string | null | undefined) {
+  const today = todayIn((await getSettings(userId)).timeZone);
+  const day = date ?? today;
+  if (day > today) return { ok: false as const, error: "Das Datum des Kontostands liegt in der Zukunft." };
+  return { ok: true as const, anchor: { date: day, amountCents } };
 }

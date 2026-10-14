@@ -18,22 +18,40 @@ export function signedAmount(tx: Pick<Transaction, "type" | "amountCents">): Cen
   return tx.type === "income" ? tx.amountCents : -tx.amountCents;
 }
 
-/** Tatsaechlicher Kontostand: Anfangssaldo plus alle gebuchten Bewegungen. */
-export function accountBalance(account: Pick<Account, "id" | "startBalanceCents">, transactions: Transaction[]): Cents {
-  let balance = account.startBalanceCents;
+type BalanceBase = Pick<Account, "id" | "startBalanceCents"> & { balanceAnchor?: Account["balanceAnchor"] };
+
+const booked = (tx: Transaction, accountId: string) => tx.status === "booked" && tx.accountId === accountId;
+
+/**
+ * Saldo vor der ersten Buchung. Mit Kontostand-Anker wird er aus dem Anker
+ * zurueckgerechnet (Anker minus alle Buchungen bis einschliesslich Ankertag),
+ * sonst ist es der eingegebene Anfangssaldo.
+ */
+export function openingBalance(account: BalanceBase, transactions: Transaction[]): Cents {
+  const anchor = account.balanceAnchor;
+  if (!anchor) return account.startBalanceCents;
+  let balance = anchor.amountCents;
   for (const tx of transactions) {
-    if (tx.status === "booked" && tx.accountId === account.id) balance += signedAmount(tx);
+    if (booked(tx, account.id) && tx.date <= anchor.date) balance -= signedAmount(tx);
   }
   return balance;
 }
 
-export function accountBalances(accounts: Account[], transactions: Transaction[]): Map<string, Cents> {
-  const result = new Map<string, Cents>(accounts.map((account) => [account.id, account.startBalanceCents]));
+/**
+ * Kontostand: Saldo vor der ersten Buchung plus alle gebuchten Bewegungen bis
+ * einschliesslich `asOf` (ohne Angabe: alle). Buchungen mit spaeterem Datum
+ * aendern den heutigen Stand nicht.
+ */
+export function accountBalance(account: BalanceBase, transactions: Transaction[], asOf?: ISODate): Cents {
+  let balance = openingBalance(account, transactions);
   for (const tx of transactions) {
-    if (tx.status !== "booked" || !tx.accountId || !result.has(tx.accountId)) continue;
-    result.set(tx.accountId, result.get(tx.accountId)! + signedAmount(tx));
+    if (booked(tx, account.id) && (!asOf || tx.date <= asOf)) balance += signedAmount(tx);
   }
-  return result;
+  return balance;
+}
+
+export function accountBalances(accounts: BalanceBase[], transactions: Transaction[], asOf?: ISODate): Map<string, Cents> {
+  return new Map(accounts.map((account) => [account.id, accountBalance(account, transactions, asOf)]));
 }
 
 /** Konten, deren Guthaben als verfuegbar gilt (liquide, nicht archiviert). */
@@ -46,10 +64,10 @@ export type AccountEntry = { tx: Transaction; balanceAfter: Cents };
 /** Kontoverlauf, neueste zuerst, mit Saldo nach jeder Buchung. */
 export function accountHistory(account: Account, transactions: Transaction[]): AccountEntry[] {
   const own = transactions
-    .filter((tx) => tx.status === "booked" && tx.accountId === account.id)
+    .filter((tx) => booked(tx, account.id))
     .sort((a, b) => (a.date === b.date ? a.id.localeCompare(b.id) : a.date.localeCompare(b.date)));
 
-  let balance = account.startBalanceCents;
+  let balance = openingBalance(account, transactions);
   const entries = own.map((tx) => {
     balance += signedAmount(tx);
     return { tx, balanceAfter: balance };
@@ -112,15 +130,38 @@ export type SpendingBaseline = {
 };
 
 /**
- * Durchschnitt der letzten bis zu `count` abgeschlossenen Monate, in denen
- * ueberhaupt gebucht wurde. Null, wenn es noch keinen solchen Monat gibt.
+ * Ab wann Buchungen erfasst sind: das Datum der ersten gebuchten Buchung.
+ * Ein Monat, der danach beginnt, ist vollstaendig erfasst; der Monat, in dem
+ * die Daten beginnen, nur teilweise (z. B. Import ab dem 30.).
  */
-export function spendingBaseline(transactions: Transaction[], today: ISODate, count = 3): SpendingBaseline | null {
+export function dataStart(transactions: Transaction[]): ISODate | null {
+  let first: ISODate | null = null;
+  for (const tx of transactions) {
+    if (tx.status === "booked" && (!first || tx.date < first)) first = tx.date;
+  }
+  return first;
+}
+
+/** Ist der Monat nur teilweise erfasst? Liefert dann den ersten erfassten Tag. */
+export function partialFrom(month: MonthKey, start: ISODate | null): ISODate | null {
+  if (!start || monthOf(start) !== month || start === monthStart(month)) return null;
+  return start;
+}
+
+/**
+ * Durchschnitt der letzten bis zu `count` abgeschlossenen Monate, in denen
+ * ueberhaupt gebucht wurde. Mit `start` (siehe dataStart) zaehlen nur
+ * vollstaendig erfasste Monate - ein Monat mit Daten erst ab dem 30. wuerde
+ * den Durchschnitt sonst winzig machen. Null, wenn es keinen solchen Monat gibt.
+ */
+export function spendingBaseline(transactions: Transaction[], today: ISODate, count = 3, start: ISODate | null = null): SpendingBaseline | null {
   const current = monthOf(today);
   const used: MonthSummary[] = [];
 
   for (let offset = 1; offset <= 24 && used.length < count; offset += 1) {
-    const summary = monthSummary(transactions, shiftMonth(current, -offset));
+    const month = shiftMonth(current, -offset);
+    if (start && monthStart(month) < start) break;
+    const summary = monthSummary(transactions, month);
     if (summary.count > 0) used.push(summary);
   }
   if (used.length === 0) return null;

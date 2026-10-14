@@ -3,7 +3,7 @@ import { buildDashboard } from "./dashboard";
 import type { Account, Recurring, Transaction } from "./types";
 
 const TODAY = "2026-10-28";
-const giro: Account = { id: "giro", name: "Giro", kind: "giro", startBalanceCents: 500_00, liquid: true, archived: false };
+const giro: Account = { id: "giro", name: "Giro", kind: "giro", startBalanceCents: 500_00, balanceAnchor: null, liquid: true, archived: false };
 
 const sub = (overrides: Partial<Recurring>): Recurring => ({
   id: "s",
@@ -63,5 +63,55 @@ describe("Startseite", () => {
     };
     const dashboard = buildDashboard({ accounts: [giro], transactions: [paid, { ...paid, id: "t2", date: "2026-09-05" }], recurring: [sub({})], today: TODAY });
     expect(dashboard.paidThisMonth.map((tx) => tx.id)).toEqual(["t1"]);
+  });
+
+  it("rechnet nicht mit einem Monat, der erst am 30. beginnt (#18)", () => {
+    // Daten ab 30.09.: September ist unvollstaendig
+    const booked = (id: string, date: string, amountCents: number, type: "income" | "expense" = "expense"): Transaction => ({
+      id, type, status: "booked", amountCents, date, title: id, note: null, categoryId: null, accountId: "giro",
+      transferGroupId: null, recurringId: null, recurringDue: null,
+    });
+    const transactions = [
+      booked("rente", "2026-09-30", 278_48, "income"),
+      booked("lidl", "2026-09-30", 30_07),
+      booked("stadt", "2026-10-07", 1035_54, "income"),
+      booked("okt", "2026-10-05", 50_00),
+    ];
+    const recurring = [
+      sub({ id: "a", amountCents: 207_00 }),
+      sub({ id: "miete", costType: "rent", amountCents: 127_99 }),
+    ];
+    const dashboard = buildDashboard({ accounts: [giro], transactions, recurring, today: "2026-10-14" });
+
+    expect(dashboard.baseline).toBeNull();
+    expect(dashboard.previousPartialFrom).toBe("2026-09-30");
+    expect(dashboard.shareBase).toBe("fixed");
+    expect(dashboard.subscriptionShare).toBeCloseTo(207 / 334.99);
+    expect(dashboard.savings?.variableReserve).toBeNull();
+    expect(dashboard.history.find((month) => month.month === "2026-09")).toMatchObject({ partial: true, partialFrom: "2026-09-30" });
+  });
+
+  it("kappt Sparbar auf den voraussichtlichen Kontostand und warnt nur bei echtem Absinken", () => {
+    const overdrawn: Account = { ...giro, startBalanceCents: -18_16 };
+    const income: Transaction = {
+      id: "gehalt", type: "income", status: "booked", amountCents: 2000_00, date: "2026-10-02", title: "Gehalt", note: null,
+      categoryId: null, accountId: "anderes", transferGroupId: null, recurringId: null, recurringDue: null,
+    };
+    const dashboard = buildDashboard({ accounts: [overdrawn], transactions: [income], recurring: [], today: "2026-10-14" });
+    // Monatsfluss +2.000 €, aber auf dem Konto sind nur -18,16 €
+    expect(dashboard.savings).toMatchObject({ amount: -18_16, cappedByBalance: true });
+    expect(dashboard.availability.startsNegative).toBe(true);
+    expect(dashboard.availability.dip).toBeNull();
+  });
+
+  it("zieht von der Prognose geschaetzte variable Ausgaben ab, wenn es einen vollen Monat gibt", () => {
+    const spent: Transaction = {
+      id: "sep", type: "expense", status: "booked", amountCents: 300_00, date: "2026-09-01", title: "Einkauf", note: null,
+      categoryId: null, accountId: "giro", transferGroupId: null, recurringId: null, recurringDue: null,
+    };
+    const dashboard = buildDashboard({ accounts: [giro], transactions: [spent], recurring: [], today: "2026-10-21" });
+    // 300 € in 30 Tagen = 10 €/Tag, 10 Resttage
+    expect(dashboard.variableForecast).toEqual({ reserve: 100_00, projected: dashboard.availability.projectedMonthEnd - 100_00 });
+    expect(buildDashboard({ accounts: [giro], transactions: [], recurring: [], today: "2026-10-21" }).variableForecast).toBeNull();
   });
 });

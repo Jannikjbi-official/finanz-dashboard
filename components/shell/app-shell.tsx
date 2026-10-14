@@ -2,8 +2,10 @@
 
 import {
   ArrowsClockwise,
+  CalendarBlank,
   CaretDown,
   ChartLineUp,
+  ChartPieSlice,
   GearSix,
   Gift,
   Moon,
@@ -23,13 +25,17 @@ import type { Lookups } from "@/components/forms/transaction-dialog";
 import { authClient } from "@/lib/client/auth-client";
 import { useTheme } from "@/lib/client/theme";
 import { QuickAddProvider, useQuickAdd } from "./quick-add";
+import { QuickEntryHotkey } from "./quick-entry";
 
-type NavItem = { href: string; label: string; short: string; icon: Icon; aliases?: string[] };
+/** `mobile: false`: nur in der Seitenleiste (die Leiste unten hat sieben Plaetze). */
+type NavItem = { href: string; label: string; short: string; icon: Icon; aliases?: string[]; mobile?: false };
 
 /** Bewusst kompakt: sieben Bereiche. Aliase sind Adressen der Vorversion. */
 const NAV: NavItem[] = [
   { href: "/", label: "Übersicht", short: "Übersicht", icon: ChartLineUp, aliases: ["/app"] },
   { href: "/transaktionen", label: "Transaktionen", short: "Umsätze", icon: Receipt, aliases: ["/app/geld/buchungen"] },
+  { href: "/kategorien", label: "Kategorien", short: "Kategorien", icon: ChartPieSlice, mobile: false },
+  { href: "/kalender", label: "Kalender", short: "Kalender", icon: CalendarBlank, mobile: false },
   { href: "/abonnements", label: "Abonnements", short: "Abos", icon: ArrowsClockwise },
   { href: "/feste-kosten", label: "Feste Kosten", short: "Fixkosten", icon: Vault, aliases: ["/app/planung/fixkosten"] },
   { href: "/wuensche", label: "Wünsche", short: "Wünsche", icon: Gift },
@@ -180,7 +186,7 @@ function MobileTabs({ pathname }: { pathname: string }) {
       aria-label="Hauptnavigation"
       className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-7 border-t border-separator bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm lg:hidden"
     >
-      {NAV.map((item) => {
+      {NAV.filter((item) => item.mobile !== false).map((item) => {
         const active = isActive(item, pathname);
         const IconComponent = item.icon;
         return (
@@ -231,6 +237,7 @@ export function AppShell({ lookups, userName, children }: { lookups: Lookups; us
         </div>
         <MobileTabs pathname={pathname} />
       </div>
+      <QuickEntryHotkey />
     </QuickAddProvider>
   );
 }

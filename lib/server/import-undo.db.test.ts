@@ -234,6 +234,9 @@ describe("Alte Importe in der Oberflaeche", () => {
 
     expect(await actions.undoImport(list[0].id)).toMatchObject({ ok: true, message: "Import rückgängig gemacht: 8 Buchungen gelöscht" });
     expect(await db.transactions.countDocuments({ createdAt })).toBe(0);
+    // Vorher gesichert
+    const trash = await db.importTrash.findOne({ userId: "user-a", importId: list[0].id });
+    expect(trash?.docs).toHaveLength(8);
     // Eigene Daten und der andere Import bleiben
     expect(await db.transactions.countDocuments()).toBe(3 + 2);
     expect(await db.recurring.countDocuments()).toBe(1);
