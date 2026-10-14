@@ -6,6 +6,7 @@ import Link from "next/link";
 import { BalanceChart } from "@/components/charts/balance-chart";
 import { CashflowChart } from "@/components/charts/cashflow-chart";
 import { LastImportNotice } from "@/components/finance/import-list";
+import { AnomalyPanel } from "@/components/finance/anomaly-panel";
 import { AmountChangePanel, MatchPanel } from "@/components/finance/match-panel";
 import { QuickEntryBar } from "@/components/shell/quick-entry";
 import { ItemStatus } from "@/components/finance/item-status";
@@ -14,6 +15,7 @@ import { useQuickAdd } from "@/components/shell/quick-add";
 import { Figures, Money } from "@/components/ui/money";
 import { Panel } from "@/components/ui/panel";
 import { Status } from "@/components/ui/status";
+import type { Anomaly } from "@/lib/domain/anomalies";
 import { aboveAverage, type CategoryBreakdown } from "@/lib/domain/categories";
 import { COST_TYPE_LABEL, INTERVAL_UNIT } from "@/lib/domain/labels";
 import { monthlyEquivalent } from "@/lib/domain/recurring";
@@ -27,6 +29,7 @@ export function DashboardView({
   pending,
   lastImport = null,
   categories = null,
+  anomalies = [],
 }: {
   dashboard: Dashboard;
   recurring: Recurring[];
@@ -34,6 +37,7 @@ export function DashboardView({
   lastImport?: ImportInfo | null;
   /** Ausgaben des Monats je Kategorie (null: keine Kategorien angelegt). */
   categories?: CategoryBreakdown | null;
+  anomalies?: Anomaly[];
 }) {
   const { openAccount, openTransaction } = useQuickAdd();
 
@@ -78,6 +82,7 @@ export function DashboardView({
 
       {dashboard.matches.length > 0 && <MatchPanel matches={dashboard.matches} />}
       {dashboard.amountChanges.length > 0 && <AmountChangePanel changes={dashboard.amountChanges} />}
+      {anomalies.length > 0 && <AnomalyPanel anomalies={anomalies} />}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <Panel

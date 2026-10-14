@@ -133,6 +133,8 @@ export type SettingsDoc = {
   notifyMonthly?: boolean;
   /** Abgelehnte Vorschlaege "regelmaessige Zahlung erkannt". */
   dismissedRecurringSuggestions?: string[];
+  /** Mit "Passt" ausgeblendete Auffaelligkeiten (siehe lib/domain/anomalies.ts). */
+  dismissedAnomalies?: string[];
   /** Weitere Altfelder bleiben unangetastet. */
   [legacy: string]: unknown;
 };

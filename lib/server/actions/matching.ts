@@ -146,3 +146,16 @@ export async function dismissRecurringSuggestion(key: string): Promise<ActionRes
   refresh();
   return ok("Wird nicht mehr vorgeschlagen");
 }
+
+/** Auffaelligkeit ausblenden ("Passt"). Hoechstens die letzten 500 Schluessel. */
+export async function dismissAnomaly(key: string): Promise<ActionResult> {
+  const auth = await authorize();
+  if ("error" in auth) return auth.error;
+  if (typeof key !== "string" || !/^(dup:[0-9a-f]{24}:[0-9a-f]{24}|large:[0-9a-f]{24}|cat:([0-9a-f]{24}|none):\d{4}-\d{2})$/.test(key)) {
+    return fail("Hinweis nicht gefunden");
+  }
+  const update = { $push: { dismissedAnomalies: { $each: [key], $slice: -500 } } } as unknown as UpdateFilter<SettingsDoc>;
+  await settings.updateOne({ _id: auth.userId, dismissedAnomalies: { $ne: key } }, update);
+  refresh();
+  return ok("Ausgeblendet");
+}

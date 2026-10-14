@@ -62,6 +62,8 @@ export type Transaction = {
   bankPending?: boolean;
   /** Regelmaessige Zahlungen, fuer die diese Buchung als Treffer abgelehnt wurde. */
   dismissedRecurring?: string[];
+  /** CSV-Import, aus dem die Buchung stammt. */
+  importId?: string | null;
 };
 
 export type RecurringStatus = "active" | "paused" | "cancelled" | "archived";
