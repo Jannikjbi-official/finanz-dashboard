@@ -2,9 +2,10 @@
 
 import { ArrowsLeftRight, DownloadSimple, UploadSimple } from "@phosphor-icons/react";
 import { Button, SearchField, Table, ToggleButton, ToggleButtonGroup, type Key, type SortDescriptor } from "@heroui/react";
-import { useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { ConfirmDialog } from "@/components/forms/confirm-dialog";
-import { SelectInput } from "@/components/forms/fields";
+import { DateInput, MoneyInput, SelectInput } from "@/components/forms/fields";
 import { ImportDialog } from "@/components/forms/import-dialog";
 import { useQuickAdd } from "@/components/shell/quick-add";
 import { Figures, Money } from "@/components/ui/money";
@@ -12,8 +13,10 @@ import { PageHeader } from "@/components/ui/panel";
 import { Status } from "@/components/ui/status";
 import { useAction } from "@/lib/client/use-action";
 import { isTransfer } from "@/lib/domain/ledger";
+import { defaultFilter, filterToParams, matchesFilter, type TransactionFilter } from "@/lib/domain/transaction-filter";
 import type { Account, Category, Transaction } from "@/lib/domain/types";
-import { formatDate, formatMoney, formatMonth } from "@/lib/format";
+import { formatAmountInput, formatDate, formatMoney, formatMonth } from "@/lib/format";
+import { parseAmountToCents } from "@/lib/money";
 import { deleteTransaction, setTransactionStatus } from "@/lib/server/actions/transactions";
 
 type Row = {
@@ -70,24 +73,34 @@ export function TransactionsView({
   accounts,
   categories,
   today,
-  initialAccount,
+  initialFilter,
 }: {
   transactions: Transaction[];
   accounts: Account[];
   categories: Category[];
   today: string;
-  initialAccount: string | null;
+  initialFilter: TransactionFilter;
 }) {
   const { openTransaction } = useQuickAdd();
   const { run, pending } = useAction();
+  const router = useRouter();
+  const pathname = usePathname();
   const currentMonth = today.slice(0, 7);
 
-  const [query, setQuery] = useState("");
-  const [month, setMonth] = useState<string>(initialAccount ? "all" : currentMonth);
-  const [kind, setKind] = useState<"all" | "income" | "expense" | "transfer">("all");
-  const [status, setStatus] = useState<"all" | "pending" | "booked">("all");
-  const [accountId, setAccountId] = useState<string>(initialAccount ?? "all");
-  const [categoryId, setCategoryId] = useState<string>("all");
+  const [filter, setFilter] = useState<TransactionFilter>(initialFilter);
+  const [minText, setMinText] = useState(initialFilter.min !== null ? formatAmountInput(initialFilter.min) : "");
+  const [maxText, setMaxText] = useState(initialFilter.max !== null ? formatAmountInput(initialFilter.max) : "");
+  const update = (patch: Partial<TransactionFilter>) => setFilter((current) => ({ ...current, ...patch }));
+  const { q: query, period: month, kind, status, account: accountId, category: categoryId } = filter;
+
+  // Filter in der Adresse halten (teilbar, "Zurueck" funktioniert); Tippen kurz abwarten
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const params = filterToParams(filter, currentMonth).toString();
+      router.replace(params ? `${pathname}?${params}` : pathname, { scroll: false });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [filter, currentMonth, pathname, router]);
   const [sort, setSort] = useState<SortDescriptor>({ column: "date", direction: "descending" });
   const [limit, setLimit] = useState(PAGE);
   const [importOpen, setImportOpen] = useState(false);
@@ -104,25 +117,14 @@ export function TransactionsView({
   }, [transactions, currentMonth]);
 
   const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    const rows = allRows.filter((row) => {
-      if (month !== "all" && row.date.slice(0, 7) !== month) return false;
-      if (kind !== "all" && row.kind !== kind) return false;
-      if (status !== "all" && row.tx.status !== status) return false;
-      if (accountId === "none" && row.tx.accountId) return false;
-      if (accountId !== "all" && accountId !== "none" && row.tx.accountId !== accountId && row.counterAccountId !== accountId) return false;
-      if (categoryId === "none" && (row.tx.categoryId || row.kind === "transfer")) return false;
-      if (categoryId !== "all" && categoryId !== "none" && row.tx.categoryId !== categoryId) return false;
-      if (needle && !`${row.title} ${row.tx.note ?? ""}`.toLowerCase().includes(needle)) return false;
-      return true;
-    });
+    const rows = allRows.filter((row) => matchesFilter({ ...row, amountCents: Math.abs(row.signed) }, filter));
     const direction = sort.direction === "ascending" ? 1 : -1;
     return rows.sort((a, b) => {
       if (sort.column === "amount") return (a.signed - b.signed) * direction;
       if (sort.column === "title") return a.title.localeCompare(b.title, "de") * direction;
       return (a.date === b.date ? a.id.localeCompare(b.id) : a.date.localeCompare(b.date)) * direction;
     });
-  }, [allRows, month, kind, status, accountId, categoryId, query, sort]);
+  }, [allRows, filter, sort]);
 
   const totals = useMemo(() => {
     let income = 0;
@@ -140,8 +142,24 @@ export function TransactionsView({
     return { income, expense, open };
   }, [filtered]);
 
+  // Monatssummen, sobald die Treffer mehrere Monate umfassen
+  const byMonth = useMemo(() => {
+    const groups = new Map<string, { income: number; expense: number; count: number }>();
+    for (const row of filtered) {
+      const key = row.date.slice(0, 7);
+      const group = groups.get(key) ?? { income: 0, expense: 0, count: 0 };
+      group.count += 1;
+      if (row.kind !== "transfer" && row.tx.status === "booked") {
+        if (row.kind === "income") group.income += row.tx.amountCents;
+        else group.expense += row.tx.amountCents;
+      }
+      groups.set(key, group);
+    }
+    return [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  }, [filtered]);
+
   const visible = filtered.slice(0, limit);
-  const filtersActive = query || month !== currentMonth || kind !== "all" || status !== "all" || accountId !== "all" || categoryId !== "all";
+  const filtersActive = filterToParams(filter, currentMonth).toString() !== "";
 
   return (
     <div>
@@ -174,10 +192,10 @@ export function TransactionsView({
 
       <div className="panel mb-4 flex flex-col gap-3 p-3 sm:p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-          <SearchField aria-label="Transaktionen durchsuchen" value={query} onChange={setQuery} className="lg:w-72">
+          <SearchField aria-label="Transaktionen durchsuchen" value={query} onChange={(value) => update({ q: value })} className="lg:w-72">
             <SearchField.Group>
               <SearchField.SearchIcon />
-              <SearchField.Input placeholder="Beschreibung oder Notiz suchen" />
+              <SearchField.Input placeholder="Beschreibung, Notiz oder Betrag" />
               <SearchField.ClearButton />
             </SearchField.Group>
           </SearchField>
@@ -185,7 +203,7 @@ export function TransactionsView({
             selectionMode="single"
             disallowEmptySelection
             selectedKeys={new Set<Key>([kind])}
-            onSelectionChange={(keys) => setKind(String([...keys][0] ?? "all") as typeof kind)}
+            onSelectionChange={(keys) => update({ kind: String([...keys][0] ?? "all") as TransactionFilter["kind"] })}
             size="sm"
             aria-label="Art"
           >
@@ -194,18 +212,35 @@ export function TransactionsView({
             <ToggleButton id="expense">Ausgaben</ToggleButton>
             <ToggleButton id="transfer">Transfers</ToggleButton>
           </ToggleButtonGroup>
+          {filtersActive && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onPress={() => {
+                setFilter(defaultFilter(currentMonth));
+                setMinText("");
+                setMaxText("");
+              }}
+            >
+              Filter zurücksetzen
+            </Button>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <SelectInput
-            label="Monat"
+            label="Zeitraum"
             value={month}
-            onChange={(value) => setMonth(value ?? currentMonth)}
-            options={[{ id: "all", label: "Alle Monate" }, ...months.map((m) => ({ id: m, label: formatMonth(m) }))]}
+            onChange={(value) => update({ period: value ?? currentMonth })}
+            options={[
+              { id: "all", label: "Alle Monate" },
+              { id: "range", label: "Von – bis …" },
+              ...months.map((m) => ({ id: m, label: formatMonth(m) })),
+            ]}
           />
           <SelectInput
             label="Status"
             value={status}
-            onChange={(value) => setStatus((value ?? "all") as typeof status)}
+            onChange={(value) => update({ status: (value ?? "all") as TransactionFilter["status"] })}
             options={[
               { id: "all", label: "Alle" },
               { id: "pending", label: "Offen (geplant/erwartet)" },
@@ -215,7 +250,7 @@ export function TransactionsView({
           <SelectInput
             label="Konto"
             value={accountId}
-            onChange={(value) => setAccountId(value ?? "all")}
+            onChange={(value) => update({ account: value ?? "all" })}
             options={[
               { id: "all", label: "Alle Konten" },
               ...accounts.map((a) => ({ id: a.id, label: a.name + (a.archived ? " (archiviert)" : "") })),
@@ -225,8 +260,34 @@ export function TransactionsView({
           <SelectInput
             label="Kategorie"
             value={categoryId}
-            onChange={(value) => setCategoryId(value ?? "all")}
+            onChange={(value) => update({ category: value ?? "all" })}
             options={[{ id: "all", label: "Alle Kategorien" }, { id: "none", label: "Ohne Kategorie" }, ...categories.map((c) => ({ id: c.id, label: c.name }))]}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {month === "range" && (
+            <>
+              <DateInput label="Von" value={filter.from} onChange={(value) => update({ from: value })} />
+              <DateInput label="Bis" value={filter.to} onChange={(value) => update({ to: value })} />
+            </>
+          )}
+          <MoneyInput
+            label="Betrag ab"
+            value={minText}
+            isRequired={false}
+            onChange={(value) => {
+              setMinText(value);
+              update({ min: value.trim() ? parseAmountToCents(value) : null });
+            }}
+          />
+          <MoneyInput
+            label="Betrag bis"
+            value={maxText}
+            isRequired={false}
+            onChange={(value) => {
+              setMaxText(value);
+              update({ max: value.trim() ? parseAmountToCents(value) : null });
+            }}
           />
         </div>
       </div>
@@ -251,6 +312,37 @@ export function TransactionsView({
           {totals.open > 0 && ` · ${totals.open} offen (nicht in den Summen)`}
         </span>
       </div>
+
+      {byMonth.length > 1 && (
+        <details className="panel mb-3 px-4 py-2.5 text-[13px] sm:px-5">
+          <summary className="cursor-pointer text-muted">Summen je Monat ({byMonth.length} Monate)</summary>
+          <table className="mt-2 w-full">
+            <thead>
+              <tr className="label border-b border-separator">
+                <th className="py-1.5 text-left font-medium">Monat</th>
+                <th className="py-1.5 text-right font-medium">Einnahmen</th>
+                <th className="py-1.5 text-right font-medium">Ausgaben</th>
+                <th className="py-1.5 text-right font-medium">Saldo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {byMonth.map(([key, group]) => (
+                <tr key={key} className="border-b border-separator last:border-0">
+                  <td className="py-1.5">
+                    <button type="button" className="underline decoration-border underline-offset-4 hover:decoration-foreground" onClick={() => update({ period: key, from: null, to: null })}>
+                      {formatMonth(key)}
+                    </button>
+                    <span className="text-muted"> · {group.count}</span>
+                  </td>
+                  <td className="py-1.5 text-right"><Money cents={group.income} tone="plain" /></td>
+                  <td className="py-1.5 text-right"><Money cents={group.expense} tone="plain" /></td>
+                  <td className="py-1.5 text-right"><Money cents={group.income - group.expense} signed /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
 
       <div className="panel md:hidden">
         {visible.length === 0 ? (
