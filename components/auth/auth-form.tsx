@@ -27,7 +27,7 @@ function message(error: { code?: string; status?: number; message?: string }) {
 
 function Brand() {
   return (
-    <div className="mb-8 flex items-center gap-2.5">
+    <Link href="/" aria-label="Zur Startseite" className="mb-8 flex w-fit items-center gap-2.5 rounded-[var(--radius)] outline-none focus-visible:ring-2 focus-visible:ring-focus">
       <svg viewBox="0 0 32 32" className="size-8" aria-hidden>
         <rect width="32" height="32" rx="7" className="fill-surface-secondary" />
         <path d="M9 21.5h14" className="stroke-accent" strokeWidth="2" strokeLinecap="round" />
@@ -37,7 +37,7 @@ function Brand() {
         <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Jannikjbi</div>
         <div className="text-[15px] font-semibold">Finanzen</div>
       </div>
-    </div>
+    </Link>
   );
 }
 
