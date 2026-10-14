@@ -64,6 +64,7 @@ export function toRecurring(doc: WithId<RecurringDoc>): Recurring {
     noticePeriod: doc.noticePeriod ?? null,
     note: doc.note ?? null,
     autoBook: Boolean(doc.autoBook),
+    amountCheckedCents: doc.amountCheckedCents ?? null,
   };
 }
 

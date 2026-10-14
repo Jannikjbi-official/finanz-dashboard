@@ -5,7 +5,7 @@ import { Button, Disclosure, Tooltip } from "@heroui/react";
 import Link from "next/link";
 import { CashflowChart } from "@/components/charts/cashflow-chart";
 import { LastImportNotice } from "@/components/finance/import-list";
-import { MatchPanel } from "@/components/finance/match-panel";
+import { AmountChangePanel, MatchPanel } from "@/components/finance/match-panel";
 import { QuickEntryBar } from "@/components/shell/quick-entry";
 import { ItemStatus } from "@/components/finance/item-status";
 import { SettleMenu } from "@/components/finance/settle-menu";
@@ -71,6 +71,7 @@ export function DashboardView({
       </div>
 
       {dashboard.matches.length > 0 && <MatchPanel matches={dashboard.matches} />}
+      {dashboard.amountChanges.length > 0 && <AmountChangePanel changes={dashboard.amountChanges} />}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <Panel

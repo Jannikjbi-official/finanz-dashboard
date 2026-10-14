@@ -110,3 +110,26 @@ export async function findLinkCandidates(recurringId: string, due: string): Prom
     })
     .sort((a, b) => Number(b.likely) - Number(a.likely) || Math.abs(a.amountCents - entry.amountCents) - Math.abs(b.amountCents - entry.amountCents));
 }
+
+/**
+ * Betragsaenderung uebernehmen oder bewusst beibehalten. Der neue Betrag
+ * wird auf dem Server aus der zuletzt zugeordneten Zahlung bestimmt.
+ */
+export async function resolveAmountChange(input: { recurringId: string; accept: boolean }): Promise<ActionResult> {
+  const auth = await authorize();
+  if ("error" in auth) return auth.error;
+  const entry = typeof input?.recurringId === "string" ? await findEntry(auth.userId, input.recurringId) : null;
+  if (!entry) return fail("Eintrag nicht gefunden");
+  const latestDoc = await transactions
+    .find({ userId: auth.userId, recurringId: entry.id, status: "booked", recurringDue: { $type: "string" } })
+    .sort({ recurringDue: -1 })
+    .limit(1)
+    .toArray();
+  const latest = latestDoc[0]?.amountCents;
+  if (latest === undefined || latest === entry.amountCents) return fail("Keine Betragsänderung gefunden");
+
+  const set = input.accept ? { amountCents: latest, amountCheckedCents: null } : { amountCheckedCents: latest };
+  await recurring.updateOne({ _id: toObjectId(entry.id)!, userId: auth.userId }, { $set: { ...set, updatedAt: new Date() } });
+  refresh();
+  return ok(input.accept ? `Betrag auf ${(latest / 100).toFixed(2).replace(".", ",")} € geändert` : "Betrag bleibt unverändert");
+}

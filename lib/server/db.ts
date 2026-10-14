@@ -114,6 +114,8 @@ export type RecurringDoc = {
   note: string | null;
   /** Am Faelligkeitstag automatisch buchen (opt-in). */
   autoBook?: boolean;
+  /** Bewusst nicht uebernommener abweichender Betrag. */
+  amountCheckedCents?: number | null;
   createdAt: Date;
   updatedAt?: Date;
 };

@@ -385,3 +385,23 @@ describe("Discord-Benachrichtigungen (#21)", () => {
     expect(await runNotifications(fake)).toBe(0);
   });
 });
+
+describe("Betragsaenderungen", () => {
+  it("uebernimmt oder behaelt den Betrag der letzten Zahlung", async () => {
+    const giro = await createAccount("Giro", "giro", "0");
+    await rec.saveRecurring({ type: "income", title: "Waisenrente", amount: "276,48", interval: "monthly", nextDue: "2026-09-30", costType: "other", accountId: giro });
+    const id = (await db.recurring.findOne({}))!._id.toString();
+    await rec.settleRecurring({ id, due: "2026-09-30", mode: "book", amount: "278,48" });
+    const { amountChanges } = await import("@/lib/domain/amount-changes");
+    const loaded = await load();
+    expect(amountChanges(loaded.recurring, loaded.transactions)).toHaveLength(1);
+
+    const match = await import("./matching");
+    expect(await match.resolveAmountChange({ recurringId: id, accept: false })).toMatchObject({ ok: true });
+    let after = await load();
+    expect(amountChanges(after.recurring, after.transactions)).toEqual([]);
+    expect(await match.resolveAmountChange({ recurringId: id, accept: true })).toMatchObject({ ok: true });
+    after = await load();
+    expect(after.recurring[0].amountCents).toBe(278_48);
+  });
+});

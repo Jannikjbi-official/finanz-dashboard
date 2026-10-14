@@ -1,6 +1,7 @@
 import { addDays, monthEnd, monthOf, shiftMonth, type ISODate } from "./calendar";
 import { fixedCostSummary, subscriptionSummary } from "./commitments";
 import { dataStart, monthSummary, monthlyHistory, partialFrom, spendingBaseline } from "./ledger";
+import { amountChanges } from "./amount-changes";
 import { findRecurringMatches } from "./matching";
 import { availability, openItems, savingsEstimate, type OpenItem } from "./overview";
 import type { Account, Recurring, Transaction } from "./types";
@@ -77,6 +78,8 @@ export function buildDashboard(input: { accounts: Account[]; transactions: Trans
     upcomingTotalUntilMonthEnd: avail.bankPending.total + avail.dueUnpaid.total + avail.plannedExpenses.total,
     /** Buchungen, die offenen Terminen zugeordnet werden koennen (#17). */
     matches: findRecurringMatches(recurring, transactions, today),
+    /** Zugeordnete Zahlungen mit anderem Betrag als hinterlegt. */
+    amountChanges: amountChanges(recurring, transactions),
     paidThisMonth,
   };
 }

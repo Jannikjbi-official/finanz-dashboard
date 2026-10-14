@@ -111,6 +111,8 @@ export type Recurring = {
   note: string | null;
   /** Am Faelligkeitstag automatisch als bezahlt/eingegangen buchen (Cron, opt-in). */
   autoBook?: boolean;
+  /** Abweichender Betrag, der bewusst nicht uebernommen wurde (siehe amount-changes.ts). */
+  amountCheckedCents?: number | null;
 };
 
 export type Category = {

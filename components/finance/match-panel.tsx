@@ -5,9 +5,10 @@ import { Money } from "@/components/ui/money";
 import { Panel } from "@/components/ui/panel";
 import { Status } from "@/components/ui/status";
 import { useAction } from "@/lib/client/use-action";
+import type { AmountChange } from "@/lib/domain/amount-changes";
 import type { RecurringMatch } from "@/lib/domain/matching";
 import { formatDayShort, formatMoney } from "@/lib/format";
-import { dismissRecurringMatch, linkAllSureMatches, linkRecurringPayment } from "@/lib/server/actions/matching";
+import { dismissRecurringMatch, linkAllSureMatches, linkRecurringPayment, resolveAmountChange } from "@/lib/server/actions/matching";
 
 /**
  * Buchungen, die zu offenen Terminen regelmaessiger Zahlungen passen. Erst
@@ -66,6 +67,37 @@ export function MatchPanel({ matches }: { matches: RecurringMatch[] }) {
             </li>
           );
         })}
+      </ul>
+    </Panel>
+  );
+}
+
+/** Regelmaessige Zahlungen, deren letzte Zahlung einen anderen Betrag hatte. */
+export function AmountChangePanel({ changes }: { changes: AmountChange[] }) {
+  const { run, pending } = useAction();
+  return (
+    <Panel id="amounts" title="Beträge prüfen" description="Die letzte Zahlung hatte einen anderen Betrag als hinterlegt – z. B. eine Preiserhöhung oder Rentenanpassung." bodyClassName="">
+      <ul className="rows">
+        {changes.map((change) => (
+          <li key={change.recurringId} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div className="min-w-0 text-[13.5px]">
+              <span className="font-medium">{change.title}</span>
+              <span className="text-muted">
+                {" "}
+                · zuletzt {formatMoney(change.latestCents)} am {formatDayShort(change.latestDate)} statt {formatMoney(change.currentCents)} (
+                {formatMoney(change.latestCents - change.currentCents, { signed: true })})
+              </span>
+            </div>
+            <div className="flex shrink-0 gap-1.5">
+              <Button size="sm" variant="secondary" isPending={pending} onPress={() => run(() => resolveAmountChange({ recurringId: change.recurringId, accept: true }))}>
+                Übernehmen
+              </Button>
+              <Button size="sm" variant="ghost" onPress={() => run(() => resolveAmountChange({ recurringId: change.recurringId, accept: false }))}>
+                Beibehalten
+              </Button>
+            </div>
+          </li>
+        ))}
       </ul>
     </Panel>
   );
