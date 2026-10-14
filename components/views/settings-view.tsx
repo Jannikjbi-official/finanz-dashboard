@@ -8,6 +8,7 @@ import { SelectInput, TextInput } from "@/components/forms/fields";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { ImportDialog } from "@/components/forms/import-dialog";
 import { ImportList } from "@/components/finance/import-list";
+import { NotificationsPanel } from "@/components/settings/notifications-panel";
 import { RulesPanel } from "@/components/settings/rules-panel";
 import { SecurityPanel } from "@/components/settings/security-panel";
 import { SignOutButton } from "@/components/shell/app-shell";
@@ -31,6 +32,7 @@ export function SettingsView({
   accounts,
   imports,
   rules,
+  notify,
   counts,
 }: {
   user: { name: string; email: string };
@@ -40,6 +42,7 @@ export function SettingsView({
   accounts: Account[];
   imports: ImportInfo[];
   rules: CategoryRule[];
+  notify: { webhook: string | null; due: boolean; monthly: boolean };
   counts: { transactions: number; recurring: number; accounts: number };
 }) {
   const { theme, setTheme } = useTheme();
@@ -90,6 +93,8 @@ export function SettingsView({
             </div>
           </div>
         </Panel>
+
+        <NotificationsPanel webhook={notify.webhook} due={notify.due} monthly={notify.monthly} />
 
         <Panel title="Daten" description={`${counts.accounts} Konten · ${counts.transactions} Buchungen · ${counts.recurring} regelmäßige Zahlungen`} id="import">
           <div className="flex flex-col gap-4">

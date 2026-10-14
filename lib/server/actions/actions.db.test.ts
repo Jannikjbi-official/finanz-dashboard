@@ -45,6 +45,8 @@ beforeEach(async () => {
     db.categories.deleteMany({}),
     db.imports.deleteMany({}),
     db.rules.deleteMany({}),
+    db.settings.deleteMany({}),
+    db.db.collection("notifications").deleteMany({}),
     db.db.collection("rate_limits").deleteMany({}),
   ]);
 });
@@ -352,5 +354,34 @@ describe("Automatisch buchen (#20)", () => {
     expect((await call("Bearer falsch")).status).toBe(401);
     expect((await call("Bearer geheim")).status).toBe(200);
     delete process.env.CRON_SECRET;
+  });
+});
+
+describe("Discord-Benachrichtigungen (#21)", () => {
+  it("meldet faellige Zahlungen genau einmal an den eigenen Webhook", async () => {
+    const giro = await createAccount("Giro", "giro", "0");
+    const { today } = await load();
+    const { addDays } = await import("@/lib/domain/calendar");
+    await rec.saveRecurring({ type: "expense", title: "Streaming", amount: "9,99", interval: "monthly", nextDue: addDays(today, 1), costType: "subscription", accountId: giro });
+
+    const notify = await import("./notify");
+    expect(await notify.saveNotificationSettings({ webhookUrl: "https://example.org/hook", due: true, monthly: true })).toMatchObject({ ok: false });
+    expect(await notify.saveNotificationSettings({ webhookUrl: "https://discord.com/api/webhooks/123/abc-DEF", due: true, monthly: false })).toMatchObject({ ok: true });
+
+    const calls: Array<{ url: string; body: { content: string; allowed_mentions: unknown } }> = [];
+    const fake = (async (url: string, init: RequestInit) => {
+      calls.push({ url, body: JSON.parse(String(init.body)) });
+      return new Response(null, { status: 204 });
+    }) as unknown as typeof fetch;
+    const { runNotifications, maskWebhook } = await import("@/lib/server/notify");
+    expect(await runNotifications(fake)).toBe(1);
+    expect(calls[0].url).toBe("https://discord.com/api/webhooks/123/abc-DEF");
+    expect(calls[0].body.content).toContain("Streaming – 9,99 €");
+    expect(calls[0].body.allowed_mentions).toEqual({ parse: [] });
+    expect(await runNotifications(fake)).toBe(0);
+    expect(maskWebhook("https://discord.com/api/webhooks/123456/geheim")).toBe("discord.com/api/webhooks/1234…");
+
+    expect(await notify.saveNotificationSettings({ webhookUrl: "", due: true, monthly: true })).toMatchObject({ ok: true });
+    expect(await runNotifications(fake)).toBe(0);
   });
 });
