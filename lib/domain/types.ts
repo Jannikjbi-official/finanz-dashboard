@@ -172,3 +172,13 @@ export type TrashEntry = {
   expiresAt: string | null;
   fromImport: boolean;
 };
+
+/** Automatisch gesicherter Stand vor einer Wiederherstellung. */
+export type SnapshotInfo = {
+  id: string;
+  /** ISO-Zeitstempel. */
+  createdAt: string;
+  reason: string;
+  /** Anzahl je Collection. */
+  counts: Record<string, number>;
+};

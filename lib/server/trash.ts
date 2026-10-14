@@ -123,7 +123,8 @@ export async function restoreTrash(userId: string, trashId: string): Promise<Res
 
   if (missing.length > 0) {
     try {
-      await transactions.insertMany(missing.map((doc) => ({ ...doc, updatedAt: new Date() })), { ordered: false });
+      // Immer dem eigenen Konto zuordnen - auch wenn der Eintrag aus einer hochgeladenen Sicherung stammt
+      await transactions.insertMany(missing.map((doc) => ({ ...doc, userId, updatedAt: new Date() })), { ordered: false });
     } catch (error) {
       // Doppelte IDs (parallel wiederhergestellt) sind kein Fehler, alles andere schon
       if (!(error instanceof Error && "code" in error && error.code === 11000)) {

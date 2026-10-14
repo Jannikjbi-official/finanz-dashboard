@@ -10,6 +10,7 @@ import { FormDialog } from "@/components/forms/form-dialog";
 import { ImportDialog } from "@/components/forms/import-dialog";
 import { ImportList } from "@/components/finance/import-list";
 import { NotificationsPanel } from "@/components/settings/notifications-panel";
+import { RestoreRow } from "@/components/settings/restore-row";
 import { RulesPanel } from "@/components/settings/rules-panel";
 import { TrashPanel } from "@/components/finance/trash-panel";
 import { SecurityPanel } from "@/components/settings/security-panel";
@@ -18,7 +19,7 @@ import { PageHeader, Panel } from "@/components/ui/panel";
 import { useAction } from "@/lib/client/use-action";
 import { useTheme } from "@/lib/client/theme";
 import type { CategoryRule } from "@/lib/domain/rules";
-import type { Account, Category, ImportInfo, TrashEntry, TxType } from "@/lib/domain/types";
+import type { Account, Category, ImportInfo, SnapshotInfo, TrashEntry, TxType } from "@/lib/domain/types";
 import { deleteCategory, saveCategory, saveTimeZone } from "@/lib/server/actions/accounts";
 
 type CategoryRow = Category & { usage: number };
@@ -34,6 +35,7 @@ export function SettingsView({
   accounts,
   imports,
   trash,
+  snapshots,
   rules,
   notify,
   counts,
@@ -45,6 +47,7 @@ export function SettingsView({
   accounts: Account[];
   imports: ImportInfo[];
   trash: TrashEntry[];
+  snapshots: SnapshotInfo[];
   rules: CategoryRule[];
   notify: { webhook: string | null; due: boolean; monthly: boolean };
   counts: { transactions: number; recurring: number; accounts: number };
@@ -119,6 +122,7 @@ export function SettingsView({
                 <DownloadSimple className="size-4" /> JSON
               </a>
             </DataRow>
+            <RestoreRow snapshots={snapshots} />
           </div>
         </Panel>
 

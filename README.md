@@ -29,6 +29,16 @@ npm run dev                   # http://localhost:3000 → „Zugang einrichten�
 | `npm run db:migrate [-- --dry-run]` | Ausstehende Migrationen (sichert vorher automatisch) |
 | `npm run db:undo-import -- <datei.csv> [--apply]` | Alten CSV-Import anhand der Datei finden und löschen (Probelauf ohne `--apply`, sichert vorher) |
 
+## Daten sichern und zurückholen (in der App)
+
+- **Papierkorb** (Einstellungen → Papierkorb): Gelöschte Buchungen bleiben 30 Tage,
+  rückgängig gemachte Importe bis zum endgültigen Löschen. Nach jedem Löschen bietet
+  die Meldung „Rückgängig“ an.
+- **JSON-Sicherung** (Einstellungen → Daten): herunterladen und wieder einspielen.
+  Einspielen ersetzt alle eigenen Daten; der Stand davor wird automatisch gespeichert
+  (die letzten drei, Collection `user_snapshots`) und lässt sich mit „Zurückholen“
+  wiederherstellen. Höchstens 4 MB pro Datei.
+
 ## Umstieg von der Vorversion („Spielraum“)
 
 Die bestehenden Daten bleiben vollständig erhalten. Die neue Version liest alte

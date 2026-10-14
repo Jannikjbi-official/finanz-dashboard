@@ -46,6 +46,8 @@ beforeEach(async () => {
     db.imports.deleteMany({}),
     db.rules.deleteMany({}),
     db.importTrash.deleteMany({}),
+    db.wishes.deleteMany({}),
+    db.db.collection("user_snapshots").deleteMany({}),
     db.settings.deleteMany({}),
     db.db.collection("notifications").deleteMany({}),
     db.db.collection("rate_limits").deleteMany({}),
@@ -523,5 +525,82 @@ describe("Papierkorb und Mehrfachauswahl", () => {
     const [again] = await listTrash("user-a");
     expect(await tx.restoreFromTrash(again.id)).toMatchObject({ ok: false, error: expect.stringContaining("neu importiert") });
     expect(await db.transactions.countDocuments()).toBe(2);
+  });
+});
+
+describe("JSON-Sicherung wiederherstellen", () => {
+  async function exportJson() {
+    const { exportUserData } = await import("@/lib/server/user-data");
+    return JSON.stringify({ exportedAt: new Date().toISOString(), ...(await exportUserData(session.userId)) });
+  }
+
+  it("spielt die eigene Sicherung zurueck, sichert vorher und holt den alten Stand wieder", async () => {
+    const backup = await import("./backup");
+    const giro = await createAccount("Giro", "giro", "100");
+    await tx.saveTransaction({ type: "expense", status: "booked", amount: "10", date: "2026-10-01", title: "Lidl", accountId: giro });
+    await rec.saveRecurring({ type: "expense", title: "Streaming", amount: "9,99", interval: "monthly", nextDue: "2026-10-20", costType: "subscription", accountId: giro });
+    const json = await exportJson();
+
+    // Danach geaendert: Buchung geloescht, neue angelegt
+    await tx.deleteTransaction((await db.transactions.findOne({ title: "Lidl" }))!._id.toString());
+    await tx.saveTransaction({ type: "expense", status: "booked", amount: "5", date: "2026-10-02", title: "Kiosk", accountId: giro });
+
+    expect(await backup.restoreFromBackup(json)).toMatchObject({ ok: true, message: expect.stringContaining("1 Konten, 1 Buchungen, 1 regelmäßige Zahlungen") });
+    const restored = await load();
+    expect(restored.transactions.map((entry) => entry.title)).toEqual(["Lidl"]);
+    expect(restored.transactions[0].accountId).toBe(giro);
+    expect(restored.recurring[0]).toMatchObject({ title: "Streaming", accountId: giro });
+    const doc = await db.transactions.findOne({ title: "Lidl" });
+    expect(doc!.createdAt).toBeInstanceOf(Date);
+    expect(doc!.userId).toBe("user-a");
+
+    const { listSnapshots } = await import("@/lib/server/restore");
+    const [snapshot] = await listSnapshots("user-a");
+    expect(snapshot.counts).toMatchObject({ transactions: 1, accounts: 1 });
+    expect(await backup.restorePreviousState(snapshot.id)).toMatchObject({ ok: true });
+    expect((await load()).transactions.map((entry) => entry.title)).toEqual(["Kiosk"]);
+  });
+
+  it("lehnt kaputte Dateien und fremde IDs ab, uebernimmt nie fremde userIds", async () => {
+    const backup = await import("./backup");
+    expect(await backup.restoreFromBackup("kein json")).toMatchObject({ ok: false, error: "Die Datei ist kein gültiges JSON." });
+    expect(await backup.restoreFromBackup("{}")).toMatchObject({ ok: false });
+    expect(
+      await backup.restoreFromBackup(JSON.stringify({ accounts: [], transactions: [{ id: "x", type: "expense", amountCents: -5, date: "2026-10-01", title: "x" }] })),
+    ).toMatchObject({ ok: false, error: expect.stringContaining("Eintrag 1 in „transactions“") });
+
+    // Nutzer B hat eine Buchung; A versucht, sie mit einer praeparierten Sicherung zu ueberschreiben
+    session.userId = "user-b";
+    const giroB = await createAccount("Giro B", "giro", "0");
+    await tx.saveTransaction({ type: "income", status: "booked", amount: "50", date: "2026-10-01", title: "Gehalt B", accountId: giroB });
+    const foreign = (await db.transactions.findOne({ title: "Gehalt B" }))!._id.toString();
+    session.userId = "user-a";
+    const crafted = {
+      accounts: [],
+      transactions: [{ id: foreign, type: "expense", amountCents: 1, date: "2026-10-01", title: "Hack" }],
+    };
+    expect(await backup.restoreFromBackup(JSON.stringify(crafted))).toMatchObject({ ok: false, error: expect.stringContaining("anderen Zugang") });
+    expect(await db.transactions.findOne({ title: "Gehalt B" })).toMatchObject({ userId: "user-b" });
+
+    // Verschachtelte Papierkorb-Eintraege mit fremder userId werden beim Einspielen und Wiederherstellen zu eigenen
+    const trashed = {
+      accounts: [],
+      transactions: [],
+      import_trash: [
+        {
+          id: "aaaaaaaaaaaaaaaaaaaaaaaa",
+          kind: "transactions",
+          label: "x",
+          deletedAt: "2026-10-01T10:00:00.000Z",
+          docs: [{ _id: "bbbbbbbbbbbbbbbbbbbbbbbb", userId: "user-b", type: "income", status: "booked", amountCents: 1_000_00, date: "2026-10-01", title: "Fremd", note: null, categoryId: null, recurringId: null }],
+        },
+      ],
+    };
+    expect(await backup.restoreFromBackup(JSON.stringify(trashed))).toMatchObject({ ok: true });
+    const entry = await db.importTrash.findOne({ userId: "user-a" });
+    expect((entry!.docs as Array<{ userId: string }>)[0].userId).toBe("user-a");
+    expect(await tx.restoreFromTrash("aaaaaaaaaaaaaaaaaaaaaaaa")).toMatchObject({ ok: true });
+    expect(await db.transactions.findOne({ title: "Fremd" })).toMatchObject({ userId: "user-a" });
+    expect(await db.transactions.countDocuments({ userId: "user-b" })).toBe(1);
   });
 });
