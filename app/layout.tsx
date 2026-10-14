@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Schibsted_Grotesk } from "next/font/google";
+import { ServiceWorker } from "@/components/shell/service-worker";
 import "./globals.css";
 
 const sans = Schibsted_Grotesk({
@@ -13,9 +14,14 @@ export const metadata: Metadata = {
   title: { default: "Jannikjbi Finanzen", template: "%s · Jannikjbi Finanzen" },
   description: "Private Finanzverwaltung",
   robots: { index: false, follow: false },
+  applicationName: "Finanzen",
+  appleWebApp: { capable: true, title: "Finanzen", statusBarStyle: "black" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {
+  // Fuer die Safe-Area unten (Home-Leiste) in der installierten App
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: dark)", color: "#121514" },
     { media: "(prefers-color-scheme: light)", color: "#f7f7f4" },
@@ -34,7 +40,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <ServiceWorker />
+      </body>
     </html>
   );
 }

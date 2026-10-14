@@ -15,6 +15,9 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Alles ausser Anmeldung, Auth-API, Cron (eigene Pruefung per CRON_SECRET) und statischen Dateien
-  matcher: ["/((?!anmelden|registrieren|api/auth|api/cron|_next/static|_next/image|icon.svg|favicon.ico).*)"],
+  // Alles ausser Anmeldung, Auth-API, Cron (eigene Pruefung per CRON_SECRET) und
+  // oeffentlichen Dateien der App (Manifest, Service Worker, Icons, Offline-Seite)
+  matcher: [
+    "/((?!anmelden|registrieren|api/auth|api/cron|_next/static|_next/image|icon.svg|favicon.ico|manifest.webmanifest|sw.js|offline.html|icons/).*)",
+  ],
 };
