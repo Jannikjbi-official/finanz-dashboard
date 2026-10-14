@@ -44,6 +44,7 @@ beforeEach(async () => {
     db.recurring.deleteMany({}),
     db.categories.deleteMany({}),
     db.imports.deleteMany({}),
+    db.rules.deleteMany({}),
     db.db.collection("rate_limits").deleteMany({}),
   ]);
 });
@@ -279,5 +280,45 @@ describe("Regelmaessige Zahlungen mit Buchungen abgleichen (#17)", () => {
     expect(await match.linkRecurringPayment({ recurringId: waisen, due: "2026-09-30", transactionId: id })).toMatchObject({ ok: false });
     expect(await match.findLinkCandidates(waisen, "2026-09-30")).toEqual([]);
     expect((await db.recurring.findOne({ title: "Waisenrente" }))!.nextDue).toBe("2026-09-30");
+  });
+});
+
+describe("Kategorisierungsregeln (#22)", () => {
+  async function food() {
+    expect(await acc.saveCategory({ name: "Lebensmittel", kind: "expense", color: "#a39462" })).toMatchObject({ ok: true });
+    return (await db.categories.findOne({ name: "Lebensmittel" }))!._id.toString();
+  }
+
+  it("ordnet neue Buchungen und Importe zu, vorhandene auf Knopfdruck", async () => {
+    const giro = await createAccount("Giro", "giro", "0");
+    const categoryId = await food();
+    await tx.saveTransaction({ type: "expense", status: "booked", amount: "9", date: "2026-10-01", title: "LIDL alt", accountId: giro });
+    const rules = await import("./rules");
+    expect(await rules.saveRule({ match: "lidl", categoryId, kind: "expense" })).toMatchObject({ ok: true });
+
+    await tx.saveTransaction({ type: "expense", status: "booked", amount: "12,50", date: "2026-10-02", title: "Lidl Wilhelmshavener", accountId: giro });
+    expect(await db.transactions.findOne({ title: "Lidl Wilhelmshavener" })).toMatchObject({ categoryId });
+
+    const { importTransactions } = await import("./import");
+    await importTransactions({ accountId: giro, rows: [{ date: "2026-10-03", title: "Lidl Filiale", amountCents: 5_00, type: "expense", category: null, note: null }] });
+    expect(await db.transactions.findOne({ title: "Lidl Filiale" })).toMatchObject({ categoryId });
+
+    expect(await rules.countRuleMatches()).toBe(1);
+    expect(await rules.applyRulesToExisting()).toMatchObject({ ok: true });
+    expect(await db.transactions.findOne({ title: "LIDL alt" })).toMatchObject({ categoryId });
+  });
+
+  it("legt aus einer Buchung eine Regel an; fremde Kategorien sind tabu", async () => {
+    const giro = await createAccount("Giro", "giro", "0");
+    const categoryId = await food();
+    await tx.saveTransaction({ type: "expense", status: "booked", amount: "3", date: "2026-10-01", title: "Bäcker", categoryId, accountId: giro });
+    await tx.saveTransaction({ type: "expense", status: "booked", amount: "4", date: "2026-10-02", title: "Bäcker", accountId: giro });
+    const rules = await import("./rules");
+    const id = (await db.transactions.findOne({ categoryId }))!._id.toString();
+    expect(await rules.ruleFromTransaction(id)).toMatchObject({ ok: true });
+    expect(await db.transactions.countDocuments({ title: "Bäcker", categoryId })).toBe(2);
+
+    session.userId = "user-b";
+    expect(await rules.saveRule({ match: "x", categoryId, kind: null })).toMatchObject({ ok: false });
   });
 });

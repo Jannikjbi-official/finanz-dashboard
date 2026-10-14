@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { isISODate } from "../../domain/calendar";
 import { duplicateKey, MAX_IMPORT_ROWS } from "../../import";
+import { categorize } from "../../domain/rules";
+import { loadRules } from "../data";
 import { LEGACY_PREFIX, legacyFilter, parseLegacyId } from "../import-undo";
 import { linkSureMatches, reopenLinkedDues } from "../recurring-link";
 import { accounts, categories, ensureIndexes, imports, toObjectId, transactions, wishes, type TransactionDoc } from "../db";
@@ -145,10 +147,12 @@ export async function importTransactions(input: ImportInput): Promise<ImportResu
       }
     }
   }
-  const categoryId = (name: string | null, kind: "income" | "expense") => {
-    if (!name) return null;
-    const match = known.find((doc) => doc.kind === kind && doc.name.toLowerCase() === name.toLowerCase());
-    return match ? match._id.toString() : null;
+  // Kategorie aus der Datei, sonst aus den Kategorisierungsregeln
+  const ruleList = await loadRules(auth.userId);
+  const categoryId = (name: string | null, kind: "income" | "expense", row?: { title: string; note: string | null; accountId: string }) => {
+    const match = name ? known.find((doc) => doc.kind === kind && doc.name.toLowerCase() === name.toLowerCase()) : null;
+    if (match) return match._id.toString();
+    return row ? categorize({ title: row.title, note: row.note, type: kind, accountId: row.accountId }, ruleList) : null;
   };
 
   const now = new Date();
@@ -193,7 +197,7 @@ export async function importTransactions(input: ImportInput): Promise<ImportResu
       // Vorgemerkt und geplant veraendern den Kontostand noch nicht
       status: row.status === "booked" ? "booked" : "pending",
       bankPending: row.status === "pending",
-      categoryId: categoryId(row.category, row.type),
+      categoryId: categoryId(row.category, row.type, { title: row.title, note: row.note, accountId: rowAccount }),
       accountId: rowAccount,
       transferGroupId: null,
       importHash,

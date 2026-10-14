@@ -8,11 +8,13 @@ import { SelectInput, TextInput } from "@/components/forms/fields";
 import { FormDialog } from "@/components/forms/form-dialog";
 import { ImportDialog } from "@/components/forms/import-dialog";
 import { ImportList } from "@/components/finance/import-list";
+import { RulesPanel } from "@/components/settings/rules-panel";
 import { SecurityPanel } from "@/components/settings/security-panel";
 import { SignOutButton } from "@/components/shell/app-shell";
 import { PageHeader, Panel } from "@/components/ui/panel";
 import { useAction } from "@/lib/client/use-action";
 import { useTheme } from "@/lib/client/theme";
+import type { CategoryRule } from "@/lib/domain/rules";
 import type { Account, Category, ImportInfo, TxType } from "@/lib/domain/types";
 import { deleteCategory, saveCategory, saveTimeZone } from "@/lib/server/actions/accounts";
 
@@ -28,6 +30,7 @@ export function SettingsView({
   categories,
   accounts,
   imports,
+  rules,
   counts,
 }: {
   user: { name: string; email: string };
@@ -36,6 +39,7 @@ export function SettingsView({
   categories: CategoryRow[];
   accounts: Account[];
   imports: ImportInfo[];
+  rules: CategoryRule[];
   counts: { transactions: number; recurring: number; accounts: number };
 }) {
   const { theme, setTheme } = useTheme();
@@ -141,6 +145,8 @@ export function SettingsView({
             </div>
           ))}
         </Panel>
+
+        <RulesPanel rules={rules} categories={categories} />
 
         <Panel title="So wird gerechnet" className="lg:col-span-2">
           <dl className="grid grid-cols-1 gap-x-8 gap-y-3 text-[13px] md:grid-cols-2">

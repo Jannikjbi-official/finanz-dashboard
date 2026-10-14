@@ -3,8 +3,9 @@ import { cache } from "react";
 import type { WithId } from "mongodb";
 import { todayIn } from "../domain/calendar";
 import type { Account, Category, ImportInfo, Recurring, Transaction, Wish } from "../domain/types";
-import { toAccount, toCategory, toImportInfo, toRecurring, toTransaction, toWish } from "./convert";
-import { accounts, categories, db, ensureIndexes, imports, recurring, transactions, wishes, type TransactionDoc } from "./db";
+import type { CategoryRule } from "../domain/rules";
+import { toAccount, toCategory, toImportInfo, toRecurring, toRule, toTransaction, toWish } from "./convert";
+import { accounts, categories, db, ensureIndexes, imports, recurring, rules, transactions, wishes, type TransactionDoc } from "./db";
 import { LEGACY_PREFIX, listLegacyImports } from "./import-undo";
 import { getSettings } from "./user-data";
 
@@ -85,4 +86,10 @@ export async function loadImports(userId: string, kind: ImportInfo["kind"], limi
     });
   }
   return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+}
+
+/** Kategorisierungsregeln in ihrer Reihenfolge. */
+export async function loadRules(userId: string): Promise<CategoryRule[]> {
+  const docs = await rules.find({ userId }).sort({ order: 1, createdAt: 1 }).toArray();
+  return docs.map(toRule);
 }

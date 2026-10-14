@@ -3,7 +3,8 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { reopenDue } from "../../domain/recurring";
-import { toRecurring } from "../data";
+import { categorize } from "../../domain/rules";
+import { loadRules, toRecurring } from "../data";
 import { accounts, ensureIndexes, recurring, toObjectId, transactions, type TransactionDoc } from "../db";
 import { getSettings } from "../user-data";
 import { todayIn } from "../../domain/calendar";
@@ -72,6 +73,10 @@ export async function saveTransaction(input: TransactionInput): Promise<ActionRe
     return ok("Änderungen gespeichert");
   }
 
+  // Ohne Kategorie: Kategorisierungsregeln fragen
+  if (!fields.categoryId) {
+    fields.categoryId = categorize({ title: fields.title, note: fields.note, type: fields.type, accountId: fields.accountId }, await loadRules(auth.userId));
+  }
   await transactions.insertOne({
     ...fields,
     userId: auth.userId,

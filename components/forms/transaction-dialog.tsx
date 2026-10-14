@@ -6,6 +6,7 @@ import { formatAmountInput, formatDate } from "@/lib/format";
 import { useAction } from "@/lib/client/use-action";
 import type { Account, Category, Transaction, TxStatus, TxType } from "@/lib/domain/types";
 import { unlinkRecurringPayment } from "@/lib/server/actions/matching";
+import { ruleFromTransaction } from "@/lib/server/actions/rules";
 import { deleteTransaction, saveTransaction, saveTransfer } from "@/lib/server/actions/transactions";
 import { ConfirmDialog } from "./confirm-dialog";
 import { DateInput, MoneyInput, NoteInput, SelectInput, TextInput } from "./fields";
@@ -197,6 +198,14 @@ export function TransactionDialog({
           </>
         )}
         <NoteInput value={note} onChange={setNote} />
+        {transaction && !transaction.transferGroupId && transaction.categoryId && transaction.categoryId === categoryId && (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="label font-normal">Künftige Buchungen mit „{transaction.title}“ automatisch so einordnen?</p>
+            <Button size="sm" variant="ghost" isPending={pending} onPress={() => run(() => ruleFromTransaction(transaction.id))}>
+              Immer so kategorisieren
+            </Button>
+          </div>
+        )}
         {transaction?.recurringId && (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="label font-normal">

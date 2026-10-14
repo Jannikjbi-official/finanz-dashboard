@@ -148,6 +148,17 @@ export type WishDoc = {
   updatedAt?: Date;
 };
 
+/** Regel fuer die automatische Kategorisierung (lib/domain/rules.ts). */
+export type RuleDoc = {
+  userId: string;
+  match: string;
+  categoryId: string;
+  kind: TxType | null;
+  accountId: string | null;
+  order: number;
+  createdAt: Date;
+};
+
 /** Ein CSV-Import. Alle Datensaetze daraus tragen die importId. */
 export type ImportDoc = {
   _id: string;
@@ -186,6 +197,7 @@ export const settings = db.collection<SettingsDoc>("user_settings");
 export const planned = db.collection<LegacyPlannedDoc>("planned");
 export const wishes = db.collection<WishDoc>("wishes");
 export const imports = db.collection<ImportDoc>("imports");
+export const rules = db.collection<RuleDoc>("rules");
 
 /**
  * Alle Collections mit Finanzdaten eines Nutzers - auch die nicht mehr
@@ -198,6 +210,7 @@ export const USER_DATA_COLLECTIONS = [
   "recurring",
   "wishes",
   "imports",
+  "rules",
   "planned",
   "goals",
   "refunds",
@@ -216,6 +229,7 @@ export function ensureIndexes(): Promise<void> {
       transactions.createIndex({ userId: 1, importId: 1 }, { partialFilterExpression: { importId: { $type: "string" } } }),
       wishes.createIndex({ userId: 1, status: 1 }),
       imports.createIndex({ userId: 1, createdAt: -1 }),
+      rules.createIndex({ userId: 1, order: 1 }),
       transactions.createIndex(
         { userId: 1, legacyPlannedId: 1 },
         { unique: true, partialFilterExpression: { legacyPlannedId: { $type: "string" } } },
