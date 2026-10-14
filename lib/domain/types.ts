@@ -66,6 +66,8 @@ export type Transaction = {
   importId?: string | null;
   /** Teil einer Aufteilung (ID der urspruenglichen Buchung). */
   splitGroupId?: string | null;
+  /** Anzahl angehaengter Belege. */
+  receiptCount?: number;
 };
 
 export type RecurringStatus = "active" | "paused" | "cancelled" | "archived";

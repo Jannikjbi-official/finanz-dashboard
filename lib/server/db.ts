@@ -1,4 +1,4 @@
-import { MongoClient, ObjectId, type Db } from "mongodb";
+import { MongoClient, ObjectId, type Binary, type Db } from "mongodb";
 import type {
   AccountKind,
   CostType,
@@ -89,6 +89,8 @@ export type TransactionDoc = {
   wishId?: string | null;
   /** Herkunft aus der frueheren Collection "planned" (Migration 005). */
   legacyPlannedId?: string | null;
+  /** Anzahl angehaengter Belege (Collection "receipts"). */
+  receiptCount?: number;
   /** Teil einer Aufteilung: ID der urspruenglichen Buchung (die selbst Teil 1 ist). */
   splitGroupId?: string | null;
   /** Nur Teil 1: die Werte vor dem Aufteilen, fuer "Aufteilung aufheben". */
@@ -187,6 +189,19 @@ export type TemplateDoc = {
   createdAt: Date;
 };
 
+export type ReceiptType = "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
+
+/** Beleg zu einer Buchung (lib/server/receipts.ts). */
+export type ReceiptDoc = {
+  userId: string;
+  transactionId: string;
+  fileName: string;
+  contentType: ReceiptType;
+  size: number;
+  data: Binary;
+  createdAt: Date;
+};
+
 /** Ein CSV-Import. Alle Datensaetze daraus tragen die importId. */
 export type ImportDoc = {
   _id: string;
@@ -227,6 +242,7 @@ export const wishes = db.collection<WishDoc>("wishes");
 export const imports = db.collection<ImportDoc>("imports");
 export const rules = db.collection<RuleDoc>("rules");
 export const templates = db.collection<TemplateDoc>("templates");
+export const receipts = db.collection<ReceiptDoc>("receipts");
 /**
  * Papierkorb: Kopie aller geloeschten Buchungen - aus "Loeschen" und aus
  * "Import rueckgaengig". Ein Eintrag je Vorgang, wiederherstellbar. Die
@@ -280,6 +296,7 @@ export function ensureIndexes(): Promise<void> {
       imports.createIndex({ userId: 1, createdAt: -1 }),
       rules.createIndex({ userId: 1, order: 1 }),
       templates.createIndex({ userId: 1, title: 1 }),
+      receipts.createIndex({ userId: 1, transactionId: 1 }),
       transactions.createIndex(
         { userId: 1, legacyPlannedId: 1 },
         { unique: true, partialFilterExpression: { legacyPlannedId: { $type: "string" } } },

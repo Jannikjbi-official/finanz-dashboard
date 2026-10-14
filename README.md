@@ -38,6 +38,9 @@ npm run dev                   # http://localhost:3000 → „Zugang einrichten�
   Einspielen ersetzt alle eigenen Daten; der Stand davor wird automatisch gespeichert
   (die letzten drei, Collection `user_snapshots`) und lässt sich mit „Zurückholen“
   wiederherstellen. Höchstens 4 MB pro Datei.
+- **Belege** (Foto oder PDF, bis 2 MB, Fotos werden im Browser verkleinert) liegen in der
+  Collection `receipts` und sind **nicht** Teil der JSON-Sicherung; `npm run db:backup`
+  sichert sie mit. Belege endgültig gelöschter Buchungen räumt der tägliche Cron auf.
 
 ## Umstieg von der Vorversion („Spielraum“)
 

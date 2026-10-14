@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowsLeftRight, CalendarBlank, CheckSquare, DownloadSimple, Trash, UploadSimple } from "@phosphor-icons/react";
+import { ArrowsLeftRight, CalendarBlank, CheckSquare, DownloadSimple, Paperclip, Trash, UploadSimple } from "@phosphor-icons/react";
 import { Button, Checkbox, Dropdown, Label, SearchField, Table, ToggleButton, ToggleButtonGroup, type Key, type Selection, type SortDescriptor } from "@heroui/react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -542,7 +542,10 @@ export function TransactionsView({
                     <Table.Cell className="whitespace-nowrap text-muted">{formatDate(row.date)}</Table.Cell>
                     <Table.Cell>
                       <div className="min-w-0">
-                        <div className="truncate font-medium">{row.title}</div>
+                        <div className="flex items-center gap-1.5 truncate font-medium">
+                          <span className="truncate">{row.title}</span>
+                          {(row.tx.receiptCount ?? 0) > 0 && <Paperclip className="size-3.5 shrink-0 text-muted" aria-label={`${row.tx.receiptCount} Beleg(e)`} />}
+                        </div>
                         <div className="label truncate font-normal">{meta}</div>
                       </div>
                     </Table.Cell>

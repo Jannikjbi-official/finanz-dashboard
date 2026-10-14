@@ -1,6 +1,7 @@
 "use client";
 
-import { Button, Label, ToggleButton, ToggleButtonGroup, type Key } from "@heroui/react";
+import { CaretDown } from "@phosphor-icons/react";
+import { Button, Dropdown, Label, ToggleButton, ToggleButtonGroup, type Key } from "@heroui/react";
 import { useState } from "react";
 import { formatAmountInput, formatDate } from "@/lib/format";
 import { useAction } from "@/lib/client/use-action";
@@ -13,6 +14,7 @@ import { useQuickAdd } from "@/components/shell/quick-add";
 import { ConfirmDialog } from "./confirm-dialog";
 import { DateInput, MoneyInput, NoteInput, SelectInput, TextInput } from "./fields";
 import { FormDialog } from "./form-dialog";
+import { ReceiptsField } from "./receipts-field";
 import { SplitDialog } from "./split-dialog";
 
 export type DialogKind = TxType | "transfer";
@@ -130,7 +132,6 @@ export function TransactionDialog({
     setNote(template.note ?? "");
   };
   const templates = lookups.templates ?? [];
-  const canSaveTemplate = !isEdit || !transaction?.transferGroupId;
 
   const accountOptions = accounts.map((account) => ({ id: account.id, label: account.name + (account.archived ? " (archiviert)" : "") }));
   const title_ = isEdit
@@ -158,36 +159,40 @@ export function TransactionDialog({
         onSubmit={submit}
         extraActions={
           isEdit ? (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex items-center gap-1.5">
               <Button variant="danger-soft" size="sm" onPress={() => setConfirmDelete(true)}>
                 Löschen
               </Button>
               {transaction && !transaction.transferGroupId && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onPress={() => {
-                    onOpenChange(false);
-                    openTransaction(transaction.type, null, { duplicateOf: transaction });
-                  }}
-                >
-                  Duplizieren
-                </Button>
-              )}
-              {transaction && !transaction.transferGroupId && !transaction.recurringId && !transaction.splitGroupId && (
-                <Button variant="ghost" size="sm" onPress={() => setSplitting(true)}>
-                  Aufteilen
-                </Button>
-              )}
-              {canSaveTemplate && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  isPending={pending}
-                  onPress={() => run(() => saveTemplate({ type, title, amount, categoryId, accountId, note }))}
-                >
-                  Als Vorlage
-                </Button>
+                <Dropdown>
+                  <Button variant="ghost" size="sm" aria-label="Weitere Aktionen">
+                    Mehr <CaretDown className="size-3.5" />
+                  </Button>
+                  <Dropdown.Popover placement="top start">
+                    <Dropdown.Menu
+                      aria-label="Weitere Aktionen"
+                      disabledKeys={transaction.recurringId || transaction.splitGroupId ? ["split"] : []}
+                      onAction={(key) => {
+                        if (key === "duplicate") {
+                          onOpenChange(false);
+                          openTransaction(transaction.type, null, { duplicateOf: transaction });
+                        }
+                        if (key === "split") setSplitting(true);
+                        if (key === "template") void run(() => saveTemplate({ type, title, amount, categoryId, accountId, note }));
+                      }}
+                    >
+                      <Dropdown.Item id="duplicate" textValue="Duplizieren">
+                        <Label>Duplizieren</Label>
+                      </Dropdown.Item>
+                      <Dropdown.Item id="split" textValue="Aufteilen">
+                        <Label>Aufteilen</Label>
+                      </Dropdown.Item>
+                      <Dropdown.Item id="template" textValue="Als Vorlage speichern">
+                        <Label>Als Vorlage speichern</Label>
+                      </Dropdown.Item>
+                    </Dropdown.Menu>
+                  </Dropdown.Popover>
+                </Dropdown>
               )}
             </div>
           ) : kind !== "transfer" ? (
@@ -283,6 +288,7 @@ export function TransactionDialog({
           </>
         )}
         <NoteInput value={note} onChange={setNote} />
+        {transaction && !transaction.transferGroupId && <ReceiptsField transactionId={transaction.id} />}
         {transaction && !transaction.transferGroupId && transaction.categoryId && transaction.categoryId === categoryId && (
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="label font-normal">Künftige Buchungen mit „{transaction.title}“ automatisch so einordnen?</p>

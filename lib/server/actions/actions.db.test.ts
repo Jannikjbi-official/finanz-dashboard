@@ -48,6 +48,7 @@ beforeEach(async () => {
     db.importTrash.deleteMany({}),
     db.wishes.deleteMany({}),
     db.templates.deleteMany({}),
+    db.receipts.deleteMany({}),
     db.db.collection("user_snapshots").deleteMany({}),
     db.settings.deleteMany({}),
     db.db.collection("notifications").deleteMany({}),
@@ -659,5 +660,53 @@ describe("Aufteilen", () => {
     expect(merged).toHaveLength(1);
     expect(merged[0]).toMatchObject({ _id: original._id, amountCents: 30_00, categoryId: null, splitGroupId: null });
     expect(await db.transactions.countDocuments()).toBe(1);
+  });
+});
+
+describe("Belege", () => {
+  const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
+  const form = (transactionId: string, bytes: Uint8Array<ArrayBuffer>, name = "kassenbon.jpg") => {
+    const data = new FormData();
+    data.set("transactionId", transactionId);
+    data.set("file", new File([bytes], name, { type: "image/jpeg" }));
+    return data;
+  };
+
+  it("haengt an, prueft Typ und Groesse, liefert nur dem Eigentuemer, raeumt verwaiste auf", async () => {
+    const receipts = await import("./receipts");
+    const store = await import("@/lib/server/receipts");
+    const giro = await createAccount("Giro", "giro", "0");
+    await tx.saveTransaction({ type: "expense", status: "booked", amount: "12,50", date: "2026-10-10", title: "Lidl", accountId: giro });
+    const id = (await db.transactions.findOne({ title: "Lidl" }))!._id.toString();
+
+    expect(await receipts.uploadReceipt(form(id, jpeg))).toMatchObject({ ok: true });
+    expect(await receipts.uploadReceipt(form(id, new Uint8Array(new TextEncoder().encode("<script>alert(1)</script>")), "x.jpg"))).toMatchObject({ ok: false, error: expect.stringContaining("Nur Fotos") });
+    expect(await receipts.uploadReceipt(form(id, new Uint8Array(2 * 1024 * 1024 + 1)))).toMatchObject({ ok: false, error: expect.stringContaining("zu groß") });
+    const list = await receipts.getReceipts(id);
+    expect(list).toEqual([expect.objectContaining({ fileName: "kassenbon.jpg", contentType: "image/jpeg", size: 8 })]);
+    expect((await load()).transactions[0].receiptCount).toBe(1);
+
+    // Hoechstens 5, auch bei parallelen Uploads
+    await Promise.all(Array.from({ length: 6 }, () => receipts.uploadReceipt(form(id, jpeg))));
+    expect(await db.receipts.countDocuments({ transactionId: id })).toBe(5);
+    expect((await db.transactions.findOne({ title: "Lidl" }))!.receiptCount).toBe(5);
+
+    session.userId = "user-b";
+    expect(await receipts.getReceipts(id)).toEqual([]);
+    expect(await receipts.uploadReceipt(form(id, jpeg))).toMatchObject({ ok: false, error: "Buchung nicht gefunden" });
+    expect(await receipts.removeReceipt(list[0].id)).toMatchObject({ ok: false });
+    expect(await store.getReceipt("user-b", list[0].id)).toBeNull();
+    session.userId = "user-a";
+    expect((await store.getReceipt("user-a", list[0].id))!.data.buffer.byteLength).toBe(8);
+
+    expect(await receipts.removeReceipt(list[0].id)).toMatchObject({ ok: true });
+    expect((await db.transactions.findOne({ title: "Lidl" }))!.receiptCount).toBe(4);
+
+    // Im Papierkorb bleiben die Belege, nach endgueltigem Loeschen werden sie aufgeraeumt
+    await tx.deleteTransaction(id);
+    expect(await store.cleanupReceipts()).toBe(0);
+    await tx.purgeFromTrash();
+    expect(await store.cleanupReceipts()).toBe(4);
+    expect(await db.receipts.countDocuments()).toBe(0);
   });
 });

@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { runAutoBooking } from "@/lib/server/auto-book";
 import { runNotifications } from "@/lib/server/notify";
+import { cleanupReceipts } from "@/lib/server/receipts";
 
 export const dynamic = "force-dynamic";
 
@@ -20,5 +21,7 @@ export async function GET(request: Request) {
   const result = await runAutoBooking();
   // Nach dem Buchen: nur noch wirklich Offenes melden
   const notifications = await runNotifications().catch(() => 0);
-  return NextResponse.json({ ...result, notifications });
+  // Belege endgueltig geloeschter Buchungen entfernen
+  const receipts = await cleanupReceipts().catch(() => 0);
+  return NextResponse.json({ ...result, notifications, receipts });
 }

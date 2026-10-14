@@ -44,6 +44,7 @@ export function toTransaction(doc: WithId<TransactionDoc>): Transaction {
     dismissedRecurring: doc.dismissedRecurring ?? [],
     importId: doc.importId ?? null,
     splitGroupId: doc.splitGroupId ?? null,
+    receiptCount: doc.receiptCount ?? 0,
   };
 }
 
