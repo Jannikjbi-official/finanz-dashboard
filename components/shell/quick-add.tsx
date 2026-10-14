@@ -5,18 +5,29 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import { AccountDialog } from "@/components/forms/account-dialog";
 import { RecurringDialog } from "@/components/forms/recurring-dialog";
 import { TransactionDialog, type DialogKind, type Lookups } from "@/components/forms/transaction-dialog";
-import type { Account, CostType, Recurring, Transaction, TxType } from "@/lib/domain/types";
+import type { Account, CostType, Interval, Recurring, Transaction, TxType } from "@/lib/domain/types";
+
+/** Vorbelegung fuer neue regelmaessige Zahlungen (z. B. aus einer erkannten Zahlung). */
+export type RecurringDefaults = {
+  type?: TxType;
+  costType?: CostType;
+  title?: string;
+  amountCents?: number;
+  interval?: Interval;
+  nextDue?: string;
+  accountId?: string | null;
+};
 
 type DialogState =
   | { kind: "transaction"; initialKind: DialogKind; transaction: Transaction | null; key: number }
-  | { kind: "recurring"; entry: Recurring | null; defaults?: { type?: TxType; costType?: CostType }; key: number }
+  | { kind: "recurring"; entry: Recurring | null; defaults?: RecurringDefaults; key: number }
   | { kind: "account"; account: Account | null; key: number }
   | null;
 
 type QuickAdd = {
   lookups: Lookups;
   openTransaction: (initialKind?: DialogKind, transaction?: Transaction | null) => void;
-  openRecurring: (entry?: Recurring | null, defaults?: { type?: TxType; costType?: CostType }) => void;
+  openRecurring: (entry?: Recurring | null, defaults?: RecurringDefaults) => void;
   openAccount: (account?: Account | null) => void;
 };
 

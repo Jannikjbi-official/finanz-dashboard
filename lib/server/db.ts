@@ -127,6 +127,12 @@ export type SettingsDoc = {
   timeZone: string;
   createdAt: Date;
   updatedAt: Date;
+  /** Discord-Benachrichtigungen (siehe lib/server/notify.ts). */
+  discordWebhookUrl?: string;
+  notifyDue?: boolean;
+  notifyMonthly?: boolean;
+  /** Abgelehnte Vorschlaege "regelmaessige Zahlung erkannt". */
+  dismissedRecurringSuggestions?: string[];
   /** Weitere Altfelder bleiben unangetastet. */
   [legacy: string]: unknown;
 };

@@ -5,7 +5,8 @@ import { addDays } from "../../domain/calendar";
 import { scoreMatch } from "../../domain/matching";
 import { reopenDue } from "../../domain/recurring";
 import { toRecurring, toTransaction } from "../convert";
-import { recurring, toObjectId, transactions } from "../db";
+import type { UpdateFilter } from "mongodb";
+import { recurring, settings, toObjectId, transactions, type SettingsDoc } from "../db";
 import { linkPayment, linkSureMatches } from "../recurring-link";
 import { authorize, fail, firstIssue, isoDate, ok, refresh, type ActionResult } from "./shared";
 
@@ -132,4 +133,16 @@ export async function resolveAmountChange(input: { recurringId: string; accept: 
   await recurring.updateOne({ _id: toObjectId(entry.id)!, userId: auth.userId }, { $set: { ...set, updatedAt: new Date() } });
   refresh();
   return ok(input.accept ? `Betrag auf ${(latest / 100).toFixed(2).replace(".", ",")} € geändert` : "Betrag bleibt unverändert");
+}
+
+/** Vorschlag "regelmaessige Zahlung erkannt" nicht mehr zeigen. */
+export async function dismissRecurringSuggestion(key: string): Promise<ActionResult> {
+  const auth = await authorize();
+  if ("error" in auth) return auth.error;
+  if (typeof key !== "string" || !/^(income|expense):[a-zäöüß ]{1,120}$/.test(key)) return fail("Vorschlag nicht gefunden");
+  // $addToSet kennt die Typen wegen der Altfelder-Signatur von SettingsDoc nicht
+  const update = { $addToSet: { dismissedRecurringSuggestions: key } } as unknown as UpdateFilter<SettingsDoc>;
+  await settings.updateOne({ _id: auth.userId }, update, { upsert: true });
+  refresh();
+  return ok("Wird nicht mehr vorgeschlagen");
 }

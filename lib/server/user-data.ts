@@ -22,6 +22,12 @@ export async function getSettings(userId: string): Promise<{ timeZone: string }>
   return { timeZone: typeof doc?.timeZone === "string" ? doc.timeZone : DEFAULT_TIME_ZONE };
 }
 
+/** Abgelehnte Vorschlaege "regelmaessige Zahlung erkannt" (siehe recurring-detect.ts). */
+export async function getDismissedSuggestions(userId: string): Promise<string[]> {
+  const doc = await settings.findOne({ _id: userId }, { projection: { dismissedRecurringSuggestions: 1 } });
+  return Array.isArray(doc?.dismissedRecurringSuggestions) ? (doc.dismissedRecurringSuggestions as string[]) : [];
+}
+
 /** Einstellungen und Grundkategorien fuer neue Nutzer. Idempotent. */
 export async function ensureUserSetup(userId: string) {
   await ensureIndexes();
