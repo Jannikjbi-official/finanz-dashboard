@@ -1,4 +1,4 @@
-import { addDays, monthEnd, monthOf, shiftMonth, type ISODate } from "./calendar";
+import { addDays, daysBetween, monthEnd, monthOf, shiftMonth, type ISODate } from "./calendar";
 import { fixedCostSummary, subscriptionSummary } from "./commitments";
 import { dataStart, monthSummary, monthlyHistory, partialFrom, spendingBaseline } from "./ledger";
 import { amountChanges } from "./amount-changes";
@@ -63,6 +63,16 @@ export function buildDashboard(input: { accounts: Account[]; transactions: Trans
     previousEmpty: start === null || start > monthEnd(previous.month),
     baseline,
     savings: savingsEstimate({ current, availability: avail, baseline }),
+    /**
+     * Prognose abzueglich geschaetzter variabler Ausgaben fuer die restlichen
+     * Tage (Durchschnitt vollstaendiger Monate) - null ohne solchen Monat.
+     */
+    variableForecast: baseline
+      ? (() => {
+          const reserve = Math.round(baseline.variablePerDay * daysBetween(today, avail.monthEnd));
+          return { reserve, projected: avail.projectedMonthEnd - reserve };
+        })()
+      : null,
     subscriptions,
     subscriptionShare,
     shareBase,

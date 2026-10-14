@@ -29,10 +29,10 @@ export const viewport: Viewport = {
 };
 
 /**
- * Dunkel ist Standard. Wer hell gewaehlt hat, bekommt es vor dem ersten
- * Zeichnen, damit nichts aufblitzt.
+ * Dunkel ist Standard. Wer hell oder "System" gewaehlt hat, bekommt es vor
+ * dem ersten Zeichnen, damit nichts aufblitzt.
  */
-const THEME_SCRIPT = `try{if(localStorage.getItem("theme")==="light"){var d=document.documentElement;d.classList.remove("dark");d.classList.add("light");d.dataset.theme="light"}}catch(e){}`;
+const THEME_SCRIPT = `try{var t=localStorage.getItem("theme");if(t==="system")t=matchMedia("(prefers-color-scheme: light)").matches?"light":"dark";if(t==="light"){var d=document.documentElement;d.classList.remove("dark");d.classList.add("light");d.dataset.theme="light"}}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

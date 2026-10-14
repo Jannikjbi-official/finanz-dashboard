@@ -45,7 +45,7 @@ export function SettingsView({
   notify: { webhook: string | null; due: boolean; monthly: boolean };
   counts: { transactions: number; recurring: number; accounts: number };
 }) {
-  const { theme, setTheme } = useTheme();
+  const { preference, setPreference } = useTheme();
   const { run, pending } = useAction();
   const [zone, setZone] = useState(timeZone);
   const [editing, setEditing] = useState<{ category: CategoryRow | null; kind: TxType } | null>(null);
@@ -65,14 +65,15 @@ export function SettingsView({
               <ToggleButtonGroup
                 selectionMode="single"
                 disallowEmptySelection
-                selectedKeys={new Set<Key>([theme])}
-                onSelectionChange={(keys) => setTheme(String([...keys][0]) as "dark" | "light")}
+                selectedKeys={new Set<Key>([preference])}
+                onSelectionChange={(keys) => setPreference(String([...keys][0]) as "dark" | "light" | "system")}
                 size="sm"
                 aria-label="Farbschema"
                 className="w-fit"
               >
                 <ToggleButton id="dark">Dunkel</ToggleButton>
                 <ToggleButton id="light">Hell</ToggleButton>
+                <ToggleButton id="system">Wie Gerät</ToggleButton>
               </ToggleButtonGroup>
               <span className="label font-normal">Wird in diesem Browser gespeichert.</span>
             </div>

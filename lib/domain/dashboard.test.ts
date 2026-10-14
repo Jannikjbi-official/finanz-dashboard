@@ -103,4 +103,15 @@ describe("Startseite", () => {
     expect(dashboard.availability.startsNegative).toBe(true);
     expect(dashboard.availability.dip).toBeNull();
   });
+
+  it("zieht von der Prognose geschaetzte variable Ausgaben ab, wenn es einen vollen Monat gibt", () => {
+    const spent: Transaction = {
+      id: "sep", type: "expense", status: "booked", amountCents: 300_00, date: "2026-09-01", title: "Einkauf", note: null,
+      categoryId: null, accountId: "giro", transferGroupId: null, recurringId: null, recurringDue: null,
+    };
+    const dashboard = buildDashboard({ accounts: [giro], transactions: [spent], recurring: [], today: "2026-10-21" });
+    // 300 € in 30 Tagen = 10 €/Tag, 10 Resttage
+    expect(dashboard.variableForecast).toEqual({ reserve: 100_00, projected: dashboard.availability.projectedMonthEnd - 100_00 });
+    expect(buildDashboard({ accounts: [giro], transactions: [], recurring: [], today: "2026-10-21" }).variableForecast).toBeNull();
+  });
 });

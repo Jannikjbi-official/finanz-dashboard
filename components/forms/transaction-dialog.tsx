@@ -8,6 +8,7 @@ import type { Account, Category, Transaction, TxStatus, TxType } from "@/lib/dom
 import { unlinkRecurringPayment } from "@/lib/server/actions/matching";
 import { ruleFromTransaction } from "@/lib/server/actions/rules";
 import { deleteTransaction, saveTransaction, saveTransfer } from "@/lib/server/actions/transactions";
+import { useQuickAdd } from "@/components/shell/quick-add";
 import { ConfirmDialog } from "./confirm-dialog";
 import { DateInput, MoneyInput, NoteInput, SelectInput, TextInput } from "./fields";
 import { FormDialog } from "./form-dialog";
@@ -63,25 +64,30 @@ export function TransactionDialog({
   lookups,
   initialKind = "expense",
   transaction,
+  duplicateOf,
 }: {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   lookups: Lookups;
   initialKind?: DialogKind;
   transaction?: Transaction | null;
+  /** Neue Buchung mit den Angaben dieser Buchung (Datum: heute). */
+  duplicateOf?: Transaction | null;
 }) {
+  const { openTransaction } = useQuickAdd();
+  const source = transaction ?? duplicateOf ?? null;
   const accounts = lookups.accounts.filter((account) => !account.archived || account.id === transaction?.accountId);
   const defaultAccount = accounts.find((account) => account.kind === "giro" && !account.archived) ?? accounts[0];
 
-  const [kind, setKind] = useState<DialogKind>(transaction ? transaction.type : initialKind);
+  const [kind, setKind] = useState<DialogKind>(source ? source.type : initialKind);
   const [status, setStatus] = useState<TxStatus>(transaction?.status ?? "booked");
-  const [amount, setAmount] = useState(transaction ? formatAmountInput(transaction.amountCents) : "");
-  const [title, setTitle] = useState(transaction?.title ?? "");
+  const [amount, setAmount] = useState(source ? formatAmountInput(source.amountCents) : "");
+  const [title, setTitle] = useState(source?.title ?? "");
   const [date, setDate] = useState<string | null>(transaction?.date ?? lookups.today);
-  const [accountId, setAccountId] = useState<string | null>(transaction?.accountId ?? defaultAccount?.id ?? null);
+  const [accountId, setAccountId] = useState<string | null>(source?.accountId ?? defaultAccount?.id ?? null);
   const [toAccountId, setToAccountId] = useState<string | null>(accounts.find((account) => account.id !== defaultAccount?.id)?.id ?? null);
-  const [categoryId, setCategoryId] = useState<string | null>(transaction?.categoryId ?? null);
-  const [note, setNote] = useState(transaction?.note ?? "");
+  const [categoryId, setCategoryId] = useState<string | null>(source?.categoryId ?? null);
+  const [note, setNote] = useState(source?.note ?? "");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const { run, pending } = useAction();
 
@@ -113,6 +119,8 @@ export function TransactionDialog({
   const accountOptions = accounts.map((account) => ({ id: account.id, label: account.name + (account.archived ? " (archiviert)" : "") }));
   const title_ = isEdit
     ? "Buchung bearbeiten"
+    : duplicateOf
+      ? "Buchung duplizieren"
     : kind === "transfer"
       ? "Transfer zwischen Konten"
       : kind === "income"
@@ -130,9 +138,23 @@ export function TransactionDialog({
         onSubmit={submit}
         extraActions={
           isEdit ? (
-            <Button variant="danger-soft" size="sm" onPress={() => setConfirmDelete(true)}>
-              Löschen
-            </Button>
+            <div className="flex gap-1.5">
+              <Button variant="danger-soft" size="sm" onPress={() => setConfirmDelete(true)}>
+                Löschen
+              </Button>
+              {transaction && !transaction.transferGroupId && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onPress={() => {
+                    onOpenChange(false);
+                    openTransaction(transaction.type, null, { duplicateOf: transaction });
+                  }}
+                >
+                  Duplizieren
+                </Button>
+              )}
+            </div>
           ) : undefined
         }
       >

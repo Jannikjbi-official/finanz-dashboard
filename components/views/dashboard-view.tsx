@@ -184,6 +184,14 @@ function AvailabilityPanel({ dashboard, className }: { dashboard: Dashboard; cla
           <Line label="Aktuell verfügbar" value={a.available} sign="=" strong />
           <Line label="Erwartete Einnahmen" hint="noch nicht eingegangen" value={a.expectedIncome.total} sign="+" muted={a.expectedIncome.total === 0} />
           <Line label={`Voraussichtlich am ${endLabel}`} hint="Prognose" value={a.projectedMonthEnd} sign="=" strong />
+          {dashboard.variableForecast && (
+            <Line
+              label="Nach Ø variablen Ausgaben"
+              hint={`−${formatMoney(dashboard.variableForecast.reserve)} geschätzt`}
+              value={dashboard.variableForecast.projected}
+              muted
+            />
+          )}
           {a.overdueIncome.total > 0 && (
             <Line
               label="Überfällige Einnahmen"
