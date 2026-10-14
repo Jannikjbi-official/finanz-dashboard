@@ -87,9 +87,14 @@ export function DashboardView({
           className="lg:col-span-7"
           bodyClassName=""
           action={
-            <Button size="sm" variant="ghost" onPress={() => openTransaction("expense")}>
-              Zahlung planen
-            </Button>
+            <>
+              <Link href="/kalender" className="label font-normal hover:text-foreground">
+                Kalender
+              </Link>
+              <Button size="sm" variant="ghost" onPress={() => openTransaction("expense")}>
+                Zahlung planen
+              </Button>
+            </>
           }
         >
           {dashboard.upcoming.length === 0 ? (

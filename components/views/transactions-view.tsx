@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowsLeftRight, CheckSquare, DownloadSimple, Trash, UploadSimple } from "@phosphor-icons/react";
+import { ArrowsLeftRight, CalendarBlank, CheckSquare, DownloadSimple, Trash, UploadSimple } from "@phosphor-icons/react";
 import { Button, Checkbox, Dropdown, Label, SearchField, Table, ToggleButton, ToggleButtonGroup, type Key, type Selection, type SortDescriptor } from "@heroui/react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -197,6 +197,12 @@ export function TransactionsView({
             <Button size="sm" variant="ghost" onPress={() => setImportOpen(true)}>
               <UploadSimple className="size-4" /> CSV-Import
             </Button>
+            <Link
+              href={`/kalender${month !== "all" && month !== "range" ? `?monat=${month}` : ""}`}
+              className="inline-flex h-8 items-center gap-2 rounded-[var(--radius)] px-3 text-sm font-medium text-foreground hover:bg-default"
+            >
+              <CalendarBlank className="size-4" /> Kalender
+            </Link>
             {trashCount > 0 && (
               <Link
                 href="/einstellungen#papierkorb"

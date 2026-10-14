@@ -2,6 +2,7 @@
 
 import {
   ArrowsClockwise,
+  CalendarBlank,
   CaretDown,
   ChartLineUp,
   ChartPieSlice,
@@ -34,6 +35,7 @@ const NAV: NavItem[] = [
   { href: "/", label: "Übersicht", short: "Übersicht", icon: ChartLineUp, aliases: ["/app"] },
   { href: "/transaktionen", label: "Transaktionen", short: "Umsätze", icon: Receipt, aliases: ["/app/geld/buchungen"] },
   { href: "/kategorien", label: "Kategorien", short: "Kategorien", icon: ChartPieSlice, mobile: false },
+  { href: "/kalender", label: "Kalender", short: "Kalender", icon: CalendarBlank, mobile: false },
   { href: "/abonnements", label: "Abonnements", short: "Abos", icon: ArrowsClockwise },
   { href: "/feste-kosten", label: "Feste Kosten", short: "Fixkosten", icon: Vault, aliases: ["/app/planung/fixkosten"] },
   { href: "/wuensche", label: "Wünsche", short: "Wünsche", icon: Gift },
