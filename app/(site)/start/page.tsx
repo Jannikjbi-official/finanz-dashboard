@@ -1,6 +1,7 @@
 import type { Icon } from "@phosphor-icons/react";
 import { ArrowCounterClockwise, ArrowsClockwise, Gift, Lightning, LinkSimple, LockKey } from "@phosphor-icons/react/dist/ssr";
 import type { Metadata } from "next";
+import { SiteInstall } from "@/components/shell/install-app";
 import { LinkButton } from "@/components/site/site-links";
 import { Figures, Money } from "@/components/ui/money";
 import { availability } from "@/lib/domain/overview";
@@ -155,9 +156,12 @@ export default async function StartPage() {
 
       <section className="mx-auto max-w-[1120px] px-4 pb-16 sm:px-6">
         <div className="panel flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-[18px] font-semibold">Auch als App auf dem Handy</h2>
-            <p className="mt-1 text-[13.5px] text-muted">Im Browser „Zum Startbildschirm hinzufügen“ – öffnet sich wie eine App, ohne Store.</p>
+          <div className="flex flex-col gap-3">
+            <div>
+              <h2 className="text-[18px] font-semibold">Auch als App – auf Handy und Computer</h2>
+              <p className="mt-1 text-[13.5px] text-muted">Öffnet sich ohne Browserleiste wie eine eigene App, mit Symbol auf dem Startbildschirm. Kein App Store nötig.</p>
+            </div>
+            <SiteInstall />
           </div>
           {!user && <LinkButton href="/anmelden">Anmelden</LinkButton>}
         </div>

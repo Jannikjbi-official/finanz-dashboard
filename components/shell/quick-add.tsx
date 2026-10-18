@@ -1,7 +1,7 @@
 "use client";
 
 import { toast } from "@heroui/react";
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AccountDialog } from "@/components/forms/account-dialog";
 import { RecurringDialog } from "@/components/forms/recurring-dialog";
 import { TransactionDialog, type DialogKind, type Lookups } from "@/components/forms/transaction-dialog";
@@ -63,6 +63,17 @@ export function QuickAddProvider({ lookups, children }: { lookups: Lookups; chil
     }),
     [lookups, show],
   );
+
+  // App-Verknuepfungen ("Ausgabe erfassen" am App-Symbol): ?erfassen=ausgabe|einnahme|transfer
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const kind = { ausgabe: "expense", einnahme: "income", transfer: "transfer" }[url.searchParams.get("erfassen") ?? ""] as DialogKind | undefined;
+    if (!url.searchParams.has("erfassen")) return;
+    url.searchParams.delete("erfassen");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+    if (kind) value.openTransaction(kind);
+    // Nur beim Start der App
+  }, []);
 
   return (
     <Context.Provider value={value}>
