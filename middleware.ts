@@ -10,11 +10,14 @@ import { getSessionCookie } from "better-auth/cookies";
 export function middleware(request: NextRequest) {
   if (getSessionCookie(request)) return NextResponse.next();
 
-  // Ohne Anmeldung zeigt "/" die oeffentliche Startseite
-  if (request.nextUrl.pathname === "/") return NextResponse.rewrite(new URL("/start", request.url));
+  // Ohne Anmeldung zeigt "/" die oeffentliche Startseite - ausser bei einer
+  // App-Verknuepfung ("/?erfassen=ausgabe"): dann anmelden und weiter dorthin
+  if (request.nextUrl.pathname === "/" && !request.nextUrl.searchParams.has("erfassen")) {
+    return NextResponse.rewrite(new URL("/start", request.url));
+  }
 
   const url = new URL("/anmelden", request.url);
-  url.searchParams.set("next", request.nextUrl.pathname);
+  url.searchParams.set("next", request.nextUrl.pathname + request.nextUrl.search);
   return NextResponse.redirect(url);
 }
 

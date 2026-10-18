@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+// Frueh laden: "beforeinstallprompt" kommt nur einmal kurz nach dem Start
+import "@/lib/client/install";
 
 /** Service Worker registrieren (nur in Produktion, siehe public/sw.js). */
 export function ServiceWorker() {

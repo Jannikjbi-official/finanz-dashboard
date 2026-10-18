@@ -8,6 +8,7 @@ import { CashflowChart } from "@/components/charts/cashflow-chart";
 import { LastImportNotice } from "@/components/finance/import-list";
 import { AnomalyPanel } from "@/components/finance/anomaly-panel";
 import { AmountChangePanel, MatchPanel } from "@/components/finance/match-panel";
+import { InstallHint } from "@/components/shell/install-app";
 import { QuickEntryBar } from "@/components/shell/quick-entry";
 import { ItemStatus } from "@/components/finance/item-status";
 import { SettleMenu } from "@/components/finance/settle-menu";
@@ -72,6 +73,7 @@ export function DashboardView({
     <div className="flex flex-col gap-4">
       <h1 className="sr-only">Übersicht</h1>
       {lastImport && <LastImportNotice entry={lastImport} />}
+      <InstallHint />
       {Number(dashboard.today.slice(8)) <= 7 && !dashboard.previousEmpty && dashboard.previous.count > 0 && (
         <Link href="/rueckblick" className="panel flex items-center justify-between gap-3 px-4 py-3 text-[13.5px] hover:bg-surface-secondary sm:px-5">
           <span>

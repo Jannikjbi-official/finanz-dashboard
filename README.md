@@ -29,6 +29,20 @@ npm run dev                   # http://localhost:3000 → „Zugang einrichten�
 | `npm run db:migrate [-- --dry-run]` | Ausstehende Migrationen (sichert vorher automatisch) |
 | `npm run db:undo-import -- <datei.csv> [--apply]` | Alten CSV-Import anhand der Datei finden und löschen (Probelauf ohne `--apply`, sichert vorher) |
 
+## Als App installieren
+
+Die Seite ist eine installierbare Web-App (PWA): eigenes Symbol, ohne Browserleiste,
+kein App Store.
+
+- **Android, Chrome/Edge am Computer:** Knopf „App installieren“ unter Einstellungen →
+  „Als App nutzen“ (bzw. im Hinweis auf der Übersicht).
+- **iPhone/iPad:** in Safari **Teilen → Zum Home-Bildschirm**.
+- **Mac mit Safari:** Ablage → Zum Dock hinzufügen.
+
+Langes Drücken auf das App-Symbol bietet „Ausgabe erfassen“, „Einnahme erfassen“,
+„Transaktionen“ und „Kalender“ (`/?erfassen=ausgabe` öffnet den Dialog direkt). Der
+Service Worker speichert nur die Offline-Seite und das Symbol, nie Finanzdaten.
+
 ## Daten sichern und zurückholen (in der App)
 
 - **Papierkorb** (Einstellungen → Papierkorb): Gelöschte Buchungen bleiben 30 Tage,

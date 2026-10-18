@@ -12,6 +12,7 @@ import { ImportList } from "@/components/finance/import-list";
 import { NotificationsPanel } from "@/components/settings/notifications-panel";
 import { RestoreRow } from "@/components/settings/restore-row";
 import { RulesPanel } from "@/components/settings/rules-panel";
+import { InstallPanel } from "@/components/shell/install-app";
 import { TemplatesPanel } from "@/components/settings/templates-panel";
 import { TrashPanel } from "@/components/finance/trash-panel";
 import { SecurityPanel } from "@/components/settings/security-panel";
@@ -106,6 +107,8 @@ export function SettingsView({
         </Panel>
 
         <NotificationsPanel webhook={notify.webhook} due={notify.due} monthly={notify.monthly} />
+
+        <InstallPanel />
 
         <Panel title="Daten" description={`${counts.accounts} Konten · ${counts.transactions} Buchungen · ${counts.recurring} regelmäßige Zahlungen`} id="import">
           <div className="flex flex-col gap-4">

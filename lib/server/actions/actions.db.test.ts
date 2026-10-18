@@ -465,7 +465,7 @@ describe("Papierkorb und Mehrfachauswahl", () => {
     const spar = await createAccount("Spar", "savings", "0");
     await tx.saveTransaction({ type: "expense", status: "booked", amount: "10", date: "2026-10-01", title: "Lidl", accountId: giro });
     await tx.saveTransaction({ type: "income", status: "booked", amount: "20", date: "2026-10-02", title: "Erstattung", accountId: giro });
-    await tx.saveTransaction({ type: "expense", status: "pending", amount: "30", date: "2026-12-01", title: "Rechnung", accountId: giro });
+    await tx.saveTransaction({ type: "expense", status: "pending", amount: "30", date: "2099-12-01", title: "Rechnung", accountId: giro });
     await tx.saveTransfer({ fromAccountId: giro, toAccountId: spar, amount: "50", date: "2026-10-03" });
     await db.categories.insertOne({ userId: "user-a", name: "Lebensmittel", kind: "expense", createdAt: new Date() } as never);
     const food = (await db.categories.findOne({ name: "Lebensmittel" }))!._id.toString();
@@ -481,7 +481,9 @@ describe("Papierkorb und Mehrfachauswahl", () => {
     // Das Konto des Transfers bleibt
     expect(await db.transactions.findOne({ title: "Transfer an Spar" })).toMatchObject({ accountId: giro });
     expect(await tx.updateTransactions({ ids: all, booked: true })).toMatchObject({ ok: true, message: expect.stringMatching(/^1 Buchungen/) });
-    expect(await db.transactions.findOne({ title: "Rechnung" })).toMatchObject({ status: "booked", date: "2026-10-14" });
+    // Frueher bezahlt als geplant: Buchungsdatum ist heute
+    const { todayIn } = await import("@/lib/domain/calendar");
+    expect(await db.transactions.findOne({ title: "Rechnung" })).toMatchObject({ status: "booked", date: todayIn("Europe/Berlin") });
 
     const deleted = await tx.deleteTransactions([ids.Lidl, ids["Transfer an Spar"]]);
     expect(deleted).toMatchObject({ ok: true, message: "3 Buchungen gelöscht" });
