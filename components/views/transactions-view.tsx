@@ -553,7 +553,9 @@ export function TransactionsView({
                       {row.kind === "transfer" ? (
                         <Status tone="neutral">Transfer</Status>
                       ) : pending ? (
-                        row.date < today ? (
+                        row.tx.bankPending ? (
+                          <Status tone="accent">Vorgemerkt</Status>
+                        ) : row.date < today ? (
                           <Status tone="danger">{row.kind === "income" ? "Ausstehend" : "Überfällig"}</Status>
                         ) : (
                           <Status tone={row.kind === "income" ? "accent" : "warning"}>{row.kind === "income" ? "Erwartet" : "Geplant"}</Status>

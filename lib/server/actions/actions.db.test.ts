@@ -225,6 +225,21 @@ describe("Kontostand mit Datum (#16)", () => {
     expect(availability.bankPending.total).toBe(244_21);
     expect(availability.available).toBe(883_85 - 244_21);
   });
+
+  it("bestaetigte Vormerkung ist eine normale Buchung und wird nicht doppelt importiert", async () => {
+    const giro = await createAccount("Giro", "giro", "100");
+    const { importTransactions } = await import("./import");
+    const row = { date: "2026-10-14", title: "Kartenzahlung", amountCents: 5_00, type: "expense" as const, category: null, note: null };
+    expect(await importTransactions({ accountId: giro, rows: [{ ...row, status: "pending" }] })).toMatchObject({ ok: true, imported: 1 });
+    const pending = await db.transactions.findOne({ title: "Kartenzahlung" });
+    expect(await tx.setTransactionStatus(pending!._id.toString(), "booked")).toMatchObject({ ok: true });
+    expect(await db.transactions.findOne({ _id: pending!._id })).toMatchObject({ status: "booked", bankPending: false });
+
+    expect(await importTransactions({ accountId: giro, rows: [{ ...row, status: "booked" }] })).toMatchObject({ ok: true, imported: 0, skipped: 1 });
+    const { availability } = await load();
+    expect(availability.liquidBalance).toBe(95_00);
+    expect(availability.bankPending.total).toBe(0);
+  });
 });
 
 describe("Regelmaessige Zahlungen mit Buchungen abgleichen (#17)", () => {

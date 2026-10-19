@@ -69,7 +69,8 @@ export async function saveTransaction(input: TransactionInput): Promise<ActionRe
     if (!existing) return fail("Buchung nicht gefunden");
     if (existing.transferGroupId) return fail("Transfers bitte über „Transfer“ löschen und neu anlegen.");
     // Unscharfe Altdaten werden beim Bearbeiten zu einem festen Datum
-    await transactions.updateOne({ _id, userId: auth.userId }, { $set: { ...fields, dateEnd: null, datePrecision: "day" } });
+    const set = { ...fields, dateEnd: null, datePrecision: "day" as const, ...(fields.status === "booked" ? { bankPending: false } : {}) };
+    await transactions.updateOne({ _id, userId: auth.userId }, { $set: set });
     refresh();
     return ok("Änderungen gespeichert");
   }
@@ -105,6 +106,8 @@ export async function setTransactionStatus(id: string, status: "booked" | "pendi
     // Frueher bezahlt als geplant: Buchungsdatum ist heute, nie in der Zukunft
     const today = todayIn((await getSettings(auth.userId)).timeZone);
     if (existing.date > today) update.date = today;
+    // Eine bestaetigte Vormerkung ist eine normale Buchung: der naechste Import erkennt sie als Dublette
+    update.bankPending = false;
   }
   await transactions.updateOne({ _id, userId: auth.userId }, { $set: update });
   refresh();
@@ -203,8 +206,8 @@ export async function updateTransactions(input: BulkUpdateInput): Promise<Action
     const today = todayIn((await getSettings(auth.userId)).timeZone);
     const pending = { ...base, status: "pending" as const };
     // Frueher bezahlt als geplant: Buchungsdatum ist heute, nie in der Zukunft
-    const future = await transactions.updateMany({ ...pending, date: { $gt: today } }, { $set: { status: "booked", date: today, updatedAt: now } });
-    const due = await transactions.updateMany(pending, { $set: { status: "booked", updatedAt: now } });
+    const future = await transactions.updateMany({ ...pending, date: { $gt: today } }, { $set: { status: "booked", bankPending: false, date: today, updatedAt: now } });
+    const due = await transactions.updateMany(pending, { $set: { status: "booked", bankPending: false, updatedAt: now } });
     refresh();
     return ok(`${future.modifiedCount + due.modifiedCount} Buchungen als bezahlt bzw. eingegangen markiert`);
   }
