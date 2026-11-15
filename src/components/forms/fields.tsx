@@ -12,6 +12,7 @@ import {
   NumberField,
   SearchField,
   Select,
+  Switch,
   useFilter,
 } from "@heroui/react";
 import { parseDate } from "@internationalized/date";
@@ -250,5 +251,42 @@ export function IntervalSelect({
         </ListBox>
       </Select.Popover>
     </Select>
+  );
+}
+
+/* ── Schalter-Zeile (Text links, Switch rechts – ganze Zeile antippbar) ─── */
+
+export function SwitchRow({
+  label,
+  description,
+  isSelected,
+  onChange,
+  name,
+  tone = "accent",
+}: {
+  label: string;
+  description?: string;
+  isSelected: boolean;
+  onChange: (v: boolean) => void;
+  name?: string;
+  tone?: "accent" | "success";
+}) {
+  return (
+    <Switch
+      isSelected={isSelected}
+      onChange={onChange}
+      name={name}
+      className={`w-full ${tone === "success" ? "[--switch-control-bg-checked:var(--success)] [--switch-control-bg-checked-hover:var(--success)]" : ""}`}
+    >
+      <Switch.Content className="min-h-11 w-full flex-row items-center justify-between gap-4">
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <Label className="cursor-pointer">{label}</Label>
+          {description && <span className="text-xs text-muted">{description}</span>}
+        </span>
+        <Switch.Control>
+          <Switch.Thumb />
+        </Switch.Control>
+      </Switch.Content>
+    </Switch>
   );
 }

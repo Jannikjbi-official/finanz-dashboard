@@ -2,11 +2,9 @@
 
 import {
   Button,
-  Description,
   Form,
   Input,
   Label,
-  Switch,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -15,7 +13,14 @@ import {
 import { Banknote, CreditCard, Landmark, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { CategoryPicker, type CategoryOption, DateInput, IntervalSelect, MoneyField } from "@/components/forms/fields";
+import {
+  CategoryPicker,
+  type CategoryOption,
+  DateInput,
+  IntervalSelect,
+  MoneyField,
+  SwitchRow,
+} from "@/components/forms/fields";
 import { enqueue, isNetworkError } from "@/lib/client/offline-queue";
 import { todayIso } from "@/lib/dates";
 import { type IntervalId, PAYMENT_METHODS, type PaymentMethodId } from "@/lib/finance";
@@ -159,15 +164,13 @@ export function ExpenseForm({
 
       {!isEdit && (
         <div className="flex flex-col gap-3 rounded-2xl bg-surface-secondary p-4">
-          <Switch isSelected={recurring} onChange={setRecurring} name="recurring">
-            <Switch.Control>
-              <Switch.Thumb />
-            </Switch.Control>
-            <Switch.Content>
-              <Label>Wiederkehrend</Label>
-              <Description>Wird automatisch im gewählten Rhythmus gebucht.</Description>
-            </Switch.Content>
-          </Switch>
+          <SwitchRow
+            label="Wiederkehrend"
+            description="Wird automatisch im gewählten Rhythmus gebucht."
+            isSelected={recurring}
+            onChange={setRecurring}
+            name="recurring"
+          />
           {recurring && <IntervalSelect value={interval} onChange={setInterval} isRequired />}
         </div>
       )}

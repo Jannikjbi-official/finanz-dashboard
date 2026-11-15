@@ -5,14 +5,14 @@ import {
   Card,
   Chip,
   ComboBox,
-  Description,
   FieldError,
   Form,
   Input,
   Label,
   ListBox,
-  Switch,
   Tabs,
+  Tag,
+  TagGroup,
   TextField,
   toast,
 } from "@heroui/react";
@@ -22,7 +22,7 @@ import { useMemo, useState, useTransition } from "react";
 import { ChartLegend, IncomeBars, IncomeExpenseBars } from "@/components/charts/lazy";
 import { Empty } from "@/components/common/empty";
 import { ResponsiveSheet } from "@/components/common/responsive-sheet";
-import { DateInput, IntervalSelect, MoneyField } from "@/components/forms/fields";
+import { DateInput, IntervalSelect, MoneyField, SwitchRow } from "@/components/forms/fields";
 import { enqueue, isNetworkError } from "@/lib/client/offline-queue";
 import { formatDate, formatMonth, todayIso } from "@/lib/dates";
 import { DEFAULT_INCOME_SOURCES, INTERVALS, type IntervalId, labelOf } from "@/lib/finance";
@@ -147,7 +147,7 @@ export function IncomeView({ data }: { data: IncomePageData }) {
         </Tabs.Panel>
       </Tabs>
 
-      <ResponsiveSheet isOpen={open} onOpenChange={setOpen} title="Neue Einnahme" icon={<Wallet className="size-5" />}>
+      <ResponsiveSheet isOpen={open} onOpenChange={setOpen} title="Neue Einnahme" icon={<Wallet className="size-5" />} tone="success">
         <IncomeForm key={formKey} sources={sources} onDone={() => setOpen(false)} />
       </ResponsiveSheet>
     </div>
@@ -293,6 +293,7 @@ function IncomeForm({ sources, onDone }: { sources: string[]; onDone: () => void
   const [interval, setInterval] = useState<IntervalId | null>("monatlich");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pending, start] = useTransition();
+  const quickSources = sources.slice(0, 8);
 
   function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -329,33 +330,52 @@ function IncomeForm({ sources, onDone }: { sources: string[]; onDone: () => void
   return (
     <Form onSubmit={submit} validationErrors={errors} validationBehavior="aria" className="flex flex-col gap-5">
       <MoneyField label="Betrag" name="amountCents" value={amount} onChange={setAmount} autoFocus isRequired size="lg" />
-      <ComboBox
-        name="source"
-        allowsCustomValue
-        inputValue={source}
-        onInputChange={setSource}
-        onChange={(k) => k && setSource(String(k))}
-        isRequired
-        fullWidth
-      >
-        <Label>Quelle</Label>
-        <ComboBox.InputGroup>
-          <Input placeholder="z. B. Gehalt" />
-          <ComboBox.Trigger />
-        </ComboBox.InputGroup>
-        <Description>Wähle eine Quelle oder tippe eine eigene ein.</Description>
-        <FieldError />
-        <ComboBox.Popover>
-          <ListBox>
-            {sources.map((s) => (
-              <ListBox.Item key={s} id={s} textValue={s}>
+      <div className="flex flex-col gap-2">
+        <ComboBox
+          name="source"
+          aria-label="Quelle"
+          allowsCustomValue
+          inputValue={source}
+          onInputChange={setSource}
+          onChange={(k) => k && setSource(String(k))}
+          isRequired
+          fullWidth
+        >
+          <Label>Quelle</Label>
+          <ComboBox.InputGroup>
+            <Input placeholder="Eigene Quelle eintippen …" />
+            <ComboBox.Trigger />
+          </ComboBox.InputGroup>
+          <FieldError />
+          <ComboBox.Popover>
+            <ListBox>
+              {sources.map((s) => (
+                <ListBox.Item key={s} id={s} textValue={s}>
+                  {s}
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              ))}
+            </ListBox>
+          </ComboBox.Popover>
+        </ComboBox>
+        <TagGroup
+          aria-label="Schnellwahl Quelle"
+          selectionMode="single"
+          selectedKeys={quickSources.includes(source) ? new Set([source]) : new Set()}
+          onSelectionChange={(keys) => {
+            const k = [...(keys as Set<string>)][0];
+            if (k) setSource(String(k));
+          }}
+        >
+          <TagGroup.List className="scrollbar-none -mx-1 flex flex-nowrap gap-1.5 overflow-x-auto px-1 pb-0.5">
+            {quickSources.map((s) => (
+              <Tag key={s} id={s} textValue={s} className="min-h-9 shrink-0">
                 {s}
-                <ListBox.ItemIndicator />
-              </ListBox.Item>
+              </Tag>
             ))}
-          </ListBox>
-        </ComboBox.Popover>
-      </ComboBox>
+          </TagGroup.List>
+        </TagGroup>
+      </div>
       <div className="grid gap-5 sm:grid-cols-2">
         <DateInput label="Datum" name="date" value={date} onChange={setDate} isRequired />
         <TextField name="note" value={note} onChange={setNote} maxLength={500}>
@@ -364,18 +384,23 @@ function IncomeForm({ sources, onDone }: { sources: string[]; onDone: () => void
         </TextField>
       </div>
       <div className="flex flex-col gap-3 rounded-2xl bg-surface-secondary p-4">
-        <Switch isSelected={recurring} onChange={setRecurring} name="recurring">
-          <Switch.Control>
-            <Switch.Thumb />
-          </Switch.Control>
-          <Switch.Content>
-            <Label>Wiederkehrend</Label>
-            <Description>z. B. monatliches Gehalt</Description>
-          </Switch.Content>
-        </Switch>
+        <SwitchRow
+          label="Wiederkehrend"
+          description="z. B. monatliches Gehalt – wird automatisch gebucht"
+          isSelected={recurring}
+          onChange={setRecurring}
+          name="recurring"
+          tone="success"
+        />
         {recurring && <IntervalSelect value={interval} onChange={setInterval} isRequired />}
       </div>
-      <Button type="submit" size="lg" fullWidth isPending={pending} className="h-12 rounded-2xl">
+      <Button
+        type="submit"
+        size="lg"
+        fullWidth
+        isPending={pending}
+        className="h-12 rounded-2xl bg-success text-success-foreground data-[hovered=true]:bg-success/90"
+      >
         Einnahme speichern
       </Button>
     </Form>
