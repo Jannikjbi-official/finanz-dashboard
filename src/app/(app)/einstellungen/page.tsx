@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/common/page-header";
 import { SettingsView } from "@/components/settings/settings-view";
 import { requireSession } from "@/lib/auth/session";
+import { databaseSizeBytes } from "@/server/maintenance";
 import { getSettings } from "@/server/queries";
 import pkg from "../../../../package.json";
 
@@ -9,7 +10,7 @@ export const metadata: Metadata = { title: "Einstellungen" };
 
 export default async function SettingsPage() {
   const session = await requireSession();
-  const settings = await getSettings();
+  const [settings, dbBytes] = await Promise.all([getSettings(), databaseSizeBytes()]);
   const discordId = session.user.email.split("@")[0] ?? null;
   return (
     <>
@@ -22,6 +23,7 @@ export default async function SettingsPage() {
           emergency: session.user.name === "Notfall-Zugang" && !session.user.image,
         }}
         settings={settings}
+        dbBytes={dbBytes}
         version={pkg.version}
       />
     </>

@@ -17,12 +17,13 @@ import {
   perYearCents,
 } from "@/lib/finance";
 import { ensureDefaultCategories } from "./defaults";
+import { ensureMaintenance } from "./maintenance";
 import { ensureRecurringMaterialized } from "./recurring";
 
 /** Jede Abfrage prüft die Session (Seiten rendern parallel zum Layout). */
 async function guard() {
   await requireSession();
-  await Promise.all([ensureRecurringMaterialized(), ensureDefaultCategories()]);
+  await Promise.all([ensureRecurringMaterialized(), ensureDefaultCategories(), ensureMaintenance()]);
 }
 
 /* ── Einstellungen & Stammdaten ───────────────────────────────────────────── */

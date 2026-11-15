@@ -10,6 +10,7 @@ import {
   Input,
   Label,
   ListBox,
+  Meter,
   Select,
   TextField,
   ToggleButton,
@@ -51,10 +52,12 @@ export function SettingsView({
   user,
   settings,
   version,
+  dbBytes,
 }: {
   user: { name: string; image: string | null; discordId: string | null; emergency: boolean };
   settings: { accentColor: string | null; startBalanceCents: number };
   version: string;
+  dbBytes: number | null;
 }) {
   return (
     <Accordion
@@ -67,7 +70,7 @@ export function SettingsView({
         <Appearance accent={settings.accentColor} />
       </Section>
       <Section id="daten" title="Daten" icon={<Database className="size-5" />}>
-        <DataSection startBalanceCents={settings.startBalanceCents} />
+        <DataSection startBalanceCents={settings.startBalanceCents} dbBytes={dbBytes} />
       </Section>
       <Section id="konto" title="Konto" icon={<UserRound className="size-5" />}>
         <AccountSection user={user} />
@@ -185,7 +188,7 @@ function Appearance({ accent }: { accent: string | null }) {
 
 /* ── Daten ───────────────────────────────────────────────────────────────── */
 
-function DataSection({ startBalanceCents }: { startBalanceCents: number }) {
+function DataSection({ startBalanceCents, dbBytes }: { startBalanceCents: number; dbBytes: number | null }) {
   const router = useRouter();
   const [balance, setBalance] = useState<number | null>(startBalanceCents / 100);
   const [pending, start] = useTransition();
@@ -200,6 +203,7 @@ function DataSection({ startBalanceCents }: { startBalanceCents: number }) {
 
   return (
     <>
+      {dbBytes !== null && <DatabaseUsage bytes={dbBytes} />}
       <Row title="Startguthaben" description="Kontostand vor deiner ersten Buchung – Basis für den Kontostand-Verlauf.">
         <div className="flex items-end gap-2">
           <MoneyField label="Startguthaben" name="startBalance" value={balance} onChange={setBalance} minValue={-1_000_000} className="w-44" />
@@ -319,6 +323,28 @@ function DataSection({ startBalanceCents }: { startBalanceCents: number }) {
         </AlertDialog.Backdrop>
       </AlertDialog>
     </>
+  );
+}
+
+/** Neon Free: 1 GB pro Projekt – Anzeige, damit der Speicher im Blick bleibt. */
+const DB_LIMIT_BYTES = 1024 ** 3;
+
+function DatabaseUsage({ bytes }: { bytes: number }) {
+  const ratio = bytes / DB_LIMIT_BYTES;
+  const mb = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 }).format(bytes / 1024 ** 2);
+  return (
+    <Meter
+      value={Math.min(bytes, DB_LIMIT_BYTES)}
+      maxValue={DB_LIMIT_BYTES}
+      color={ratio >= 0.9 ? "danger" : ratio >= 0.7 ? "warning" : "success"}
+      valueLabel={`${mb} MB von 1 GB`}
+    >
+      <Label>Datenbank-Speicher</Label>
+      <Meter.Output className="tabular text-sm" />
+      <Meter.Track>
+        <Meter.Fill />
+      </Meter.Track>
+    </Meter>
   );
 }
 
