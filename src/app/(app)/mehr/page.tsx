@@ -6,7 +6,7 @@ import { NAV_ITEMS } from "@/components/shell/nav-items";
 
 export const metadata: Metadata = { title: "Mehr" };
 
-const MORE = ["/einnahmen", "/wunschliste", "/budgets", "/statistik", "/einstellungen"];
+const MORE = ["/einnahmen", "/wunschliste", "/budgets", "/statistik", "/umrechner", "/einstellungen"];
 
 export default function MorePage() {
   const items = NAV_ITEMS.filter((i) => MORE.includes(i.href));

@@ -1,4 +1,5 @@
 import {
+  ArrowLeftRight,
   BarChart3,
   CalendarClock,
   Gift,
@@ -24,6 +25,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/wunschliste", label: "Wunschliste", icon: Gift },
   { href: "/budgets", label: "Budgets & Kategorien", icon: PiggyBank },
   { href: "/statistik", label: "Statistik", icon: BarChart3 },
+  { href: "/umrechner", label: "Umrechner", icon: ArrowLeftRight },
   { href: "/einstellungen", label: "Einstellungen", icon: Settings },
 ];
 

@@ -34,6 +34,7 @@ Drizzle ORM · Better Auth (Discord-OAuth) · Zod · Vercel
 | **Wunschliste** | Card-Raster mit Bild, Priorität, Sparziel & Fortschritt, „Leistbar diesen Monat", Sortierung, „Gekauft" → optional als Ausgabe übernehmen |
 | **Budgets & Kategorien** | Name, Farbe (ColorPicker), Icon, Monatsbudget · Farbe wechselt bei 80 %/100 % |
 | **Statistik** | Zeitraum (Schnellauswahl + DateRangePicker/RangeCalendar), Tabs Übersicht/Kategorien/Verlauf, Top-Kategorien, größte Einzelausgaben, Ø pro Tag/Woche/Monat, Vergleich zum Vorzeitraum, Sparquote |
+| **Umrechner** | Währungen umrechnen (USD → EUR & Co.) mit EZB-Referenzkursen, Schnellwahl, Tauschen, Liste gängiger Währungen, Ergebnis direkt als Ausgabe erfassen · Kurse 6 h gecacht, offline letzter Stand · kostenlos ohne API-Key ([frankfurter.dev](https://frankfurter.dev)) |
 | **Einstellungen** | Hell/Dunkel/System, Akzentfarbe, Startguthaben, Export CSV/JSON, Import JSON, alles löschen, Konto (abmelden / auf allen Geräten abmelden), App installieren, App-Sperre, Version |
 
 Weiteres: Discord-Login mit Allowlist, Notfall-Login, PWA (offline, Warteschlange für offline erfasste Einträge,
