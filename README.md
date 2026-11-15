@@ -1,164 +1,238 @@
-# Jannikjbi Finanzen
+# Finanzen
 
-Private Finanzverwaltung. Beantwortet auf einen Blick: Wie viel Geld habe ich,
-wie viel davon ist wirklich verfügbar, was steht als Nächstes an, was kosten
-Abos und feste Kosten – und was bleibt am Monatsende übrig.
+Private, installierbare Finanz-App (PWA) für genau eine Person: Ausgaben, Einnahmen, Abos, Wunschliste,
+Budgets und Statistik – auf Handy und PC wie eine native App.
 
-Next.js 15 (App Router) · React 19 · HeroUI v3 · Tailwind 4 · Better Auth · MongoDB · Vitest
+**Stack:** Next.js 16 (App Router, Server Actions) · HeroUI v3 + Tailwind CSS v4 · Recharts · Neon Postgres +
+Drizzle ORM · Better Auth (Discord-OAuth) · Zod · Vercel
 
-## Schnellstart (lokal)
+---
+
+## Inhalt
+
+1. [Funktionen](#funktionen)
+2. [Lokal starten](#lokal-starten)
+3. [Discord-Application einrichten](#discord-application-einrichten)
+4. [Notfall-Passwort erzeugen](#notfall-passwort-erzeugen)
+5. [Umgebungsvariablen](#umgebungsvariablen)
+6. [Neon verbinden](#neon-verbinden)
+7. [Auf Vercel deployen](#auf-vercel-deployen)
+8. [App installieren](#app-installieren)
+9. [Projektstruktur](#projektstruktur)
+10. [Sicherheit](#sicherheit)
+
+---
+
+## Funktionen
+
+| Bereich | Highlights |
+| --- | --- |
+| **Dashboard** | Kennzahlen (Einkommen, Ausgaben, Abos, übrig) mit Veränderung zum Vormonat, „Monat verbraucht" (ProgressCircle), „Pro Tag noch verfügbar" (Meter), Donut nach Kategorie, Einnahmen vs. Ausgaben (12 Monate), Kontostand-Verlauf, nächste Abbuchungen (7 Tage), Budget-Warnungen, Monatswechsler mit Kalender |
+| **Ausgaben** | „+" schwebend am Handy → Drawer von unten (wischen zum Schließen), Modal am PC · Betrag sofort fokussiert · Kategorie mit Farbe/Icon · Zahlungsart · wiederkehrend · Tabelle mit Sortierung, Mehrfachauswahl, Massenlöschen, Spaltenbreite, Summen-Footer, Pagination und Virtualisierung („Alle") · Kartenliste nach Tagen am Handy · Filter: Suche, Zeitraum, Kategorien, Zahlungsart · Löschen mit „Rückgängig" |
+| **Einnahmen** | Quelle (Gehalt, Twitch, Nebenjob, Sonstiges + eigene), wiederkehrend, Tabs Monat/Jahr, Verlauf |
+| **Abos** | Intervall, Abbuchungstag, Kündigungsfrist, Status · Umrechnung pro Monat **und** Jahr · Gesamt-Card · Kalender mit Abbuchungstagen · Warnung „Kündigungsfrist endet bald" · fließen automatisch in die Monatsrechnung ein |
+| **Wunschliste** | Card-Raster mit Bild, Priorität, Sparziel & Fortschritt, „Leistbar diesen Monat", Sortierung, „Gekauft" → optional als Ausgabe übernehmen |
+| **Budgets & Kategorien** | Name, Farbe (ColorPicker), Icon, Monatsbudget · Farbe wechselt bei 80 %/100 % |
+| **Statistik** | Zeitraum (Schnellauswahl + DateRangePicker/RangeCalendar), Tabs Übersicht/Kategorien/Verlauf, Top-Kategorien, größte Einzelausgaben, Ø pro Tag/Woche/Monat, Vergleich zum Vorzeitraum, Sparquote |
+| **Einstellungen** | Hell/Dunkel/System, Akzentfarbe, Startguthaben, Export CSV/JSON, Import JSON, alles löschen, Konto (abmelden / auf allen Geräten abmelden), App installieren, App-Sperre, Version |
+
+Weiteres: Discord-Login mit Allowlist, Notfall-Login, PWA (offline, Warteschlange für offline erfasste Einträge,
+App-Shortcuts, eigener Installationshinweis), Tastaturkürzel **N** (neue Ausgabe) und **/** (Suche),
+View Transitions, `prefers-reduced-motion`, Safe-Area am iPhone, `noindex`.
+
+Alle Beträge werden als **Cent-Integer** gespeichert, angezeigt im Format `1.234,56 €`, Datum `TT.MM.JJJJ`,
+Zeitzone `Europe/Berlin`.
+
+---
+
+## Lokal starten
+
+Voraussetzungen: **Node.js 22+** und eine Postgres-Datenbank (lokal oder ein Neon-Branch).
 
 ```bash
 npm install
-cp .env.example .env          # BETTER_AUTH_SECRET und ALLOWED_EMAILS setzen
-npm run dev:db                # lokale MongoDB ohne Installation (eigenes Terminal)
-npm run dev                   # http://localhost:3000 → „Zugang einrichten“
+cp .env.example .env        # Werte eintragen (siehe unten)
+npm run db:migrate          # Tabellen anlegen
+npm run db:seed             # optional: Beispieldaten (nur lokal!)
+npm run dev                 # http://localhost:3000
 ```
 
-## Befehle
+Eine lokale Postgres per Docker:
 
-| Befehl | Zweck |
+```bash
+docker run -d --name finanzen-db -e POSTGRES_USER=finanz -e POSTGRES_PASSWORD=finanz -e POSTGRES_DB=finanz -p 5432:5432 postgres:16
+```
+
+Nützliche Skripte:
+
+| Skript | Zweck |
 | --- | --- |
-| `npm run dev` / `build` / `start` | Entwicklung, Produktions-Build, Start |
+| `npm run dev` | Entwicklungsserver |
+| `npm run build` / `npm start` | Produktions-Build lokal |
 | `npm run typecheck` | TypeScript prüfen |
-| `npm test` | Finanzlogik, Import, Migrationen und Server Actions (gegen MongoDB im Speicher) |
-| `npm run check` | Typen, Tests und Build in einem Schritt |
-| `npm run dev:db` | Lokale MongoDB auf Port 27017, Daten in `.devdb/` |
-| `npm run db:backup` | Alle Collections als Extended JSON nach `backups/` |
-| `npm run db:restore -- <ordner> [--replace]` | Sicherung zurückspielen (mit `--replace` wird vorher gesichert) |
-| `npm run db:migrate [-- --dry-run]` | Ausstehende Migrationen (sichert vorher automatisch) |
-| `npm run db:undo-import -- <datei.csv> [--apply]` | Alten CSV-Import anhand der Datei finden und löschen (Probelauf ohne `--apply`, sichert vorher) |
+| `npm run db:generate` | Neue Drizzle-Migration aus `src/lib/db/schema.ts` erzeugen |
+| `npm run db:migrate` | Migrationen anwenden (läuft auf Vercel automatisch beim Build) |
+| `npm run db:studio` | Drizzle Studio (Datenbank im Browser ansehen) |
+| `npm run db:seed` | Beispieldaten – verweigert die Ausführung auf Neon/Vercel |
+| `npm run hash-password` | bcrypt-Hash für den Notfall-Login erzeugen |
+| `npm run icons` | App-Icons & iOS-Splashscreens aus `public/icons/icon.svg` neu erzeugen |
 
-## Als App installieren
+> **Ohne Discord testen:** Lokal einfach den Notfall-Login verwenden (Hash siehe unten).
 
-Die Seite ist eine installierbare Web-App (PWA): eigenes Symbol, ohne Browserleiste,
-kein App Store.
+---
 
-- **Android, Chrome/Edge am Computer:** Knopf „App installieren“ unter Einstellungen →
-  „Als App nutzen“ (bzw. im Hinweis auf der Übersicht).
-- **iPhone/iPad:** in Safari **Teilen → Zum Home-Bildschirm**.
-- **Mac mit Safari:** Ablage → Zum Dock hinzufügen.
+## Discord-Application einrichten
 
-Langes Drücken auf das App-Symbol bietet „Ausgabe erfassen“, „Einnahme erfassen“,
-„Transaktionen“ und „Kalender“ (`/?erfassen=ausgabe` öffnet den Dialog direkt). Der
-Service Worker speichert nur die Offline-Seite und das Symbol, nie Finanzdaten.
+1. Öffne <https://discord.com/developers/applications> und klicke **New Application**.
+   Name z. B. „Finanzen", Bedingungen akzeptieren, **Create**.
+2. Links **OAuth2** öffnen.
+   - **Client ID** kopieren → `DISCORD_CLIENT_ID`
+   - **Client Secret → Reset Secret** → kopieren → `DISCORD_CLIENT_SECRET`
+     (wird nur einmal angezeigt; niemals ins Repository oder in einen Chat schreiben)
+3. Unter **OAuth2 → Redirects** genau diese Adressen eintragen und **Save Changes**:
+   ```
+   http://localhost:3000/api/auth/callback/discord
+   https://DEINE-VERCEL-DOMAIN/api/auth/callback/discord
+   ```
+   `DEINE-VERCEL-DOMAIN` ist die Produktionsdomain des Vercel-Projekts (z. B. `finanz-dashboard.vercel.app`
+   oder eine eigene Domain wie `finanzen.example.de`). Für jede weitere Domain eine eigene Zeile.
+4. Es wird **nur der Scope `identify`** verwendet (keine E-Mail, keine Server). Unter „OAuth2 URL Generator"
+   musst du nichts erzeugen – die App baut den Login-Link selbst.
+5. Ein Bot ist **nicht** nötig. Falls die Application einen Bot hat: „Public Bot" kann aus bleiben.
 
-## Daten sichern und zurückholen (in der App)
+### Deine Discord-User-ID finden
 
-- **Papierkorb** (Einstellungen → Papierkorb): Gelöschte Buchungen bleiben 30 Tage,
-  rückgängig gemachte Importe bis zum endgültigen Löschen. Nach jedem Löschen bietet
-  die Meldung „Rückgängig“ an.
-- **JSON-Sicherung** (Einstellungen → Daten): herunterladen und wieder einspielen.
-  Einspielen ersetzt alle eigenen Daten; der Stand davor wird automatisch gespeichert
-  (die letzten drei, Collection `user_snapshots`) und lässt sich mit „Zurückholen“
-  wiederherstellen. Höchstens 4 MB pro Datei.
-- **Belege** (Foto oder PDF, bis 2 MB, Fotos werden im Browser verkleinert) liegen in der
-  Collection `receipts` und sind **nicht** Teil der JSON-Sicherung; `npm run db:backup`
-  sichert sie mit. Belege endgültig gelöschter Buchungen räumt der tägliche Cron auf.
+1. Discord → **Einstellungen → Erweitert → Entwicklermodus** einschalten.
+2. Auf dein Profilbild/deinen Namen rechtsklicken (Handy: lange drücken) → **Benutzer-ID kopieren**.
+3. Die Zahl (17–20 Stellen) als `ALLOWED_DISCORD_ID` eintragen.
 
-## Umstieg von der Vorversion („Spielraum“)
+Nur diese ID darf sich anmelden. Jede andere wird schon beim OAuth-Callback abgewiesen – es wird **kein Nutzer
+und keine Session angelegt**, stattdessen erscheint „Kein Zugriff".
 
-Die bestehenden Daten bleiben vollständig erhalten. Die neue Version liest alte
-Datensätze direkt (fehlende Felder bekommen beim Lesen Standardwerte), es muss
-also nichts umgeschrieben werden, damit die App funktioniert.
+---
 
-Empfohlen vor bzw. nach dem ersten Deploy:
+## Notfall-Passwort erzeugen
 
-1. Sicherung ziehen: Atlas-Snapshot **und** `npm run db:backup` mit der Produktions-`MONGODB_URI`.
-2. `npm run db:migrate -- --dry-run` – zeigt, was passieren würde.
-3. `npm run db:migrate` – nur ergänzend, es wird nichts gelöscht:
-   - **005** übernimmt offene „geplante/erwartete“ Posten als offene Buchungen
-     (Posten ohne Termin werden nicht eingeplant, das Original bleibt).
-   - **006** speichert Status und Kostenart der regelmäßigen Zahlungen
-     (das alte Feld `active` bleibt).
+Falls Discord einmal nicht erreichbar ist, gibt es auf der Login-Seite den kleinen Link **„Notfall-Login"**.
+Gespeichert wird nur ein bcrypt-Hash (Kosten 12), nie das Passwort. Max. **5 Versuche pro 15 Minuten**.
 
-Nicht mehr genutzte Collections (`goals`, `scenarios`, `refunds`, `planned`,
-`beta_invites`, `waitlist`) werden nicht angefasst und sind weiter im
-JSON-Export enthalten. Der Code der Vorversion steht in der Git-Historie
-(Commit `413ec52`).
-
-Alte Adressen funktionieren weiter. Achtung: Die Vorversion hat u. a.
-`/transaktionen` und `/konten` **permanent** auf `/app/...` umgeleitet; Browser
-merken sich das. Diese `/app/...`-Pfade werden deshalb intern umgeschrieben
-statt umgeleitet (`next.config.mjs`), sonst entstünde eine Schleife.
-
-## Aufbau
-
-```
-app/(app)/           Übersicht, Transaktionen, Abonnements, Feste Kosten, Konten, Einstellungen
-app/(auth)/          Anmelden, Zugang einrichten
-app/api/             Better Auth, CSV-/JSON-Export
-components/          Oberfläche (HeroUI v3), Diagramme (eigenes SVG), Dialoge
-lib/domain/          Reine, getestete Finanzlogik – keine Datenbank, keine UI
-lib/server/          Datenbank, Auth, Server Actions (Zod-Validierung, Rate Limit), Migrationen
-docs/DESIGNSYSTEM.md Farben, Typografie, Abstände, Komponenten, Diagramme
+```bash
+npm run hash-password
+# Passwort eingeben (unsichtbar, mind. 12 Zeichen)
 ```
 
-## Rechenregeln
+Ausgegeben werden zwei Zeilen:
 
-- **Beträge** sind ganzzahlige Cent. „Heute“ richtet sich nach der Zeitzone in den Einstellungen.
-- **Kontostand** = Stand laut Bank an einem Tag (Kontostand-Anker) + gebuchte Bewegungen nach diesem Tag bis heute.
-  Ohne Anker: Anfangssaldo + gebuchte Bewegungen bis heute. Später importierte ältere Umsätze ändern einen
-  abgeglichenen Stand nicht. Vorgemerkte, geplante Ausgaben und erwartete Einnahmen ändern ihn nicht.
-- **Aktuell verfügbar** = Kontostand der Konten, die zum verfügbaren Geld zählen
-  − von der Bank vorgemerkte Umsätze − fällige, unbezahlte Zahlungen − bis Monatsende geplante Ausgaben.
-  Erwartete Einnahmen zählen nicht; sie fließen nur in die Prognose für den Monatsletzten.
-- **Abgleich**: Kommt eine regelmäßige Zahlung als Buchung (Import oder von Hand), wird sie dem Termin
-  zugeordnet – automatisch, wenn Betrag (± max. 2 €/10 %) und Name passen, sonst als Vorschlag.
-  Überfällige erwartete Einnahmen zählen nicht in die Prognose, sie werden zum Prüfen angezeigt.
-- **Automatisch buchen** (optional, pro Eintrag): täglicher Vercel Cron `/api/cron/recurring`
-  (`vercel.json`), nur mit gesetztem `CRON_SECRET`. Vorher werden sichere Treffer zugeordnet.
-- **Regelmäßige Zahlungen**: Jeder Termin vor `nextDue` ist erledigt (bezahlt oder
-  übersprungen), ab `nextDue` offen. „Bezahlt“ erzeugt genau eine Buchung und rückt
-  den Termin weiter – die Aktualisierung ist an den erwarteten Termin gebunden, ein
-  doppelter Klick bucht nicht doppelt. Monatsenden und Schaltjahre bleiben am Ankertag (31. → 28./29. → 31.).
-- **Monats-/Jahreswerte** sind Vergleichswerte (120 €/Jahr = 10 €/Monat).
-  Tatsächliche Abbuchungen kommen nur aus den Terminen.
-- **Pausiert / gekündigt** planen nichts mehr ein – außer bei gekündigten Verträgen mit Vertragsende.
-- **Transfers** sind zwei verknüpfte Buchungen, ändern beide Kontostände und zählen nie als Einnahme oder Ausgabe.
-  Beim CSV-Import werden Zeilen mit Typ „Umbuchung“ zu Transfers (Gegenkonto optional).
-- **CSV-Import**: „Gebucht“ ändert den Kontostand, „Vorgemerkt“ wird als vorgemerkt angezeigt und beim nächsten
-  Import ersetzt, „Geplant“ gehört auf die Wunschliste. Jeder Import hat eine ID und lässt sich rückgängig machen.
-- **Wünsche** ändern keine Zahl. Erst „Einplanen“ legt eine geplante Zahlung an, die in „Aktuell verfügbar“ zählt.
+- **Für Vercel:** den Hash genau so (mit `$`-Zeichen) als `EMERGENCY_PASSWORD_HASH` eintragen.
+- **Für die lokale `.env`:** die Variante mit `\$` verwenden (Next.js würde `$…` sonst als Variable lesen).
+
+---
+
+## Umgebungsvariablen
+
+| Variable | Pflicht | Beschreibung |
+| --- | --- | --- |
+| `DATABASE_URL` | ✔ | Neon-Verbindung (gepoolt). Auf Vercel setzt die Neon-Integration sie automatisch. |
+| `DATABASE_URL_UNPOOLED` | – | Direkte Verbindung für Migrationen (setzt die Neon-Integration ebenfalls). |
+| `AUTH_SECRET` | ✔ | Zufälliger Schlüssel ≥ 32 Zeichen: `openssl rand -base64 32` |
+| `DISCORD_CLIENT_ID` | ✔ | Aus dem Discord Developer Portal |
+| `DISCORD_CLIENT_SECRET` | ✔ | Aus dem Discord Developer Portal |
+| `ALLOWED_DISCORD_ID` | ✔ | Deine Discord-User-ID |
+| `EMERGENCY_PASSWORD_HASH` | empfohlen | bcrypt-Hash für den Notfall-Login |
+| `BETTER_AUTH_URL` | – | Öffentliche Adresse. Auf Vercel nicht nötig (Produktionsdomain wird automatisch erkannt). |
+
+Auf Vercel alle geheimen Werte als **Sensitive** anlegen (Environments: Production + Preview).
+
+---
+
+## Neon verbinden
+
+1. Vercel-Dashboard → Projekt → **Storage → Create Database → Neon (Serverless Postgres)**.
+2. Region nahe bei dir wählen (z. B. Frankfurt `fra1`/`aws-eu-central-1`), Plan „Free" reicht.
+3. **Connect Project** → dieses Projekt auswählen, Environments **Production** und **Preview** anhaken.
+   Vercel legt `DATABASE_URL`, `DATABASE_URL_UNPOOLED` usw. automatisch an.
+4. Neu deployen (Deployments → … → **Redeploy**). Beim Build läuft `npm run db:migrate` automatisch und legt
+   alle Tabellen an. Beim ersten Öffnen werden die Standard-Kategorien angelegt.
+
+Für die lokale Entwicklung kannst du in Neon einen eigenen **Branch** anlegen und dessen Connection-String in die
+`.env` schreiben – so bleiben Produktionsdaten unberührt.
+
+---
+
+## Auf Vercel deployen
+
+1. Projekt auf Vercel mit diesem GitHub-Repository verbinden (Framework „Next.js" wird erkannt).
+2. [Neon verbinden](#neon-verbinden) und die [Umgebungsvariablen](#umgebungsvariablen) setzen.
+3. In Discord die Redirect-URL `https://DEINE-DOMAIN/api/auth/callback/discord` eintragen.
+4. Push auf `main` → Vercel baut automatisch. Der Build-Befehl ist `npm run vercel-build`
+   (= Migrationen + `next build`).
+5. Domain öffnen → „Mit Discord anmelden".
+
+**Hinweis Previews:** Preview-Deployments haben eigene URLs. Discord-Login funktioniert dort nur, wenn die
+Preview-URL zusätzlich als Redirect eingetragen ist – der Notfall-Login geht immer.
+
+---
+
+## App installieren
+
+- **iPhone/iPad (Safari):** Seite öffnen → Teilen-Symbol → **Zum Home-Bildschirm**.
+- **Android (Chrome):** Hinweis „App installieren" in der App antippen oder Menü ⋮ → **App installieren**.
+- **PC (Chrome/Edge):** Installieren-Symbol in der Adressleiste oder Einstellungen → App → **Installieren**.
+
+Die App läuft dann ohne Browserleiste im Vollbild (Notch und Home-Indikator werden berücksichtigt) und hat
+App-Shortcuts (lange auf das Icon drücken): **Ausgabe hinzufügen**, **Abos**, **Wunschliste**.
+
+**Login in der installierten App:** Discord öffnet sich auf iPhone/Android in einem separaten Browserfenster,
+das keine Cookies mit der App teilt. Die App startet deshalb eine sichere Login-Übergabe: Nach dem Login bei
+Discord zeigt das Fenster „Angemeldet" – zurück in der App bist du automatisch eingeloggt
+(einmalige Übergabe mit nur der App bekanntem Geheimnis, gültig 10 Minuten).
+
+**Offline:** Bereits geöffnete Seiten bleiben offline verfügbar, sonst erscheint eine Offline-Seite.
+Offline erfasste Ausgaben/Einnahmen landen in einer Warteschlange und werden gespeichert, sobald wieder
+Verbindung besteht (ohne Doppelbuchungen).
+
+---
+
+## Projektstruktur
+
+```
+src/
+  app/
+    (auth)/            Login, Login-Übergabe (PWA), „Kein Zugriff"
+    (app)/             Geschützte Seiten: Dashboard, Ausgaben, Einnahmen, Abos, Wunschliste,
+                       Budgets, Statistik, Einstellungen, Mehr (Handy)
+    api/auth/[...all]  Better Auth (Discord-OAuth, Notfall-Login, Login-Übergabe)
+    api/export         CSV-/JSON-Export
+    api/sync           Offline-Warteschlange
+    manifest.ts        Web-App-Manifest
+    offline/           Offline-Seite
+  components/          UI nach Bereichen (shell, dashboard, expenses, …) – ausschließlich HeroUI v3
+  lib/
+    auth/              Better-Auth-Konfiguration, Allowlist, Session-Helfer
+    db/                Drizzle-Schema & Client
+    dates.ts money.ts  Formatierung (de-DE, Europe/Berlin, Cent ↔ Euro)
+    finance.ts         Abo-Abbuchungen, Intervalle, Budget-Stufen
+    validation.ts      Zod-Schemas (Server-Validierung)
+  server/
+    actions.ts         Server Actions (prüfen jeweils die Session + Zod)
+    queries.ts         Datenabfragen (prüfen jeweils die Session)
+    recurring.ts       Wiederkehrende Buchungen erzeugen
+  proxy.ts             Schützt alle Seiten/APIs (außer Login, Callback, Manifest, Icons, Service Worker)
+drizzle/               SQL-Migrationen
+public/sw.js           Service Worker
+scripts/               migrate, seed, hash-password, generate-icons
+```
+
+---
 
 ## Sicherheit
 
-**Wer hineinkommt**
-- Nur Adressen aus `ALLOWED_EMAILS`. Geprüft bei Registrierung, bei jeder neuen
-  Sitzung (Passwort, Zwei-Faktor, Discord) und bei jeder einzelnen Anfrage.
-  Wird eine Adresse entfernt, ist der Zugriff sofort weg – auch mit offener Sitzung.
-  Ist die Liste leer, ist alles gesperrt.
-- Die Registrierung schließt sich automatisch, sobald alle freigegebenen Adressen ein Konto haben.
-- Alte Konten aus der Beta-Zeit kommen nicht mehr hinein, solange sie nicht freigegeben sind.
-
-**Anmeldung**
-- Zwei-Faktor-Anmeldung (Authenticator-App, TOTP) mit 10 Backup-Codes und optional
-  „diesem Gerät 30 Tage vertrauen“ – einrichten unter Einstellungen → Sicherheit.
-- Mit aktiver Zwei-Faktor-Anmeldung ist die Discord-Anmeldung gesperrt, weil sie den Code umgehen würde.
-- Rate Limits (in MongoDB): 10 Anmeldeversuche pro 15 Minuten, Codeprüfung 3 pro 10 Sekunden,
-  Passwortänderung 5 pro Stunde.
-- Sitzungen laufen nach 7 Tagen ohne Nutzung ab; beendete Sitzungen gelten spätestens nach einer Minute
-  nicht mehr. Unter Einstellungen → Sicherheit: angemeldete Geräte sehen, einzeln oder alle anderen abmelden,
-  Passwort ändern (meldet alle anderen Geräte ab).
-
-**Daten**
-- Jede Abfrage und jede Server Action ist an die `userId` der Sitzung gebunden; referenzierte
-  Konten/Kategorien werden auf Eigentum geprüft (getestet). Sitzungs-Tokens gehen nie an den Browser.
-- Serverseitige Validierung mit Zod, CSP und weitere Sicherheits-Header, `noindex`,
-  CSV-Export gegen Formel-Injection entschärft, keine Secrets im Client.
-
-**Better-Auth-Dashboard (optional)**
-- Ist `BETTER_AUTH_API_KEY` gesetzt, ist das Plugin `dash()` aktiv: dash.better-auth.com kann Nutzer
-  und Sitzungen anzeigen und verwalten, Anmelde-Ereignisse gehen an Better Auth.
-- Die Endpunkte unter `/api/auth/dash/*` sind nur mit einem von Better Auth signierten Token nutzbar
-  (ohne: 401). Freigabeliste und Sitzungsprüfung gelten auch für alles, was über das Dashboard passiert.
-- Ohne API-Key ist das Plugin aus und es gehen keine Daten an Dritte.
-
-**Empfehlung für Vercel**
-- `ALLOWED_EMAILS` in Production **und** Preview setzen – sonst ist die jeweilige Umgebung gesperrt.
-- `BETTER_AUTH_URL` = Live-Domain. Auf Previews nutzt die App automatisch die Preview-Adresse
-  (Branch- und Deployment-URL), Anmeldungen von fremden Adressen werden weiter abgelehnt.
-  Die Discord-Anmeldung funktioniert auf Previews nicht, da Discord nur die Live-Adresse kennt.
-- `NEXT_PUBLIC_APP_URL` wird nicht mehr benötigt; der Browser spricht immer mit der eigenen Adresse.
-- Preview-Deployments zusätzlich unter Settings → Deployment Protection schützen
-  (Vercel Authentication), da sie dieselbe Datenbank nutzen.
+- Login ausschließlich über Discord (Scope `identify`) + Allowlist auf **eine** User-ID; Prüfung beim Callback,
+  zusätzlich in Datenbank-Hooks (Nutzer & Session) und bei jeder Session-Abfrage.
+- Sessions 30 Tage, Cookies `httpOnly`, `secure`, `SameSite=Lax`; „auf allen Geräten abmelden" widerruft alle.
+- Proxy (früher „Middleware") schützt alle Routen; **jede** Server Action, Abfrage und API-Route prüft die Session
+  zusätzlich selbst.
+- Notfall-Login: bcrypt-Hash, Rate-Limit 5 Versuche / 15 Minuten (in der Datenbank, gilt über alle Instanzen).
+- Eingaben werden serverseitig mit Zod validiert.
+- `noindex` per Meta-Tag, `X-Robots-Tag`-Header und `robots.txt`.
+- Optionale App-Sperre: automatisches Abmelden nach X Minuten Inaktivität (Einstellungen → App).

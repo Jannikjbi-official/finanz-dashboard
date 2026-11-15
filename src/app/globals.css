@@ -1,0 +1,239 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+
+@source "../";
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ *  Theme „Finanzen“ – erstellt nach dem HeroUI-Theme-Builder-Schema (OKLCH).
+ *  Dunkel ist Standard, Hell ist voll ausgearbeitet. Alle Komponenten und
+ *  Diagramme lesen ausschließlich diese CSS-Variablen.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+@layer base {
+  :root,
+  .light,
+  [data-theme="light"] {
+    color-scheme: light;
+
+    --radius: 0.875rem;
+    --field-radius: calc(var(--radius) * 1.15);
+
+    --background: oklch(0.975 0.004 264);
+    --foreground: oklch(0.21 0.012 270);
+    --surface: oklch(1 0 0);
+    --surface-foreground: var(--foreground);
+    --surface-secondary: oklch(0.962 0.005 264);
+    --surface-tertiary: oklch(0.945 0.006 264);
+    --overlay: oklch(1 0 0);
+    --overlay-foreground: var(--foreground);
+    --muted: oklch(0.53 0.016 268);
+    --default: oklch(0.94 0.005 264);
+    --default-foreground: var(--foreground);
+
+    --accent: oklch(0.56 0.21 268);
+    --accent-foreground: oklch(0.99 0 0);
+
+    --success: oklch(0.62 0.17 152);
+    --success-foreground: oklch(0.99 0 0);
+    --warning: oklch(0.75 0.16 70);
+    --warning-foreground: oklch(0.21 0.012 270);
+    --danger: oklch(0.6 0.2 22);
+    --danger-foreground: oklch(0.99 0 0);
+
+    --field-background: oklch(0.965 0.005 264);
+    --field-foreground: var(--foreground);
+    --field-placeholder: var(--muted);
+    --border: oklch(0.91 0.006 264);
+    --separator: oklch(0.92 0.006 264);
+    --focus: var(--accent);
+    --segment: oklch(1 0 0);
+    --segment-foreground: var(--foreground);
+    --backdrop: rgba(10, 12, 20, 0.45);
+    --surface-shadow: 0 1px 2px 0 rgba(15, 17, 30, 0.04), 0 8px 24px -12px rgba(15, 17, 30, 0.12);
+    --overlay-shadow: 0 12px 40px -8px rgba(15, 17, 30, 0.22);
+
+    /* App-eigene Tokens */
+    --income: var(--success);
+    --expense: oklch(0.63 0.17 22);
+    --hero-from: oklch(0.56 0.21 268);
+    --hero-to: oklch(0.55 0.19 300);
+    --chart-grid: oklch(0.9 0.006 264);
+  }
+
+  .dark,
+  [data-theme="dark"] {
+    color-scheme: dark;
+
+    --background: oklch(0.13 0.008 270);
+    --foreground: oklch(0.97 0.003 264);
+    --surface: oklch(0.185 0.01 270);
+    --surface-secondary: oklch(0.215 0.011 270);
+    --surface-tertiary: oklch(0.245 0.012 270);
+    --overlay: oklch(0.205 0.011 270);
+    --muted: oklch(0.7 0.014 268);
+    --default: oklch(0.255 0.012 270);
+    --default-foreground: var(--foreground);
+
+    --accent: oklch(0.66 0.19 268);
+    --accent-foreground: oklch(0.99 0 0);
+
+    --success: oklch(0.74 0.17 154);
+    --success-foreground: oklch(0.17 0.02 154);
+    --warning: oklch(0.81 0.14 76);
+    --warning-foreground: oklch(0.2 0.02 76);
+    --danger: oklch(0.66 0.19 22);
+    --danger-foreground: oklch(0.99 0 0);
+
+    --field-background: oklch(0.235 0.011 270);
+    --field-foreground: var(--foreground);
+    --border: oklch(0.27 0.012 270);
+    --separator: oklch(0.25 0.011 270);
+    --segment: oklch(0.32 0.013 270);
+    --backdrop: rgba(0, 0, 0, 0.6);
+    --surface-shadow: 0 0 0 1px oklch(1 0 0 / 0.04) inset;
+    --overlay-shadow: 0 0 0 1px oklch(1 0 0 / 0.06) inset, 0 24px 48px -12px rgba(0, 0, 0, 0.6);
+
+    --income: var(--success);
+    --expense: oklch(0.7 0.15 22);
+    --hero-from: oklch(0.45 0.2 268);
+    --hero-to: oklch(0.4 0.18 305);
+    --chart-grid: oklch(0.27 0.012 270);
+  }
+}
+
+@theme inline {
+  --color-income: var(--income);
+  --color-expense: var(--expense);
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI Variable", "Segoe UI", Roboto, system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+    overscroll-behavior-y: none;
+  }
+  /* Große Zahlen immer mit tabellarischen Ziffern */
+  .tabular,
+  [data-tabular] {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* iPhone: Notch & Home-Indikator */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@utility mb-safe {
+  margin-bottom: env(safe-area-inset-bottom);
+}
+@utility px-safe {
+  padding-left: max(env(safe-area-inset-left), 0px);
+  padding-right: max(env(safe-area-inset-right), 0px);
+}
+
+/* ── Animationen ─────────────────────────────────────────────────────────── */
+
+@keyframes fade-up {
+  from {
+    opacity: 0.4;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+@keyframes slide-out-left {
+  to {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+}
+@keyframes blob {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -40px) scale(1.08);
+  }
+  66% {
+    transform: translate(-25px, 25px) scale(0.95);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-blob {
+  animation: blob 18s ease-in-out infinite;
+}
+
+/* View Transitions zwischen Seiten (React <ViewTransition>) */
+::view-transition-old(.page-exit) {
+  animation: 160ms ease-in both slide-out-left;
+}
+::view-transition-new(.page-enter) {
+  animation: 280ms cubic-bezier(0.22, 1, 0.36, 1) both slide-in-right;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* Recharts an das Theme anpassen */
+.recharts-text {
+  fill: var(--muted);
+  font-size: 12px;
+}
+.recharts-cartesian-grid line {
+  stroke: var(--chart-grid);
+}
+.recharts-surface:focus,
+.recharts-wrapper:focus,
+.recharts-sector:focus {
+  outline: none;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
